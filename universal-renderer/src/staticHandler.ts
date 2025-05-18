@@ -5,7 +5,6 @@ import type {
   CoreRenderCallbacks,
   RenderRequestProps,
   SetupResultBase,
-  StaticRenderResult,
   StaticSpecificCallbacks,
 } from "@/types";
 
@@ -77,8 +76,7 @@ export default function createStaticHandler<
         return;
       }
 
-      const renderResult: StaticRenderResult =
-        await staticCallbacks.render(setupResult);
+      const renderResult = await staticCallbacks.render(setupResult);
 
       res.json(renderResult);
     } catch (error: unknown) {

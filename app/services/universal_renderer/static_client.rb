@@ -35,13 +35,18 @@ module UniversalRenderer
             JSON.parse(response.body).deep_symbolize_keys
           else
             Rails.logger.error(
-              "SSR static request to #{ssr_url} failed: #{response.code} - #{response.message}"
+              "SSR static request to #{ssr_url} failed: #{response.code} - #{response.message} (URL: #{url})"
             )
             nil
           end
+        rescue Net::OpenTimeout, Net::ReadTimeout => e
+          Rails.logger.error(
+            "SSR static request to #{ssr_url} timed out: #{e.class.name} - #{e.message} (URL: #{url})"
+          )
+          nil
         rescue StandardError => e
           Rails.logger.error(
-            "SSR static request to #{ssr_url} failed: #{e.class.name} - #{e.message}"
+            "SSR static request to #{ssr_url} failed: #{e.class.name} - #{e.message} (URL: #{url})"
           )
           nil
         end

@@ -32,7 +32,7 @@ export interface CoreRenderCallbacks<
   setup: (
     requestUrl: string,
     props: Record<string, any>,
-  ) => Promise<TSetupResult | undefined>;
+  ) => Promise<TSetupResult> | TSetupResult;
 
   /**
    * Performs cleanup of resources after rendering.
@@ -112,28 +112,30 @@ export interface StreamSpecificCallbacks<
  * Callbacks specific to the static HTML rendering strategy.
  * These are used after the common `setup` and before the common `cleanup`.
  * @template TSetupResult The type of the result from the main `setup` callback.
+ * @template TRenderOutput The type of the output from the static render callback.
  */
 export interface StaticSpecificCallbacks<
   TSetupResult extends SetupResultBase = SetupResultBase,
+  TRenderOutput extends Record<string, any> = Record<string, any>,
 > {
   /**
-   * Renders the application to a static string, including all necessary HTML and state.
-   * This is called after the common `setup` and before the common `cleanup`.
-   * The `jsx` for rendering is typically `setupResult.jsx` from the `setupResult`.
-   * @param setupResult The result from the common `setup` callback.
-   * @returns A promise or direct result containing the `StaticRenderResult` (meta, body, state).
+   * Renders the application to a static object where keys and values are strings.
+   * This is called after the common \`setup\` and before the common \`cleanup\`.
+   * The \`jsx\` for rendering is typically \`setupResult.jsx\` from the \`setupResult\`.
+   * @param setupResult The result from the common \`setup\` callback.
+   * @returns A promise or direct result containing the statically rendered HTML parts.
    */
-  render: (
-    setupResult: TSetupResult,
-  ) => Promise<StaticRenderResult> | StaticRenderResult;
+  render: (setupResult: TSetupResult) => Promise<TRenderOutput> | TRenderOutput;
 }
 
 /**
  * Options for the main createSsrServer function.
  * @template TSetupResult The type of the setup result used by renderCallbacks.
+ * @template TRenderOutput The type of the output from the static render callback.
  */
 export interface CreateSsrServerOptions<
   TSetupResult extends SetupResultBase = SetupResultBase,
+  TRenderOutput extends Record<string, any> = Record<string, any>,
 > {
   /** The Vite dev server instance. */
   vite: ViteDevServer;
@@ -145,7 +147,7 @@ export interface CreateSsrServerOptions<
   streamCallbacks?: StreamSpecificCallbacks<TSetupResult>;
 
   /** Optional: Callbacks specific to the static HTML rendering strategy. */
-  staticCallbacks?: StaticSpecificCallbacks<TSetupResult>;
+  staticCallbacks?: StaticSpecificCallbacks<TSetupResult, TRenderOutput>;
 
   /** Base path for the application, if not running at root. Defaults to '/'. */
   basePath?: string;
@@ -169,14 +171,6 @@ export interface CreateSsrServerOptions<
 export interface RenderRequestProps {
   _railsLayoutHtml?: string; // For streaming, layout provided by Rails
   [key: string]: any; // Other props
-}
-
-/**
- * Data returned for a static render.
- */
-export interface StaticRenderResult {
-  meta: string;
-  body: string;
 }
 
 /**

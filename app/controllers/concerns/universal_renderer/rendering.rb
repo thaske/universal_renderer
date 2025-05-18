@@ -4,45 +4,30 @@ module UniversalRenderer
 
     included do
       include ActionController::Live
-
       helper UniversalRenderer::SsrHelpers
-
       before_action :initialize_props
     end
 
-    protected
+    private
 
     def default_render
       return super unless request.format.html?
-
-      use_ssr_streaming? ? render_ssr_stream : render_ssr
-    end
-
-    def render_ssr
-      @ssr =
-        UniversalRenderer::StaticClient.static(
-          request.original_url,
-          @universal_renderer_props
-        )
-
-      return unless @ssr.present?
-
-      rendered_content = render_to_string(template: "universal_renderer/index")
-
-      Rails.logger.debug "SSR Rendered Content: #{rendered_content.inspect}"
-
-      render template: "universal_renderer/index"
+      if use_ssr_streaming?
+        render_ssr_stream
+      else
+        @ssr =
+          UniversalRenderer::StaticClient.static(
+            request.original_url,
+            @universal_renderer_props
+          )
+        super
+      end
     end
 
     def render_ssr_stream
       set_streaming_headers
 
-      full_layout =
-        render_to_string(
-          template: "universal_renderer/stream",
-          formats: [:html]
-        )
-
+      full_layout = render_to_string
       before_meta, after_meta = full_layout.split(ssr_meta)
 
       response.stream.write(before_meta)
@@ -60,15 +45,9 @@ module UniversalRenderer
       handle_ssr_stream_fallback(response) unless streaming_succeeded
     end
 
-    def use_ssr_streaming?
-      %w[1 true yes y].include?(ENV["ENABLE_SSR_STREAMING"]&.downcase)
-    end
-
     def initialize_props
       @universal_renderer_props = {}
     end
-
-    private
 
     def add_props(key_or_hash, data_value = nil)
       if data_value.nil? && key_or_hash.is_a?(Hash)
@@ -101,16 +80,23 @@ module UniversalRenderer
       end
     end
 
+    def use_ssr_streaming?
+      %w[1 true yes y].include?(ENV["ENABLE_SSR_STREAMING"]&.downcase)
+    end
+
     def set_streaming_headers
-      # tell Cloudflare / proxies not to cache or buffer
+      # Tell Cloudflare / proxies not to cache or buffer.
       response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
       response.headers["Pragma"] = "no-cache"
       response.headers["Expires"] = "0"
-      # if you’re behind Nginx you can also disable nginx buffering per-response:
+
+      # Disable Nginx buffering per-response.
       response.headers["X-Accel-Buffering"] = "no"
-      # and for SSE specifically:
+
+      # For SSE specifically.
       response.headers["Content-Type"] = "text/event-stream"
 
+      # Remove Content-Length header to prevent buffering.
       response.headers.delete("Content-Length")
     end
 
