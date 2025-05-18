@@ -1,24 +1,16 @@
-import { Express, Request, Response } from "express";
 import { Transform } from "node:stream";
 import React from "react";
-import { ViteDevServer } from "vite";
+
+import type { Express, Request, Response } from "express";
+import type { ViteDevServer } from "vite";
 
 // --- User Application & Configuration ---
-
-/**
- * Expected exports from the user's application entry file (appEntryPath).
- */
-export interface UserAppModule {
-  default?: React.ComponentType<{ url: string }>; // User's component
-  // Users could export other components or functions if their setup callback needs them.
-  [key: string]: any;
-}
 
 /**
  * Base result of the setup callback, containing the essential JSX
  * and allowing for arbitrary user-defined context.
  */
-export interface AppSetupResultBase {
+export interface SetupResultBase {
   jsx: React.ReactElement; // The main JSX element to be rendered
   [key: string]: any; // Allows users to pass through other context/instances they manage
 }
@@ -28,7 +20,7 @@ export interface AppSetupResultBase {
  * @template TSetupResult The type of the result returned by setup and consumed by other callbacks.
  */
 export interface CoreRenderCallbacks<
-  TSetupResult extends AppSetupResultBase = AppSetupResultBase,
+  TSetupResult extends SetupResultBase = SetupResultBase,
 > {
   /**
    * Sets up the main application component with necessary providers (Router, Helmet, QueryClient, etc.).
@@ -39,8 +31,8 @@ export interface CoreRenderCallbacks<
    */
   setup: (
     requestUrl: string,
-    props: Record<string, any>
-  ) => Promise<TSetupResult> | TSetupResult;
+    props: Record<string, any>,
+  ) => Promise<TSetupResult | undefined>;
 
   /**
    * Performs cleanup of resources after rendering.
@@ -57,18 +49,8 @@ export interface CoreRenderCallbacks<
  * @template TSetupResult The type of the result from the main `setup` callback.
  */
 export interface StreamSpecificCallbacks<
-  TSetupResult extends AppSetupResultBase = AppSetupResultBase,
+  TSetupResult extends SetupResultBase = SetupResultBase,
 > {
-  /**
-   * Optional: Called after setup and before streaming begins.
-   * Use this to prepare context like meta tags or initial state that will be embedded in the HTML shell.
-   * @param setupResult The result from the setup callback.
-   * @returns A promise or direct result containing an object with optional 'meta' (string) and 'state' (JSON-serializable).
-   */
-  getShellContext?: (
-    setupResult: TSetupResult
-  ) => Promise<{ meta?: string; state?: any }> | { meta?: string; state?: any };
-
   /**
    * Optional: Called once before any part of the HTML document is written to the response for streaming.
    * Useful for setting custom headers or performing other initial setup on the response.
@@ -79,7 +61,17 @@ export interface StreamSpecificCallbacks<
   onResponseStart?: (
     res: Response,
     setupResult: TSetupResult,
-    shellContext: { meta?: string; state?: any }
+  ) => Promise<void> | void;
+
+  /**
+   * Optional: Called after the meta tag has been written to the response.
+   * @param res The Express Response object.
+   * @param setupResult The result from the setup callback.
+   * @param shellContext The context object (containing meta and state) returned by getShellContext.
+   */
+  onWriteMeta?: (
+    res: Response,
+    setupResult: TSetupResult,
   ) => Promise<void> | void;
 
   /**
@@ -89,7 +81,7 @@ export interface StreamSpecificCallbacks<
    * @returns A Transform stream or undefined.
    */
   createResponseTransformer?: (
-    setupResult: TSetupResult
+    setupResult: TSetupResult,
   ) => Transform | undefined;
 
   /**
@@ -102,7 +94,6 @@ export interface StreamSpecificCallbacks<
   onBeforeWriteClosingHtml?: (
     res: Response,
     setupResult: TSetupResult,
-    shellContext: { meta?: string; state?: any }
   ) => Promise<void> | void;
 
   /**
@@ -113,7 +104,7 @@ export interface StreamSpecificCallbacks<
    */
   onResponseEnd?: (
     res: Response,
-    setupResult: TSetupResult
+    setupResult: TSetupResult,
   ) => Promise<void> | void;
 }
 
@@ -123,7 +114,7 @@ export interface StreamSpecificCallbacks<
  * @template TSetupResult The type of the result from the main `setup` callback.
  */
 export interface StaticSpecificCallbacks<
-  TSetupResult extends AppSetupResultBase = AppSetupResultBase,
+  TSetupResult extends SetupResultBase = SetupResultBase,
 > {
   /**
    * Renders the application to a static string, including all necessary HTML and state.
@@ -133,7 +124,7 @@ export interface StaticSpecificCallbacks<
    * @returns A promise or direct result containing the `StaticRenderResult` (meta, body, state).
    */
   render: (
-    setupResult: TSetupResult
+    setupResult: TSetupResult,
   ) => Promise<StaticRenderResult> | StaticRenderResult;
 }
 
@@ -142,8 +133,11 @@ export interface StaticSpecificCallbacks<
  * @template TSetupResult The type of the setup result used by renderCallbacks.
  */
 export interface CreateSsrServerOptions<
-  TSetupResult extends AppSetupResultBase = AppSetupResultBase,
+  TSetupResult extends SetupResultBase = SetupResultBase,
 > {
+  /** The Vite dev server instance. */
+  vite: ViteDevServer;
+
   /** Callbacks for core application setup and cleanup. */
   coreCallbacks: CoreRenderCallbacks<TSetupResult>;
 
@@ -163,7 +157,7 @@ export interface CreateSsrServerOptions<
    */
   configureExpressApp?: (
     app: Express,
-    vite: ViteDevServer
+    vite: ViteDevServer,
   ) => void | Promise<void>;
 }
 
@@ -174,7 +168,6 @@ export interface CreateSsrServerOptions<
  */
 export interface RenderRequestProps {
   _railsLayoutHtml?: string; // For streaming, layout provided by Rails
-  query_data?: Array<{ key: string; data: any }>; // For React Query prehydration
   [key: string]: any; // Other props
 }
 
@@ -184,23 +177,22 @@ export interface RenderRequestProps {
 export interface StaticRenderResult {
   meta: string;
   body: string;
-  state: Record<string, any> | null;
 }
 
 /**
  * Represents the layout chunks after parsing the HTML template for streaming.
  */
 export interface LayoutChunks {
-  headAndInitialContentChunk: string;
-  divCloseAndStateScriptChunk: string;
-  finalHtmlChunk: string;
+  beforeMetaChunk: string;
+  afterMetaAndBeforeBodyChunk: string;
+  afterBodyChunk: string;
 }
 
 /**
  * Options specific to the stream pipeline setup.
  */
 export interface StreamPipelineOptions<
-  TSetupResult extends AppSetupResultBase = AppSetupResultBase,
+  TSetupResult extends SetupResultBase = SetupResultBase,
 > {
   jsx: React.ReactElement;
   res: Response;

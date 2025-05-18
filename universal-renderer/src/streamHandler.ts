@@ -4,41 +4,52 @@ import { renderToPipeableStream } from "react-dom/server";
 import type { ViteDevServer } from "vite";
 
 import type {
-  AppSetupResultBase,
   CoreRenderCallbacks,
   RenderRequestProps,
+  SetupResultBase,
   StreamSpecificCallbacks,
-} from "./types";
+} from "@/types";
 
 import {
-  getHtmlTemplate,
   handleGenericError,
   handleStreamError,
   parseLayoutTemplate,
   SSR_MARKERS,
-} from "./utils";
+} from "@/utils";
 
+/**
+ * Creates a stream handler for the SSR server.
+ *
+ * @param vite - The Vite dev server instance.
+ * @param callbacks - The callbacks for the stream handler.
+ * @returns A function that handles streaming rendering requests.
+ */
 function createStreamHandler<
-  TSetupResult extends AppSetupResultBase = AppSetupResultBase,
+  TSetupResult extends SetupResultBase = SetupResultBase,
 >(
   vite: ViteDevServer,
   callbacks: {
     coreCallbacks: CoreRenderCallbacks<TSetupResult>;
     streamCallbacks: StreamSpecificCallbacks<TSetupResult>;
-  }
+  },
 ) {
   const { coreCallbacks, streamCallbacks } = callbacks;
 
   return async function streamHandler(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<void> {
-    let resultFromSetup: TSetupResult | undefined;
+    let setupResult: TSetupResult | undefined;
 
     try {
-      const { url, props = {} } = req.body as {
+      const {
+        url,
+        props = {},
+        template = "",
+      } = req.body as {
         url: string;
         props: RenderRequestProps;
+        template: string;
       };
 
       if (!url) {
@@ -46,51 +57,42 @@ function createStreamHandler<
         return;
       }
 
-      const htmlTemplate = getHtmlTemplate(props);
-
-      if (!htmlTemplate.includes(SSR_MARKERS.ROOT)) {
-        console.error("[SSR] HTML template is missing SSR_ROOT marker.");
+      if (!template.includes(SSR_MARKERS.BODY)) {
+        console.error("[SSR] HTML template is missing SSR_BODY marker.");
         res.status(500).send("Server Error: Invalid HTML template.");
         return;
       }
 
-      if (!htmlTemplate.includes(SSR_MARKERS.META)) {
+      if (!template.includes(SSR_MARKERS.META)) {
         console.warn(
-          `[SSR] HTML template is missing SSR_META marker (${SSR_MARKERS.META}). Meta content will not be injected by parseLayoutTemplate.`
+          `[SSR] HTML template is missing SSR_META marker (${SSR_MARKERS.META}). Meta content will not be injected.`,
         );
       }
 
-      if (!htmlTemplate.includes(SSR_MARKERS.STATE)) {
-        console.warn(
-          `[SSR] HTML template is missing SSR_STATE marker (${SSR_MARKERS.STATE}). State will not be injected by parseLayoutTemplate.`
-        );
-      }
+      setupResult = await coreCallbacks.setup(url, props);
 
-      resultFromSetup = await coreCallbacks.setup(url, props);
-
-      if (!resultFromSetup) {
+      if (!setupResult) {
         console.error("[SSR] setup did not return a result.");
+
         if (!res.headersSent) {
           res
             .status(500)
             .send(
-              "Server Error: Application setup failed to produce a valid result."
+              "Server Error: Application setup failed to produce a valid result.",
             );
         } else if (!res.writableEnded) {
           res.end();
         }
+
         return;
       }
-      const result = resultFromSetup;
 
-      const shellContext =
-        (await streamCallbacks.getShellContext?.(result)) || {};
-      const { meta = "", state } = shellContext;
+      const result = setupResult;
 
-      await streamCallbacks.onResponseStart?.(res, result, shellContext);
+      await streamCallbacks.onResponseStart?.(res, result);
 
-      const { pipe } = renderToPipeableStream(result.jsx, {
-        onShellReady: async () => {
+      const stream = renderToPipeableStream(result.jsx, {
+        async onShellReady() {
           try {
             if (!res.headersSent) {
               res.statusCode = 200;
@@ -99,64 +101,51 @@ function createStreamHandler<
             }
 
             const {
-              headAndInitialContentChunk,
-              divCloseAndStateScriptChunk: rawDivCloseAndStateScriptChunk,
-              finalHtmlChunk: rawFinalHtmlChunk,
-            } = parseLayoutTemplate(htmlTemplate, meta);
+              beforeMetaChunk,
+              afterMetaAndBeforeBodyChunk,
+              afterBodyChunk,
+            } = parseLayoutTemplate(template);
 
-            res.write(headAndInitialContentChunk);
+            res.write(beforeMetaChunk);
 
-            let streamToPipe: NodeJS.WritableStream = res;
+            await streamCallbacks.onWriteMeta?.(res, result);
+
+            res.write(afterMetaAndBeforeBodyChunk);
+
             const userTransformStream =
               streamCallbacks.createResponseTransformer?.(result);
 
-            const reactOutputRelay = new PassThrough();
-            pipe(reactOutputRelay);
+            const reactOutputStream = new PassThrough();
 
-            if (userTransformStream) {
-              streamToPipe = userTransformStream;
-              reactOutputRelay.pipe(userTransformStream).pipe(res);
-            } else {
-              reactOutputRelay.pipe(res);
-            }
+            stream.pipe(reactOutputStream);
 
-            reactOutputRelay.on("end", async () => {
+            if (userTransformStream)
+              reactOutputStream.pipe(userTransformStream).pipe(res);
+            else reactOutputStream.pipe(res);
+
+            reactOutputStream.on("end", async () => {
               try {
-                await streamCallbacks.onBeforeWriteClosingHtml?.(
-                  res,
-                  result,
-                  shellContext
-                );
+                await streamCallbacks.onBeforeWriteClosingHtml?.(res, result);
 
-                res.write(rawDivCloseAndStateScriptChunk);
-                if (state !== undefined) {
-                  if (htmlTemplate.includes(SSR_MARKERS.STATE)) {
-                    res.write(JSON.stringify(state));
-                  } else {
-                    console.warn(
-                      "[SSR] State was provided, but SSR_STATE marker is missing in HTML template. State will not be injected."
-                    );
-                  }
-                }
-                res.end(rawFinalHtmlChunk);
+                res.end(afterBodyChunk);
               } catch (endError) {
                 handleStreamError(
                   "onStreamEnd (writing state/final chunks)",
                   endError,
                   res,
                   result,
-                  coreCallbacks
+                  coreCallbacks,
                 );
               }
             });
 
-            reactOutputRelay.on("error", (streamError) => {
+            reactOutputStream.on("error", (streamError: unknown) => {
               handleStreamError(
                 "React render stream or user transform",
                 streamError,
                 res,
                 result,
-                coreCallbacks
+                coreCallbacks,
               );
             });
           } catch (shellError) {
@@ -165,26 +154,26 @@ function createStreamHandler<
               shellError,
               res,
               result,
-              coreCallbacks
+              coreCallbacks,
             );
           }
         },
-        onShellError: (error: unknown) => {
+        onShellError(error: unknown) {
           handleStreamError(
             "onShellError (React)",
             error,
             res,
             result,
-            coreCallbacks
+            coreCallbacks,
           );
         },
-        onError: (error: unknown) => {
+        onError(error: unknown) {
           handleStreamError(
             "onError (React renderToPipeableStream)",
             error,
             res,
             result,
-            coreCallbacks
+            coreCallbacks,
           );
         },
         bootstrapScripts: [],
@@ -195,17 +184,15 @@ function createStreamHandler<
         coreCallbacks.cleanup(result);
       });
     } catch (error: unknown) {
-      const currentResult = resultFromSetup;
-      handleGenericError(error, res, vite, currentResult, coreCallbacks);
-      if (currentResult) {
+      handleGenericError(error, res, vite, setupResult, coreCallbacks);
+
+      if (setupResult) {
         try {
-          if (!res.writableEnded) {
-            coreCallbacks.cleanup(currentResult);
-          }
+          if (!res.writableEnded) coreCallbacks.cleanup(setupResult);
         } catch (cleanupErr) {
           console.error(
             "[SSR] Error during cleanup after generic error:",
-            cleanupErr
+            cleanupErr,
           );
         }
       }

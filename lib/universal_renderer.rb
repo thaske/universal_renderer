@@ -1,6 +1,6 @@
-require 'universal_renderer/version'
-require 'universal_renderer/engine'
-require 'universal_renderer/configuration'
+require "universal_renderer/version"
+require "universal_renderer/engine"
+require "universal_renderer/configuration"
 
 module UniversalRenderer
   class << self

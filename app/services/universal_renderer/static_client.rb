@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-require 'net/http'
-require 'json' # Ensure JSON is required for parsing and generation
-require 'uri' # Ensure URI is required for URI parsing
+require "net/http"
+require "json" # Ensure JSON is required for parsing and generation
+require "uri" # Ensure URI is required for URI parsing
 
 module UniversalRenderer
   class StaticClient
@@ -21,24 +21,28 @@ module UniversalRenderer
         begin
           uri = URI.parse(ssr_url)
           http = Net::HTTP.new(uri.host, uri.port)
-          http.use_ssl = (uri.scheme == 'https')
+          http.use_ssl = (uri.scheme == "https")
           http.open_timeout = timeout
           http.read_timeout = timeout
 
           request = Net::HTTP::Post.new(uri.request_uri) # Use uri.request_uri to include path if present in ssr_url
           request.body = { url: url, props: props }.to_json
-          request['Content-Type'] = 'application/json'
+          request["Content-Type"] = "application/json"
 
           response = http.request(request)
 
           if response.is_a?(Net::HTTPSuccess)
             JSON.parse(response.body).deep_symbolize_keys
           else
-            Rails.logger.error("SSR static request to #{ssr_url} failed: #{response.code} - #{response.message}")
+            Rails.logger.error(
+              "SSR static request to #{ssr_url} failed: #{response.code} - #{response.message}"
+            )
             nil
           end
         rescue StandardError => e
-          Rails.logger.error("SSR static request to #{ssr_url} failed: #{e.class.name} - #{e.message}")
+          Rails.logger.error(
+            "SSR static request to #{ssr_url} failed: #{e.class.name} - #{e.message}"
+          )
           nil
         end
       end

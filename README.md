@@ -44,17 +44,17 @@ UniversalRenderer.configure do |config|
   # (Required) The base URL of your SSR server.
   # Example: 'http://localhost:3001' or 'https://your-ssr-service.com'
   # Can also be set via the SSR_SERVER_URL environment variable.
-  config.ssr_url = ENV.fetch('SSR_SERVER_URL', 'http://localhost:3001')
+  config.ssr_url = ENV.fetch("SSR_SERVER_URL", "http://localhost:3001")
 
   # (Optional) Timeout in seconds for requests to the SSR server.
   # Defaults to 3 seconds.
   # Can also be set via the SSR_TIMEOUT environment variable.
-  config.timeout = (ENV['SSR_TIMEOUT'] || 3).to_i
+  config.timeout = (ENV["SSR_TIMEOUT"] || 3).to_i
 
   # (Optional) The path on your SSR server for streaming requests.
   # Defaults to '/stream'.
   # Can also be set via the SSR_STREAM_PATH environment variable.
-  config.ssr_stream_path = ENV.fetch('SSR_STREAM_PATH', '/stream')
+  config.ssr_stream_path = ENV.fetch("SSR_STREAM_PATH", "/stream")
 end
 ```
 
@@ -165,7 +165,7 @@ Your external SSR server needs to meet the following expectations:
         "props": {
           // JSON object built from add_props calls
           // e.g., "product": { ... }, "current_user_name": "..."
-        }
+        },
       }
       ```
     - **Successful Response:** `200 OK` with a JSON body. The structure of this JSON is up to you, but it will be available in your `app/views/ssr/index.html.erb` template as `@ssr` (with keys symbolized). Example:
@@ -173,7 +173,7 @@ Your external SSR server needs to meet the following expectations:
       {
         "html_content": "<div>Rendered Product</div>",
         "initial_state": { "product_id": 123 },
-        "meta_tags": "<meta name='description' content='...'>"
+        "meta_tags": "<meta name='description' content='...'>",
       }
       ```
 
@@ -187,9 +187,9 @@ Your external SSR server needs to meet the following expectations:
         "url": "current_rails_request_original_url",
         "props": {
           // User-defined props from add_props calls...
-          "_railsLayoutHtml": "<!-- content of app/views/ssr/stream.html.erb -->"
+          "_railsLayoutHtml": "<!-- content of app/views/ssr/stream.html.erb -->",
           // ... other props ...
-        }
+        },
       }
       ```
     - **Successful Response:** `200 OK` with `Content-Type: text/html`. The body should be an HTML stream. The SSR service should handle injecting its rendered components into the provided layout string (found in `props._railsLayoutHtml`) or use the `SsrHelpers` placeholders within it.

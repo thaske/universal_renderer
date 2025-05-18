@@ -22,7 +22,7 @@ class SsrScrubber < Loofah::Scrubber
 
   # Handles <script> tags: removes them and returns true if a script node was processed.
   def handle_script_node(node)
-    return false unless node.name == 'script'
+    return false unless node.name == "script"
 
     node.remove
     true # Indicates the node was a script and has been handled.
@@ -30,7 +30,7 @@ class SsrScrubber < Loofah::Scrubber
 
   # Checks if the node is a type that should bypass detailed attribute scrubbing.
   def passthrough_node?(node)
-    (node.name == 'link' && node['rel']&.to_s&.downcase == 'stylesheet') ||
+    (node.name == "link" && node["rel"]&.to_s&.downcase == "stylesheet") ||
       %w[style meta].include?(node.name)
   end
 
@@ -42,14 +42,18 @@ class SsrScrubber < Loofah::Scrubber
 
   # Removes "javascript:" hrefs from <a> tags.
   def remove_javascript_href(node)
-    node.remove_attribute('href') if node.name == 'a' && node['href']&.to_s&.downcase&.start_with?('javascript:')
+    if node.name == "a" &&
+         node["href"]&.to_s&.downcase&.start_with?("javascript:")
+      node.remove_attribute("href")
+    end
   end
 
   # Removes "on*" event handler attributes from any node.
   def remove_event_handlers(node)
-    attrs_to_remove = node.attributes.keys.select do |name|
-      name.to_s.downcase.start_with?('on')
-    end
+    attrs_to_remove =
+      node.attributes.keys.select do |name|
+        name.to_s.downcase.start_with?("on")
+      end
     attrs_to_remove.each { |attr_name| node.remove_attribute(attr_name) }
   end
 end

@@ -14,7 +14,8 @@
     "build": "tsdown src/",
     "watch": "tsdown src/ --watch"
   },
-  "types": "./dist/index.d.ts",
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
   "dependencies": {
     "express": "^5.1.0"
   },
