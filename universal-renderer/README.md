@@ -16,20 +16,17 @@ import { createServer as createViteServer } from "vite";
 import React from "react";
 import { renderToString } from "react-dom/server";
 import {
-  createSsrServer,
-  type RenderContextBase,
-  type CoreRenderCallbacks,
-  type StaticSpecificCallbacks,
+  createSsrServer
 } from "universal-renderer";
 
 // 1. Define your application's rendering context
-interface AppContext extends RenderContextBase {
-  // jsx is already in RenderContextBase and will be React.ReactElement
+interface AppContext {
+  jsx: React.ReactElement;
   pageTitle: string;
 }
 
 // 2. Implement Core Callbacks
-const coreCallbacks: CoreRenderCallbacks<AppContext> = {
+const coreCallbacks = {
   async setup(requestUrl: string, props: Record<string, any>) {
     // Define a simple React component
     const App = ({ title }: { title: string }) => (
@@ -63,8 +60,8 @@ interface AppRenderOutput {
   html: string;
 }
 
-const staticCallbacks: StaticSpecificCallbacks<AppContext, AppRenderOutput> = {
-  async render(context): Promise<AppRenderOutput> {
+const staticCallbacks = {
+  async render(context: AppContext): Promise<AppRenderOutput> {
     // In a React app, you'd use renderToString(context.jsx)
     const html = renderToString(context.jsx as React.ReactElement);
     return { html };
@@ -126,6 +123,26 @@ startServer();
 
 `universal-renderer` uses a system of callbacks to let you control how your application is set up, rendered, and cleaned up. You provide these callbacks when you create the server.
 
+### Interaction with the `universal_renderer` Ruby Gem
+
+This Node.js package is designed to work in conjunction with its [companion Ruby gem](https://github.com/thaske/universal_renderer) for Rails applications. The gem facilitates communication between your Rails app and this SSR server. Here's a brief overview of the interaction:
+
+- **Static Rendering (`/static` endpoint):**
+
+  - When your Rails application needs to render a component statically, the Ruby gem makes a POST request to the `/static` endpoint of this Node.js server.
+  - The JSON response from this server (e.g., `{ "html": "...", "customData": "..." }`) is then typically assigned to an instance variable in your Rails controller (commonly `@ssr`).
+  - In your Rails views, you can then access the values from this JSON response using the keys (e.g., `@ssr[:html]`, `@ssr[:customData]`). If the gem further processes this into an object like `OpenStruct`, you might access them as `@ssr.html`).
+
+- **Streaming Rendering (`/stream` endpoint):**
+  - For streaming, the Ruby gem and Rails work together in a specific way:
+    1.  Your Rails application begins rendering its view/layout.
+    2.  The HTML content generated _up to (but not including)_ the point where you insert a special marker for meta tags (typically via a helper like `ssr_meta` which outputs `<!-- SSR_META -->`) is sent directly from Rails to the client's browser.
+    3.  The Ruby gem then makes a POST request to the `/stream` endpoint of this Node.js server.
+    4.  The `template` parameter included in this POST request is not necessarily a full HTML document from scratch. Instead, it's the _remainder_ of your Rails layout, starting from the `<!-- SSR_META -->` marker and including the `<!-- SSR_BODY -->` marker.
+    5.  This Node.js server then streams your JavaScript application's rendered output into the provided `template` structure, filling in the `SSR_META` and `SSR_BODY` sections.
+
+This collaborative approach allows Rails to handle the initial part of the page structure and headers, while this Node.js server focuses on rendering the dynamic JavaScript application content.
+
 ### `createSsrServer(options)`
 
 This is the main function. You pass it your Vite instance and your callback implementations.
@@ -153,9 +170,12 @@ Key options:
 
 3.  **`StreamSpecificCallbacks<TContext>`**: (For Streaming SSR)
     - These callbacks manage the streaming process. For React, this typically involves `renderToPipeableStream`. Key callbacks include:
-      - `getReactNode(context)`: Provides the React node to stream (usually `context.jsx`).
       - `onWriteMeta(res, context)`: Allows you to write `<meta>` tags or other head elements early in the stream.
       - `createRenderStreamTransformer(context)`: Optional. To pipe the render stream through transformations (e.g., for styled-components).
+      - `onResponseStart(res, context)`: Called before any part of the response is sent.
+      - `onBeforeWriteClosingHtml(res, context)`: Called after the main application stream has ended but before the closing HTML tags are written.
+      - `onResponseEnd(res, context)`: Called after the response has been fully sent.
+    - Your application's React element should be provided in `context.jsx` (setup via `coreCallbacks.setup`), which is then used directly for streaming.
 
 ## Example: React SSR (Static and Stream)
 
@@ -166,7 +186,6 @@ This example demonstrates a more complete setup using React, covering both stati
 import express from "express";
 import {
   createSsrServer,
-  type RenderContextBase,
   type CoreRenderCallbacks,
   type StreamSpecificCallbacks,
   type StaticSpecificCallbacks,
@@ -197,7 +216,7 @@ const React = {
 // --- End Dummy React ---
 
 // Define the structure for your custom context
-interface MyCustomContext extends RenderContextBase {
+interface MyCustomContext {
   // jsx is already in RenderContextBase
   appName: string;
   initialData?: Record<string, any>;
@@ -251,10 +270,8 @@ const myCoreCallbacks: CoreRenderCallbacks<MyCustomContext> = {
 };
 
 const myStreamCallbacks: StreamSpecificCallbacks<MyCustomContext> = {
-  getReactNode(context) {
-    // Typically, context.jsx is already your fully prepared React element
-    return context.jsx;
-  },
+  // context.jsx (returned from coreCallbacks.setup) is used directly for renderToPipeableStream.
+  // A specific getReactNode callback is not used by the default stream handler.
   async onResponseStart(res, context) {
     console.log(
       `Stream starting for ${context.appName} to URL ${context.initialData?.url}`,
@@ -360,10 +377,10 @@ The server created by `createSsrServer` exposes these POST endpoints (paths are 
 
 - `/static` (or `/`): For static SSR.
   - Request body: `{ "url": string, "props"?: Record<string, any> }`
-  - Response: JSON object whose structure is determined by your `staticCallbacks.render` (e.g., `{ html: "...", meta: "..." }`).
+  - Response: JSON object whose structure is determined by your `staticCallbacks.render` (e.g., `{ html: "...", meta: "..." }`). This JSON response is typically consumed by the accompanying Ruby gem, making its keys available in your Rails view context (often via an `@ssr` variable).
 - `/stream`: For streaming SSR.
   - Request body: `{ "url": string, "props"?: Record<string, any>, "template": string }`
-  - Response: HTML stream.
+  - Response: HTML stream. The `template` is usually provided by the Ruby gem and represents the latter portion of a Rails layout.
 
 And a GET endpoint for health checks:
 
@@ -371,9 +388,11 @@ And a GET endpoint for health checks:
 
 ## HTML Template for Streaming
 
-When using the `/stream` endpoint, your backend (e.g., Rails) must provide an HTML template string in the `template` field of the request body.
+When using the `/stream` endpoint, your backend (e.g., Rails, via the `universal_renderer` gem) must provide an HTML template string in the `template` field of the request body.
 
-The template needs markers for content injection:
+As described in "Interaction with the `universal_renderer` Ruby Gem", when the gem initiates a streaming request, this `template` is typically the part of your Rails layout that starts with `<!-- SSR_META -->` and includes `<!-- SSR_BODY -->`. Rails will have already sent the initial part of the HTML document (e.g., `<!DOCTYPE html>`, opening `<html>` and `<head>` tags) to the browser.
+
+The template needs markers for content injection by this Node.js server:
 
 - `<!-- SSR_BODY -->`: **Mandatory.** This is where your main app content will be streamed.
 - `<!-- SSR_META -->`: **Recommended.** Used by `streamCallbacks.onWriteMeta` to inject meta tags, title, etc., into the `<head>`.
