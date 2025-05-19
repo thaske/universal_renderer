@@ -1,7 +1,6 @@
 import type { Request, Response } from "express";
 import { PassThrough } from "node:stream";
 import { renderToPipeableStream } from "react-dom/server.node";
-import type { ViteDevServer } from "vite";
 
 import type {
   CoreRenderCallbacks,
@@ -20,19 +19,15 @@ import {
 /**
  * Creates a stream handler for the SSR server.
  *
- * @param vite - The Vite dev server instance.
- * @param callbacks - The callbacks for the stream handler.
+ * @param callbacks - The callbacks for the stream handler, including framework-specific delegate.
  * @returns A function that handles streaming rendering requests.
  */
 function createStreamHandler<
   TContext extends RenderContextBase = RenderContextBase,
->(
-  vite: ViteDevServer,
-  callbacks: {
-    coreCallbacks: CoreRenderCallbacks<TContext>;
-    streamCallbacks: StreamSpecificCallbacks<TContext>;
-  },
-) {
+>(callbacks: {
+  coreCallbacks: CoreRenderCallbacks<TContext>;
+  streamCallbacks: StreamSpecificCallbacks<TContext>;
+}) {
   const { coreCallbacks, streamCallbacks } = callbacks;
 
   return async function streamHandler(
@@ -91,97 +86,72 @@ function createStreamHandler<
 
       const { pipe } = renderToPipeableStream(context.jsx, {
         async onShellReady() {
-          try {
-            if (!res.headersSent) {
-              res.statusCode = 200;
-              res.setHeader("Content-Type", "text/html; charset=utf-8");
-              res.setHeader("Transfer-Encoding", "chunked");
-            }
+          if (!res.headersSent) {
+            res.statusCode = 200;
+            res.setHeader("Content-Type", "text/html; charset=utf-8");
+            res.setHeader("Transfer-Encoding", "chunked");
+          }
 
-            const {
-              beforeMetaChunk,
-              afterMetaAndBeforeBodyChunk,
-              afterBodyChunk,
-            } = parseLayoutTemplate(template);
+          const {
+            beforeMetaChunk,
+            afterMetaAndBeforeBodyChunk,
+            afterBodyChunk,
+          } = parseLayoutTemplate(template);
 
-            res.write(beforeMetaChunk);
+          res.write(beforeMetaChunk);
 
-            await streamCallbacks.onWriteMeta?.(res, context!);
+          await streamCallbacks.onWriteMeta?.(res, context!);
 
-            res.write(afterMetaAndBeforeBodyChunk);
+          res.write(afterMetaAndBeforeBodyChunk);
 
-            const userTransformStream =
-              streamCallbacks.createResponseTransformer?.(context!);
+          const userTransformStream =
+            streamCallbacks.createRenderStreamTransformer?.(context!);
 
-            const reactOutputStream = new PassThrough();
+          const renderOutputStream = new PassThrough();
 
-            // Setup stream error handling
-            reactOutputStream.on("error", (streamError: unknown) => {
-              handleStreamError(
-                "React render stream or user transform",
-                streamError,
-                res,
-                context!,
-                coreCallbacks,
-              );
-            });
-
-            // Create a promise that resolves when the stream ends
-            const streamEndPromise = new Promise<void>((resolve) => {
-              reactOutputStream.on("end", resolve);
-            });
-
-            // Pipe React stream but don't end response yet
-            if (userTransformStream) {
-              reactOutputStream
-                .pipe(userTransformStream)
-                .pipe(res, { end: false });
-            } else {
-              reactOutputStream.pipe(res, { end: false });
-            }
-
-            // Start the React streaming
-            pipe(reactOutputStream);
-
-            // Wait for React content to be fully streamed
-            await streamEndPromise;
-
-            try {
-              await streamCallbacks.onBeforeWriteClosingHtml?.(res, context!);
-            } catch (endError) {
-              handleStreamError(
-                "onBeforeWriteClosingHtml",
-                endError,
-                res,
-                context!,
-                coreCallbacks,
-              );
-            }
-
-            try {
-              res.end(afterBodyChunk);
-            } catch (endError) {
-              handleStreamError(
-                "onStreamEnd (writing state/final chunks)",
-                endError,
-                res,
-                context!,
-                coreCallbacks,
-              );
-            }
-          } catch (shellError) {
+          renderOutputStream.on("error", (streamError: unknown) => {
             handleStreamError(
-              "onShellReady",
-              shellError,
+              "Application render stream or user transform",
+              streamError,
+              res,
+              context!,
+              coreCallbacks,
+            );
+          });
+
+          const streamEndPromise = new Promise<void>((resolve) => {
+            renderOutputStream.on("end", resolve);
+          });
+
+          if (userTransformStream) {
+            renderOutputStream
+              .pipe(userTransformStream)
+              .pipe(res, { end: false });
+          } else {
+            renderOutputStream.pipe(res, { end: false });
+          }
+
+          pipe(renderOutputStream);
+
+          await streamEndPromise;
+
+          try {
+            await streamCallbacks.onBeforeWriteClosingHtml?.(res, context!);
+          } catch (endError) {
+            handleStreamError(
+              "onBeforeWriteClosingHtml",
+              endError,
               res,
               context!,
               coreCallbacks,
             );
           }
+
+          res.end(afterBodyChunk);
         },
         onShellError(error: unknown) {
           handleStreamError(
-            "onShellError (React)",
+            "onShellError",
             error,
             res,
             context!,
@@ -189,15 +159,8 @@ function createStreamHandler<
           );
         },
         onError(error: unknown) {
-          handleStreamError(
-            "onError (React renderToPipeableStream)",
-            error,
-            res,
-            context!,
-            coreCallbacks,
-          );
+          handleStreamError("onError", error, res, context!, coreCallbacks);
         },
-        bootstrapScripts: [],
       });
 
       res.on("finish", () => {
