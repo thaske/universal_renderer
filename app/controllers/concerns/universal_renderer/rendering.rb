@@ -28,7 +28,10 @@ module UniversalRenderer
       set_streaming_headers
 
       full_layout = render_to_string
-      before_meta, after_meta = full_layout.split(ssr_meta)
+
+      split_index = full_layout.index("<!-- SSR_META -->")
+      before_meta = full_layout[0...split_index]
+      after_meta = full_layout[split_index..]
 
       response.stream.write(before_meta)
 
@@ -92,9 +95,7 @@ module UniversalRenderer
 
       # Disable Nginx buffering per-response.
       response.headers["X-Accel-Buffering"] = "no"
-
-      # For SSE specifically.
-      response.headers["Content-Type"] = "text/event-stream"
+      response.headers["Content-Type"] = "text/html"
 
       # Remove Content-Length header to prevent buffering.
       response.headers.delete("Content-Length")
@@ -114,6 +115,18 @@ module UniversalRenderer
       response.stream.close unless response.stream.closed?
       # If response not committed, no explicit render is called here,
       # allowing Rails' default rendering behavior to take over.
+    end
+
+    # Overrides the built-in render_to_string.
+    # If you call render_to_string with no explicit template/partial/inline,
+    # it will fall back to 'ssr/index'.
+    def render_to_string(options = {}, *args, &block)
+      if options.is_a?(Hash) && !options.key?(:template) &&
+           !options.key?(:partial) && !options.key?(:inline) &&
+           !options.key?(:json) && !options.key?(:xml)
+        options = options.merge(template: "application/index")
+      end
+      super(options, *args, &block)
     end
   end
 end

@@ -1,10 +1,9 @@
 import type { Response } from "express";
-import type { ViteDevServer } from "vite";
 
 import type {
   CoreRenderCallbacks,
   LayoutChunks,
-  SetupResultBase,
+  RenderContextBase,
 } from "@/types";
 
 /**
@@ -41,27 +40,26 @@ export function parseLayoutTemplate(layout: string): LayoutChunks {
  *
  * @param error - The error to handle.
  * @param res - The Express response object.
- * @param vite - The Vite dev server instance.
- * @param appSetupResult - The app setup result.
+ * @param context - The render context.
  * @param renderCallbacks - The render callbacks.
  */
 export function handleGenericError<
-  TSetupResult extends SetupResultBase = SetupResultBase,
+  TContext extends RenderContextBase = RenderContextBase,
 >(
   error: Error | unknown,
   res: Response,
-  vite?: ViteDevServer,
-  appSetupResult?: TSetupResult,
-  renderCallbacks?: CoreRenderCallbacks<TSetupResult>,
+  context?: TContext,
+  renderCallbacks?: CoreRenderCallbacks<TContext>,
 ): void {
-  console.error("[SSR] Generic error:", error);
-  if (vite && error instanceof Error) {
-    vite.ssrFixStacktrace(error);
+  if (renderCallbacks?.onError) {
+    renderCallbacks.onError(error, context);
   }
 
-  if (appSetupResult && renderCallbacks?.cleanup) {
+  console.error("[SSR] Generic error:", error);
+
+  if (context && renderCallbacks?.cleanup) {
     try {
-      renderCallbacks.cleanup(appSetupResult);
+      renderCallbacks.cleanup(context);
     } catch (cleanupError) {
       console.error(
         "[SSR] Error during cleanup after generic error:",
@@ -89,25 +87,27 @@ export function handleGenericError<
 /**
  * Handles errors that occur within a stream, ensuring resources are cleaned up.
  *
- * @param context - The context of the error.
+ * @param context - The context in which the error occured in.
  * @param error - The error to handle.
  * @param res - The Express response object.
- * @param appSetupResult - The app setup result.
+ * @param renderContext - The render context.
  * @param renderCallbacks - The render callbacks.
  */
 export function handleStreamError<
-  TSetupResult extends SetupResultBase = SetupResultBase,
+  TContext extends RenderContextBase = RenderContextBase,
 >(
-  context: string,
+  errorContext: string,
   error: Error | unknown,
   res: Response,
-  appSetupResult: TSetupResult,
-  renderCallbacks: CoreRenderCallbacks<TSetupResult>,
+  renderContext: TContext,
+  renderCallbacks: CoreRenderCallbacks<TContext>,
 ): void {
-  console.error(`[SSR] ${context} error:`, error);
+  if (renderCallbacks.onError) {
+    renderCallbacks.onError(error, renderContext, errorContext);
+  }
 
   try {
-    renderCallbacks.cleanup(appSetupResult);
+    renderCallbacks.cleanup(renderContext);
   } catch (cleanupError) {
     console.error(
       "[SSR] Error during cleanup after stream error:",
@@ -119,7 +119,7 @@ export function handleStreamError<
     res
       .status(500)
       .send(
-        `<h1>Streaming Error</h1><p>Error during ${context}. Please check server logs.</p>`,
+        `<h1>Streaming Error</h1><p>Error during ${errorContext}. Please check server logs.</p>`,
       );
   } else if (!res.writableEnded) {
     res.end("<!-- Streaming Error -->");

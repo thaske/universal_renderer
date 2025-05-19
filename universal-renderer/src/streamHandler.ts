@@ -5,8 +5,8 @@ import type { ViteDevServer } from "vite";
 
 import type {
   CoreRenderCallbacks,
+  RenderContextBase,
   RenderRequestProps,
-  SetupResultBase,
   StreamSpecificCallbacks,
 } from "@/types";
 
@@ -25,12 +25,12 @@ import {
  * @returns A function that handles streaming rendering requests.
  */
 function createStreamHandler<
-  TSetupResult extends SetupResultBase = SetupResultBase,
+  TContext extends RenderContextBase = RenderContextBase,
 >(
   vite: ViteDevServer,
   callbacks: {
-    coreCallbacks: CoreRenderCallbacks<TSetupResult>;
-    streamCallbacks: StreamSpecificCallbacks<TSetupResult>;
+    coreCallbacks: CoreRenderCallbacks<TContext>;
+    streamCallbacks: StreamSpecificCallbacks<TContext>;
   },
 ) {
   const { coreCallbacks, streamCallbacks } = callbacks;
@@ -39,7 +39,7 @@ function createStreamHandler<
     req: Request,
     res: Response,
   ): Promise<void> {
-    let setupResult: TSetupResult | undefined;
+    let context: TContext | undefined;
 
     try {
       const {
@@ -69,16 +69,16 @@ function createStreamHandler<
         );
       }
 
-      setupResult = await coreCallbacks.setup(url, props);
+      context = await coreCallbacks.setup(url, props);
 
-      if (!setupResult) {
-        console.error("[SSR] setup did not return a result.");
+      if (!context) {
+        console.error("[SSR] setup did not return a context.");
 
         if (!res.headersSent) {
           res
             .status(500)
             .send(
-              "Server Error: Application setup failed to produce a valid result.",
+              "Server Error: Application setup failed to produce a valid context.",
             );
         } else if (!res.writableEnded) {
           res.end();
@@ -87,11 +87,9 @@ function createStreamHandler<
         return;
       }
 
-      const result = setupResult;
+      await streamCallbacks.onResponseStart?.(res, context);
 
-      await streamCallbacks.onResponseStart?.(res, result);
-
-      const stream = renderToPipeableStream(result.jsx, {
+      const { pipe } = renderToPipeableStream(context.jsx, {
         async onShellReady() {
           try {
             if (!res.headersSent) {
@@ -108,52 +106,75 @@ function createStreamHandler<
 
             res.write(beforeMetaChunk);
 
-            await streamCallbacks.onWriteMeta?.(res, result);
+            await streamCallbacks.onWriteMeta?.(res, context!);
 
             res.write(afterMetaAndBeforeBodyChunk);
 
             const userTransformStream =
-              streamCallbacks.createResponseTransformer?.(result);
+              streamCallbacks.createResponseTransformer?.(context!);
 
             const reactOutputStream = new PassThrough();
 
-            stream.pipe(reactOutputStream);
-
-            if (userTransformStream)
-              reactOutputStream.pipe(userTransformStream).pipe(res);
-            else reactOutputStream.pipe(res);
-
-            reactOutputStream.on("end", async () => {
-              try {
-                await streamCallbacks.onBeforeWriteClosingHtml?.(res, result);
-
-                res.end(afterBodyChunk);
-              } catch (endError) {
-                handleStreamError(
-                  "onStreamEnd (writing state/final chunks)",
-                  endError,
-                  res,
-                  result,
-                  coreCallbacks,
-                );
-              }
-            });
-
+            // Setup stream error handling
             reactOutputStream.on("error", (streamError: unknown) => {
               handleStreamError(
                 "React render stream or user transform",
                 streamError,
                 res,
-                result,
+                context!,
                 coreCallbacks,
               );
             });
+
+            // Create a promise that resolves when the stream ends
+            const streamEndPromise = new Promise<void>((resolve) => {
+              reactOutputStream.on("end", resolve);
+            });
+
+            // Pipe React stream but don't end response yet
+            if (userTransformStream) {
+              reactOutputStream
+                .pipe(userTransformStream)
+                .pipe(res, { end: false });
+            } else {
+              reactOutputStream.pipe(res, { end: false });
+            }
+
+            // Start the React streaming
+            pipe(reactOutputStream);
+
+            // Wait for React content to be fully streamed
+            await streamEndPromise;
+
+            try {
+              await streamCallbacks.onBeforeWriteClosingHtml?.(res, context!);
+            } catch (endError) {
+              handleStreamError(
+                "onBeforeWriteClosingHtml",
+                endError,
+                res,
+                context!,
+                coreCallbacks,
+              );
+            }
+
+            try {
+              res.end(afterBodyChunk);
+            } catch (endError) {
+              handleStreamError(
+                "onStreamEnd (writing state/final chunks)",
+                endError,
+                res,
+                context!,
+                coreCallbacks,
+              );
+            }
           } catch (shellError) {
             handleStreamError(
               "onShellReady",
               shellError,
               res,
-              result,
+              context!,
               coreCallbacks,
             );
           }
@@ -163,7 +184,7 @@ function createStreamHandler<
             "onShellError (React)",
             error,
             res,
-            result,
+            context!,
             coreCallbacks,
           );
         },
@@ -172,7 +193,7 @@ function createStreamHandler<
             "onError (React renderToPipeableStream)",
             error,
             res,
-            result,
+            context!,
             coreCallbacks,
           );
         },
@@ -180,15 +201,17 @@ function createStreamHandler<
       });
 
       res.on("finish", () => {
-        streamCallbacks.onResponseEnd?.(res, result);
-        coreCallbacks.cleanup(result);
+        if (context) {
+          streamCallbacks.onResponseEnd?.(res, context);
+          coreCallbacks.cleanup(context);
+        }
       });
     } catch (error: unknown) {
-      handleGenericError(error, res, vite, setupResult, coreCallbacks);
+      handleGenericError(error, res, context, coreCallbacks);
 
-      if (setupResult) {
+      if (context) {
         try {
-          if (!res.writableEnded) coreCallbacks.cleanup(setupResult);
+          if (!res.writableEnded) coreCallbacks.cleanup(context);
         } catch (cleanupErr) {
           console.error(
             "[SSR] Error during cleanup after generic error:",

@@ -7,20 +7,20 @@ import type { ViteDevServer } from "vite";
 // --- User Application & Configuration ---
 
 /**
- * Base result of the setup callback, containing the essential JSX
- * and allowing for arbitrary user-defined context.
+ * Base context object for rendering, containing the essential JSX
+ * and allowing for arbitrary user-defined data.
  */
-export interface SetupResultBase {
+export interface RenderContextBase {
   jsx: React.ReactElement; // The main JSX element to be rendered
   [key: string]: any; // Allows users to pass through other context/instances they manage
 }
 
 /**
  * Core callbacks for application setup and cleanup, common to all rendering strategies.
- * @template TSetupResult The type of the result returned by setup and consumed by other callbacks.
+ * @template TContext The type of the context passed between callbacks.
  */
 export interface CoreRenderCallbacks<
-  TSetupResult extends SetupResultBase = SetupResultBase,
+  TContext extends RenderContextBase = RenderContextBase,
 > {
   /**
    * Sets up the main application component with necessary providers (Router, Helmet, QueryClient, etc.).
@@ -32,122 +32,120 @@ export interface CoreRenderCallbacks<
   setup: (
     requestUrl: string,
     props: Record<string, any>,
-  ) => Promise<TSetupResult> | TSetupResult;
+  ) => Promise<TContext> | TContext;
 
   /**
    * Performs cleanup of resources after rendering.
    * This is the primary cleanup, called for both streaming and static rendering,
    * and is called on both successful renders and in error scenarios.
-   * @param setupResult The result from the setup callback.
+   * @param context The context object passed between callbacks.
    */
-  cleanup: (setupResult: TSetupResult) => void;
+  cleanup: (context: TContext) => void;
+
+  /**
+   * Called when an error occurs during rendering.
+   * @param error The error that occurred.
+   * @param errorContext A string describing the context of the error.
+   * @param context The context object passed between callbacks.
+   */
+  onError?: (
+    error: Error | unknown,
+    context?: TContext,
+    errorContext?: string,
+  ) => void;
 }
 
 /**
  * Callbacks specific to the streaming rendering strategy.
  * These are used after the common `setup` and before the common `cleanup`.
- * @template TSetupResult The type of the result from the main `setup` callback.
+ * @template TContext The type of the context passed between callbacks.
  */
 export interface StreamSpecificCallbacks<
-  TSetupResult extends SetupResultBase = SetupResultBase,
+  TContext extends RenderContextBase = RenderContextBase,
 > {
   /**
    * Optional: Called once before any part of the HTML document is written to the response for streaming.
    * Useful for setting custom headers or performing other initial setup on the response.
    * @param res The Express Response object.
-   * @param setupResult The result from the setup callback.
-   * @param shellContext The context object (containing meta and state) returned by getShellContext.
+   * @param context The context object passed between callbacks.
    */
-  onResponseStart?: (
-    res: Response,
-    setupResult: TSetupResult,
-  ) => Promise<void> | void;
+  onResponseStart?: (res: Response, context: TContext) => Promise<void> | void;
 
   /**
    * Optional: Called after the meta tag has been written to the response.
    * @param res The Express Response object.
-   * @param setupResult The result from the setup callback.
-   * @param shellContext The context object (containing meta and state) returned by getShellContext.
+   * @param context The context object passed between callbacks.
    */
-  onWriteMeta?: (
-    res: Response,
-    setupResult: TSetupResult,
-  ) => Promise<void> | void;
+  onWriteMeta?: (res: Response, context: TContext) => Promise<void> | void;
 
   /**
    * Optional: Creates a transform stream to pipe the React render stream through.
    * Useful for injecting styles (e.g., styled-components) or other stream transformations.
-   * @param setupResult The result from the setup callback.
+   * @param context The context object passed between callbacks.
    * @returns A Transform stream or undefined.
    */
-  createResponseTransformer?: (
-    setupResult: TSetupResult,
-  ) => Transform | undefined;
+  createResponseTransformer?: (context: TContext) => Transform | undefined;
 
   /**
    * Optional: Called after the main React content stream has finished,
    * but *before* the HTML parts containing the state script and the final closing HTML tags are written.
    * @param res The Express Response object.
-   * @param setupResult The result from the setup callback.
-   * @param shellContext The context object (containing meta and state) returned by getShellContext.
+   * @param context The context object passed between callbacks.
    */
   onBeforeWriteClosingHtml?: (
     res: Response,
-    setupResult: TSetupResult,
+    context: TContext,
   ) => Promise<void> | void;
 
   /**
    * Optional: Called after the HTTP response has been fully sent and ended for a streamed response.
    * Useful for logging or final resource cleanup related to the response.
    * @param res The Express Response object.
-   * @param setupResult The result from the setup callback.
+   * @param context The context object passed between callbacks.
    */
-  onResponseEnd?: (
-    res: Response,
-    setupResult: TSetupResult,
-  ) => Promise<void> | void;
+  onResponseEnd?: (res: Response, context: TContext) => Promise<void> | void;
 }
 
 /**
  * Callbacks specific to the static HTML rendering strategy.
  * These are used after the common `setup` and before the common `cleanup`.
- * @template TSetupResult The type of the result from the main `setup` callback.
+ * @template TContext The type of the context passed between callbacks.
  * @template TRenderOutput The type of the output from the static render callback.
  */
 export interface StaticSpecificCallbacks<
-  TSetupResult extends SetupResultBase = SetupResultBase,
+  TContext extends RenderContextBase = RenderContextBase,
   TRenderOutput extends Record<string, any> = Record<string, any>,
 > {
   /**
    * Renders the application to a static object where keys and values are strings.
    * This is called after the common \`setup\` and before the common \`cleanup\`.
-   * The \`jsx\` for rendering is typically \`setupResult.jsx\` from the \`setupResult\`.
-   * @param setupResult The result from the common \`setup\` callback.
+   * The \`jsx\` for rendering is typically available in the context object.
+   * @param context The context object passed between callbacks.
    * @returns A promise or direct result containing the statically rendered HTML parts.
    */
-  render: (setupResult: TSetupResult) => Promise<TRenderOutput> | TRenderOutput;
+  render: (context: TContext) => Promise<TRenderOutput> | TRenderOutput;
 }
 
 /**
  * Options for the main createSsrServer function.
- * @template TSetupResult The type of the setup result used by renderCallbacks.
+ * @template TContext The type of the context used by render callbacks.
  * @template TRenderOutput The type of the output from the static render callback.
  */
 export interface CreateSsrServerOptions<
-  TSetupResult extends SetupResultBase = SetupResultBase,
+  TContext extends RenderContextBase = RenderContextBase,
   TRenderOutput extends Record<string, any> = Record<string, any>,
 > {
   /** The Vite dev server instance. */
   vite: ViteDevServer;
 
   /** Callbacks for core application setup and cleanup. */
-  coreCallbacks: CoreRenderCallbacks<TSetupResult>;
+  coreCallbacks: CoreRenderCallbacks<TContext>;
 
   /** Optional: Callbacks specific to the streaming rendering strategy. */
-  streamCallbacks?: StreamSpecificCallbacks<TSetupResult>;
+  streamCallbacks?: StreamSpecificCallbacks<TContext>;
 
   /** Optional: Callbacks specific to the static HTML rendering strategy. */
-  staticCallbacks?: StaticSpecificCallbacks<TSetupResult, TRenderOutput>;
+  staticCallbacks?: StaticSpecificCallbacks<TContext, TRenderOutput>;
 
   /** Base path for the application, if not running at root. Defaults to '/'. */
   basePath?: string;
@@ -186,14 +184,14 @@ export interface LayoutChunks {
  * Options specific to the stream pipeline setup.
  */
 export interface StreamPipelineOptions<
-  TSetupResult extends SetupResultBase = SetupResultBase,
+  TContext extends RenderContextBase = RenderContextBase,
 > {
   jsx: React.ReactElement;
   res: Response;
   req: Request;
-  coreCallbacks: CoreRenderCallbacks<TSetupResult>;
-  streamCallbacks: StreamSpecificCallbacks<TSetupResult>;
-  appSetupResult: TSetupResult;
+  coreCallbacks: CoreRenderCallbacks<TContext>;
+  streamCallbacks: StreamSpecificCallbacks<TContext>;
+  renderContext: TContext;
   viteDevServer: ViteDevServer;
   htmlTemplate: string;
 }

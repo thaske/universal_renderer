@@ -3,8 +3,8 @@ import type { ViteDevServer } from "vite";
 
 import type {
   CoreRenderCallbacks,
+  RenderContextBase,
   RenderRequestProps,
-  SetupResultBase,
   StaticSpecificCallbacks,
 } from "@/types";
 
@@ -18,12 +18,12 @@ import { handleGenericError } from "@/utils";
  * @returns A function that handles static rendering requests.
  */
 export default function createStaticHandler<
-  TSetupResult extends SetupResultBase = SetupResultBase,
+  TContext extends RenderContextBase = RenderContextBase,
 >(
   vite: ViteDevServer,
   callbacks: {
-    coreCallbacks: CoreRenderCallbacks<TSetupResult>;
-    staticCallbacks?: StaticSpecificCallbacks<TSetupResult>;
+    coreCallbacks: CoreRenderCallbacks<TContext>;
+    staticCallbacks?: StaticSpecificCallbacks<TContext>;
   },
 ) {
   const { coreCallbacks, staticCallbacks } = callbacks;
@@ -32,7 +32,7 @@ export default function createStaticHandler<
     req: Request,
     res: Response,
   ): Promise<void> {
-    let setupResult: TSetupResult | undefined = undefined;
+    let context: TContext | undefined = undefined;
 
     try {
       const { url, props = {} } = req.body as {
@@ -46,16 +46,16 @@ export default function createStaticHandler<
         return;
       }
 
-      setupResult = await coreCallbacks.setup(url, props);
+      context = await coreCallbacks.setup(url, props);
 
-      if (!setupResult) {
-        console.error("[SSR] setup did not return a result.");
+      if (!context) {
+        console.error("[SSR] setup did not return a context.");
 
         if (!res.headersSent) {
           res
             .status(500)
             .send(
-              "Server Error: Application setup failed to produce a valid result.",
+              "Server Error: Application setup failed to produce a valid context.",
             );
         } else if (!res.writableEnded) {
           res.end();
@@ -76,20 +76,14 @@ export default function createStaticHandler<
         return;
       }
 
-      const renderResult = await staticCallbacks.render(setupResult);
+      const renderResult = await staticCallbacks.render(context);
 
       res.json(renderResult);
     } catch (error: unknown) {
-      handleGenericError<TSetupResult>(
-        error,
-        res,
-        vite,
-        setupResult,
-        coreCallbacks,
-      );
+      handleGenericError<TContext>(error, res, vite, context, coreCallbacks);
     } finally {
-      if (setupResult) {
-        coreCallbacks.cleanup(setupResult);
+      if (context) {
+        coreCallbacks.cleanup(context);
       }
     }
   };
