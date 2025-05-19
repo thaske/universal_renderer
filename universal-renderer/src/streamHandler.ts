@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { PassThrough } from "node:stream";
-import { renderToPipeableStream } from "react-dom/server";
+import { renderToPipeableStream } from "react-dom/server.node";
 import type { ViteDevServer } from "vite";
 
 import type {
