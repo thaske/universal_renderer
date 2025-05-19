@@ -1,6 +1,6 @@
 {
   "name": "universal-renderer",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Server-Side Rendering (SSR) server for the universal_renderer Ruby gem.",
   "license": "MIT",
   "author": "thaske",
@@ -11,8 +11,8 @@
   },
   "bugs": "https://github.com/thaske/universal_renderer/issues",
   "scripts": {
-    "build": "tsdown src/ --from-vite",
-    "watch": "tsdown src/ --watch --from-vite"
+    "build": "tsdown src/",
+    "watch": "tsdown src/ --watch"
   },
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
