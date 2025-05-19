@@ -203,18 +203,3 @@ export interface StreamPipelineOptions<
   viteDevServer: ViteDevServer;
   htmlTemplate: string;
 }
-
-// --- Framework Agnostic Rendering Types ---
-
-/**
- * Defines the output of a framework's rendering process,
- * primarily providing a `pipe` method to stream the output.
- */
-export interface FrameworkRenderPipeline {
-  /**
-   * Pipes the rendered output to a writable stream.
-   * @param writable The stream to write the rendered output to.
-   */
-  pipe: (writable: NodeJS.WritableStream) => void;
-  // Frameworks could potentially add other control methods like abort() if needed in the future.
-}
