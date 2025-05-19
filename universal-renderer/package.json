@@ -11,8 +11,8 @@
   },
   "bugs": "https://github.com/thaske/universal_renderer/issues",
   "scripts": {
-    "build": "tsdown src/",
-    "watch": "tsdown src/ --watch"
+    "build": "tsdown src/ --from-vite",
+    "watch": "tsdown src/ --watch --from-vite"
   },
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
