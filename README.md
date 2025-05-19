@@ -176,21 +176,21 @@ Your external SSR server needs to meet the following expectations:
       _Note: Some Node.js SSR servers like `universal-renderer` might default to a `/static` path. Ensure your SSR server listens on `/` for static requests if using this gem's default, or configure the Node.js server's `basePath` or routes accordingly._
     - **Method:** `POST`
     - **Request Body (JSON):**
-      ```json
+      ```jsonc
       {
         "url": "current_rails_request_original_url",
         "props": {
           // JSON object built from add_props calls
           // e.g., "product": { ... }, "current_user_name": "..."
-        }
+        },
       }
       ```
     - **Successful Response:** `200 OK` with a JSON body. The structure of this JSON is up to you, but it will be available in your `app/views/ssr/index.html.erb` template as `@ssr` (with keys symbolized). Example:
-      ```json
+      ```jsonc
       {
         "html_content": "<div>Rendered Product</div>",
         "initial_state": { "product_id": 123 },
-        "meta_tags": "<meta name='description' content='...'>"
+        "meta_tags": "<meta name='description' content='...'>",
       }
       ```
 
@@ -199,14 +199,14 @@ Your external SSR server needs to meet the following expectations:
     - **Path:** `config.ssr_stream_path` (defaults to `/stream`) on the `config.ssr_url`.
     - **Method:** `POST`
     - **Request Body (JSON):**
-      ```json
+      ```jsonc
       {
         "url": "current_rails_request_original_url",
         "props": {
           // User-defined props from add_props calls,
           // e.g., "product": { ... }, "current_user_name": "..."
         },
-        "template": "<!-- SSR_META -->...HTML between meta and body...<!-- SSR_BODY -->...HTML after body...</html>"
+        "template": "<!-- SSR_META -->...HTML between meta and body...<!-- SSR_BODY -->...HTML after body...</html>",
       }
       ```
     - **Successful Response:** `200 OK` with `Content-Type: text/html`. The body should be an HTML stream. The Node.js SSR server will use the `template` field from the request body to inject content at the `<!-- SSR_META -->` and `<!-- SSR_BODY -->` placeholders.
