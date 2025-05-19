@@ -174,8 +174,7 @@ export interface CreateSsrServerOptions<
  * Props typically received in the request body for rendering.
  */
 export interface RenderRequestProps {
-  _railsLayoutHtml?: string; // For streaming, layout provided by Rails
-  [key: string]: any; // Other props
+  [key: string]: any;
 }
 
 /**
