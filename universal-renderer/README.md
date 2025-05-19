@@ -8,7 +8,7 @@ A flexible and customizable server for Server-Side Rendering (SSR) of JavaScript
 
 - **Framework Agnostic Core**: The core is designed to support any SSR setup through a flexible callback system.
 - **Vite-Powered**: Leverages Vite for fast HMR during development and efficient module loading.
-- **Static & Streaming SSR**: Supports both static rendering and `renderToPipeableStream` (streaming) out of the box.
+- **Static & Streaming SSR**: Supports static rendering and streaming SSR. **Note:** The current streaming implementation uses React's `renderToPipeableStream` and is therefore specific to React.
 - **Customizable Rendering Lifecycle**: Use `RenderCallbacks` to integrate your specific libraries for routing, state management, styling, and metadata.
 - **Type-Safe Customization**: Generic types for `SetupResultBase` and `RenderCallbacks` ensure type safety even with complex custom setups.
 - **Default React Setup**: Includes pre-configured callbacks for common React ecosystems (React Router, React Helmet Async, React Query, Styled Components).
