@@ -136,6 +136,30 @@ Make sure any data passed is serializable to JSON (e.g., call `.as_json` on Acti
 The gem relies on a few conventional template paths:
 
 - `app/views/ssr/index.html.erb`: Used when `StaticClient` successfully receives data from the SSR server. This template typically uses the data (available in `@ssr`) to render the page.
+  **Example (`app/views/ssr/index.html.erb` for static rendering):**
+  This example assumes your SSR server returns a JSON object with keys like `:meta`, `:styles`, `:root`, and `:state`. You would need to ensure proper sanitization of this content (e.g., using `sanitize` or a custom helper like `sanitize_ssr` shown below).
+
+  ```erb
+  <%# Assuming @ssr contains keys like :meta, :styles, :root, :state from the SSR server %>
+  <%# You are responsible for sanitizing these values appropriately. %>
+  <%# The sanitize_ssr helper is hypothetical and you'd need to implement it or use Rails' sanitize. %>
+
+  <% content_for :head_tags do %>
+    <%= raw @ssr[:meta] %> <%# Example: <meta name="description" content="..."> %>
+    <%= raw @ssr[:styles] %> <%# Example: <style>...</style> or <link rel="stylesheet" ...> %>
+  <% end %>
+
+  <div id="root" data-ssr-rendered="true">
+    <%= raw @ssr[:root] %> <%# Example: <div>Your pre-rendered React/Vue/etc. app</div> %>
+  </div>
+
+  <script id="ssr-state" type="application/json">
+    <%= raw @ssr[:state].to_json %>
+  </script>
+  ```
+
+  Remember to yield `:head_tags` in your main layout's `<head>` section (e.g., `<%= yield :head_tags %>`) if you use `content_for` as in this example.
+
 - `app/views/application/index.html.erb`: This template is used as a fallback if SSR fails (e.g., SSR server is down, returns an error, or `StaticClient` receives no data). This usually contains your client-side rendering (CSR) entry point.
 
 ### View Helpers (`SsrHelpers`)
@@ -188,9 +212,13 @@ Your external SSR server needs to meet the following expectations:
     - **Successful Response:** `200 OK` with a JSON body. The structure of this JSON is up to you, but it will be available in your `app/views/ssr/index.html.erb` template as `@ssr` (with keys symbolized). Example:
       ```jsonc
       {
-        "html_content": "<div>Rendered Product</div>",
-        "initial_state": { "product_id": 123 },
-        "meta_tags": "<meta name='description' content='...'>",
+        "meta": "<meta name='description' content='Pre-rendered page description'>\n<meta property='og:title' content='My SSR Page'>",
+        "styles": "<link rel='stylesheet' href='/path/to/ssr-specific-styles.css'>",
+        "root": "<div><h1>Hello from SSR!</h1><p>This is your pre-rendered application content.</p></div>",
+        "state": {
+          "productId": 123,
+          "initialData": { "foo": "bar" },
+        },
       }
       ```
 
