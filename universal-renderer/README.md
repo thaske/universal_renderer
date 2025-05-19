@@ -9,10 +9,12 @@
 Let's get a basic server running. This example shows a minimal setup for static rendering.
 
 ```typescript
-// server.ts
+// server.tsx
 import express from "express";
 import http from "node:http";
 import { createServer as createViteServer } from "vite";
+import React from "react";
+import { renderToString } from "react-dom/server";
 import {
   createSsrServer,
   type RenderContextBase,
@@ -22,28 +24,33 @@ import {
 
 // 1. Define your application's rendering context
 interface AppContext extends RenderContextBase {
-  // You can add any custom data your app needs during rendering
+  // jsx is already in RenderContextBase and will be React.ReactElement
   pageTitle: string;
 }
 
 // 2. Implement Core Callbacks
 const coreCallbacks: CoreRenderCallbacks<AppContext> = {
   async setup(requestUrl: string, props: Record<string, any>) {
-    // Here, you'd typically import your main App component
-    // For simplicity, we'll use a placeholder
-    const App = ({ title }: { title: string }) =>
-      `<html><body><h1>${title}</h1></body></html>`;
+    // Define a simple React component
+    const App = ({ title }: { title: string }) => (
+      <html>
+        <head>
+          <title>{title}</title>
+        </head>
+        <body>
+          <h1>{title}</h1>
+          <p>Props: {JSON.stringify(props)}</p>
+        </body>
+      </html>
+    );
 
-    // This `jsx` is what will be rendered.
-    // In a React app, this would be <App {...props} />
-    // For this example, we are directly returning a string for simplicity.
-    // However, the `RenderContextBase` expects `jsx` to be `React.ReactElement` or equivalent.
-    // A real setup would involve React.createElement or JSX.
-    const jsxPlaceholder = App({ title: `Page for ${requestUrl}` });
+    const pageTitle = `Page for ${requestUrl}`;
+    // In a React app, this is your root component instance
+    const jsx = <App title={pageTitle} {...props} />;
 
     return {
-      jsx: jsxPlaceholder as any, // Cast for this simplified example
-      pageTitle: `Page for ${requestUrl}`,
+      jsx, // This is now a React.ReactElement
+      pageTitle,
     };
   },
   cleanup(context) {
@@ -59,8 +66,8 @@ interface AppRenderOutput {
 const staticCallbacks: StaticSpecificCallbacks<AppContext, AppRenderOutput> = {
   async render(context): Promise<AppRenderOutput> {
     // In a React app, you'd use renderToString(context.jsx)
-    // Here we directly use the simplified string from setup
-    return { html: context.jsx as unknown as string };
+    const html = renderToString(context.jsx as React.ReactElement);
+    return { html };
   },
 };
 
@@ -91,9 +98,9 @@ startServer();
 
 **To run this example:**
 
-1.  Save the code as `server.ts`.
-2.  Install dependencies: `npm install express vite universal-renderer` (or `yarn add ...`).
-3.  You'll need a `tsconfig.json` if you don't have one. A basic one:
+1.  Save the code as `server.tsx`.
+2.  Install dependencies: `npm install express vite universal-renderer react react-dom @types/react @types/react-dom` (or `yarn add ...`).
+3.  You'll need a `tsconfig.json` if you don't have one. A basic one (ensure `jsx` is configured, e.g., `"jsx": "react-jsx"`):
     ```json
     {
       "compilerOptions": {
@@ -102,17 +109,18 @@ startServer();
         "target": "ESNext",
         "esModuleInterop": true,
         "strict": true,
-        "skipLibCheck": true
+        "skipLibCheck": true,
+        "jsx": "react-jsx"
       }
     }
     ```
-4.  Run the server: `npx ts-node-dev server.ts` (you might need to install `ts-node-dev` and `typescript`).
-5.  Send a POST request to `http://localhost:3000/static` with JSON body: `{"url": "/hello"}`.
+4.  Run the server: `npx ts-node-dev server.tsx` (you might need to install `ts-node-dev`, `typescript`, `@types/node`).
+5.  Send a POST request to `http://localhost:3000/static` with JSON body: `{"url": "/hello", "props": {"message": "Greetings!"}}`.
     You can use a tool like `curl`:
     ```bash
-    curl -X POST -H "Content-Type: application/json" -d '{"url":"/world"}' http://localhost:3000/static
+    curl -X POST -H "Content-Type: application/json" -d '''{"url":"/world", "props": {"customMessage": "Hi from curl!"}}''' http://localhost:3000/static
     ```
-    The server will respond with `{"html":"<html><body><h1>Page for /world</h1></body></html>"}`.
+    The server will respond with `{"html":"<html><head><title>Page for /world</title></head><body><h1>Page for /world</h1><p>Props: {\"customMessage\":\"Hi from curl!\"}</p></body></html>"}`.
 
 ## How It Works: The Callback System
 
