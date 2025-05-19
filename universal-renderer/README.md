@@ -1,100 +1,157 @@
 # universal-renderer
 
-**Note:** This package is the Node.js/Express based Server-Side Rendering (SSR) server component for the [`universal_renderer` Ruby gem](https://github.com/thaske/universal_renderer). The Ruby gem is installed in a Rails application and forwards rendering requests to a server running this Node.js package.
+**Note:** This package is the Node.js/Express server component for the [`universal_renderer` Ruby gem](https://github.com/thaske/universal_renderer). The Ruby gem, when installed in a Rails application, forwards rendering requests to a server running this Node.js package.
 
-A flexible and customizable server for Server-Side Rendering (SSR) of JavaScript applications, built with Express and Vite. This server is designed to be adaptable to various frontend libraries and SSR strategies through a powerful callback system.
+`universal-renderer` helps you create a flexible Server-Side Rendering (SSR) server for your JavaScript applications using Express and Vite. It's designed to work with various frontend libraries through a callback system.
 
-## Features
+## Quick Start: Your First SSR Server
 
-- **Framework Agnostic Core**: The core is designed to support any SSR setup through a flexible callback system.
-- **Vite-Powered**: Leverages Vite for fast HMR during development and efficient module loading.
-- **Static & Streaming SSR**: Supports static rendering and streaming SSR. **Note:** The current streaming implementation uses React's `renderToPipeableStream` and is therefore specific to React.
-- **Customizable Rendering Lifecycle**: Use `RenderCallbacks` to integrate your specific libraries for routing, state management, styling, and metadata.
-- **Type-Safe Customization**: Generic types for `SetupResultBase` and `RenderCallbacks` ensure type safety even with complex custom setups.
-- **Default React Setup**: Includes pre-configured callbacks for common React ecosystems (React Router, React Helmet Async, React Query, Styled Components).
+Let's get a basic server running. This example shows a minimal setup for static rendering.
 
-## Installation
+```typescript
+// server.ts
+import express from "express";
+import http from "node:http";
+import { createServer as createViteServer } from "vite";
+import {
+  createSsrServer,
+  type RenderContextBase,
+  type CoreRenderCallbacks,
+  type StaticSpecificCallbacks,
+} from "universal-renderer";
 
-```bash
-# Using npm
-npm install universal-renderer
+// 1. Define your application's rendering context
+interface AppContext extends RenderContextBase {
+  // You can add any custom data your app needs during rendering
+  pageTitle: string;
+}
 
-# Using yarn
-yarn add universal-renderer
+// 2. Implement Core Callbacks
+const coreCallbacks: CoreRenderCallbacks<AppContext> = {
+  async setup(requestUrl: string, props: Record<string, any>) {
+    // Here, you'd typically import your main App component
+    // For simplicity, we'll use a placeholder
+    const App = ({ title }: { title: string }) =>
+      `<html><body><h1>${title}</h1></body></html>`;
+
+    // This `jsx` is what will be rendered.
+    // In a React app, this would be <App {...props} />
+    // For this example, we are directly returning a string for simplicity.
+    // However, the `RenderContextBase` expects `jsx` to be `React.ReactElement` or equivalent.
+    // A real setup would involve React.createElement or JSX.
+    const jsxPlaceholder = App({ title: `Page for ${requestUrl}` });
+
+    return {
+      jsx: jsxPlaceholder as any, // Cast for this simplified example
+      pageTitle: `Page for ${requestUrl}`,
+    };
+  },
+  cleanup(context) {
+    console.log(`Cleaned up: ${context.pageTitle}`);
+  },
+};
+
+// 3. Implement Static Rendering Callbacks
+interface AppRenderOutput {
+  html: string;
+}
+
+const staticCallbacks: StaticSpecificCallbacks<AppContext, AppRenderOutput> = {
+  async render(context): Promise<AppRenderOutput> {
+    // In a React app, you'd use renderToString(context.jsx)
+    // Here we directly use the simplified string from setup
+    return { html: context.jsx as unknown as string };
+  },
+};
+
+// 4. Start the Server
+async function startServer() {
+  const vite = await createViteServer({
+    server: { middlewareMode: true },
+    appType: "custom",
+  });
+
+  const app = await createSsrServer<AppContext>({
+    vite,
+    coreCallbacks,
+    staticCallbacks, // We're only doing static rendering for this example
+  });
+
+  const port = process.env.PORT || 3000;
+  http.createServer(app).listen(port, () => {
+    console.log(`SSR server started on http://localhost:${port}`);
+    console.log(
+      'Try: POST http://localhost:3000/static with JSON body {"url": "/test"}',
+    );
+  });
+}
+
+startServer();
 ```
 
-## Core Concepts
+**To run this example:**
+
+1.  Save the code as `server.ts`.
+2.  Install dependencies: `npm install express vite universal-renderer` (or `yarn add ...`).
+3.  You'll need a `tsconfig.json` if you don't have one. A basic one:
+    ```json
+    {
+      "compilerOptions": {
+        "module": "ESNext",
+        "moduleResolution": "node",
+        "target": "ESNext",
+        "esModuleInterop": true,
+        "strict": true,
+        "skipLibCheck": true
+      }
+    }
+    ```
+4.  Run the server: `npx ts-node-dev server.ts` (you might need to install `ts-node-dev` and `typescript`).
+5.  Send a POST request to `http://localhost:3000/static` with JSON body: `{"url": "/hello"}`.
+    You can use a tool like `curl`:
+    ```bash
+    curl -X POST -H "Content-Type: application/json" -d '{"url":"/world"}' http://localhost:3000/static
+    ```
+    The server will respond with `{"html":"<html><body><h1>Page for /world</h1></body></html>"}`.
+
+## How It Works: The Callback System
+
+`universal-renderer` uses a system of callbacks to let you control how your application is set up, rendered, and cleaned up. You provide these callbacks when you create the server.
 
 ### `createSsrServer(options)`
 
-This is the main function to create and configure your SSR server. It returns an Express app instance.
+This is the main function. You pass it your Vite instance and your callback implementations.
 
-- `options`: An object of type `CreateSsrServerOptions<TContext>`:
-  - `vite`: A `ViteDevServer` instance (required).
-  - `coreCallbacks`: An object implementing `CoreRenderCallbacks<TContext>`. These are essential for app setup and cleanup, common to all rendering strategies.
-  - `streamCallbacks?`: Optional object implementing `StreamSpecificCallbacks<TContext>`. Required if you want to use streaming SSR.
-  - `staticCallbacks?`: Optional object implementing `StaticSpecificCallbacks<TContext>`. Required if you want to use static SSR.
-  - `basePath?`: Base path for the application (defaults to `/`).
-  - `configureExpressApp?`: Optional function `(app: Express, vite: ViteDevServer) => void | Promise<void>` to customize the Express app instance before SSR routes and default middleware are added.
+Key options:
 
-### Render Callback Interfaces
+- `vite`: Your Vite development server instance.
+- `coreCallbacks`: Essential for all rendering. Handles setting up your app (e.g., with routers, state management) and cleaning up afterwards.
+- `staticCallbacks`: For rendering your app to a static HTML string.
+- `streamCallbacks`: For streaming your app's content (useful for larger apps and faster time-to-first-byte).
+- **Note:** You need to provide at least `staticCallbacks` or `streamCallbacks`.
 
-The rendering lifecycle is controlled by a set of callback interfaces. `TContext` is a generic type representing the data structure your `setup` callback returns and other callbacks consume. It must extend `RenderContextBase`.
+### Main Callback Groups
 
-#### `RenderContextBase`
+1.  **`CoreRenderCallbacks<TContext>`**:
 
-The base interface for the context object returned by `setup`. Your custom context must extend this.
-It requires `jsx: React.ReactElement` (or your framework's equivalent component representation) and allows any other properties: `[key: string]: any;`.
+    - `setup(requestUrl, props)`: This is where you prepare your application to be rendered. You'll typically import your main app component, wrap it with any necessary providers (like routers, state managers), and return a `context` object.
+      - This `context` object (which you define by extending `RenderContextBase`) must include a `jsx` property holding your main application component (e.g., `<App />`).
+    - `cleanup(context)`: Called after rendering to perform any cleanup tasks.
+    - `onError(error, context)`: Optional. Handles any errors during rendering.
 
-#### `CoreRenderCallbacks<TContext extends RenderContextBase>`
+2.  **`StaticSpecificCallbacks<TContext, TRenderOutput>`**:
 
-These callbacks are fundamental and used by both static and streaming rendering.
+    - `render(context)`: Takes the `jsx` from your `context` and renders it to a static format. For React, this is where you'd use `renderToString()`. The shape of `TRenderOutput` is defined by you.
 
-- `setup(requestUrl: string, props: Record<string, any>) => Promise<TContext | undefined> | TContext | undefined`:
+3.  **`StreamSpecificCallbacks<TContext>`**: (For Streaming SSR)
+    - These callbacks manage the streaming process. For React, this typically involves `renderToPipeableStream`. Key callbacks include:
+      - `getReactNode(context)`: Provides the React node to stream (usually `context.jsx`).
+      - `onWriteMeta(res, context)`: Allows you to write `<meta>` tags or other head elements early in the stream.
+      - `createRenderStreamTransformer(context)`: Optional. To pipe the render stream through transformations (e.g., for styled-components).
 
-  - Initializes your app with necessary providers (e.g., Router, State Manager, Style Collectors).
-  - `requestUrl`: The current request URL.
-  - `props`: Props passed in the request body.
-  - **Must return an object that includes at least `jsx: React.ReactElement`**. This object is your `TContext`. Can also return `undefined` if setup fails.
+## Example: React SSR (Static and Stream)
 
-- `cleanup(context: TContext) => void`:
-  - Performs any necessary cleanup after rendering (e.g., sealing style sheets, clearing query client caches). Called for both successful renders and in error scenarios.
-- `onError?(error: Error | unknown, context?: TContext, errorContext?: string) => void`:
-  - Optional. Called when an error occurs during any stage of the rendering lifecycle.
-  - `error`: The error object.
-  - `context`: The `TContext` object, if available.
-  - `errorContext`: A string describing where the error occurred.
-
-#### `StreamSpecificCallbacks<TContext extends RenderContextBase>`
-
-These callbacks are used only for the streaming rendering strategy.
-
-- `onResponseStart?(res: Response, context: TContext) => Promise<void> | void`:
-  - Optional. Called once before any part of the HTML document is written to the response for streaming.
-  - Useful for setting custom headers or performing other initial setup on the response.
-- `onWriteMeta?(res: Response, context: TContext) => Promise<void> | void`:
-  - Optional. Called after the initial part of the HTML (before where meta tags would go) has been written to the response. This is the ideal place to write meta tags or other head elements.
-- `createResponseTransformer?(context: TContext) => Transform | undefined`:
-  - Optional. Creates a Node.js `Transform` stream to pipe the React render stream through.
-  - Useful for injecting styles (e.g., from Styled Components) or other stream transformations.
-- `onBeforeWriteClosingHtml?(res: Response, context: TContext) => Promise<void> | void`:
-  - Optional. Called after the main React content stream has finished, but _before_ the final closing HTML tags are written.
-- `onResponseEnd?(res: Response, context: TContext) => Promise<void> | void`:
-  - Optional. Called after the HTTP response has been fully sent and ended for a streamed response.
-  - Useful for logging or final resource cleanup related to the response.
-
-#### `StaticSpecificCallbacks<TContext extends RenderContextBase, TRenderOutput extends Record<string, any> = Record<string, any>>`
-
-This callback is used only for the static HTML rendering strategy.
-
-- `render(context: TContext) => Promise<TRenderOutput> | TRenderOutput`:
-  - Renders the application to a static representation.
-  - The `jsx` for rendering is typically `context.jsx`.
-  - **Must return an object (or a Promise resolving to an object) of type `TRenderOutput`. The structure of this object is defined by you.** For example, it could be `{ meta: string, body: string }` for simple HTML string rendering, or any other structure suitable for your needs.
-
-## Basic Usage (Custom Setup)
-
-Here's a conceptual example of setting up the server with minimal custom callbacks for a React application.
+This example demonstrates a more complete setup using React, covering both static and streaming rendering.
 
 ```typescript
 // server.ts
@@ -107,39 +164,75 @@ import {
   type StaticSpecificCallbacks,
 } from "universal-renderer";
 import { renderToString } from "react-dom/server"; // For static
-// import { renderToPipeableStream } from "react-dom/server"; // For stream (setup shown in streamHandler.ts)
+// For stream, the default streamHandler uses renderToPipeableStream internally
+// but you'd still provide the React element via context.jsx.
 import type { ViteDevServer } from "vite";
 import type { Response } from "express"; // For callback signatures
-import type { Transform } from "node:stream"; // For createResponseTransformer
+import type { Transform } from "node:stream"; // For createRenderStreamTransformer
 import http from "node:http"; // For example server
 import { createServer as createViteServer } from "vite"; // For example
 
+// --- Dummy React for example to run ---
+// In a real app, import React: import React from 'react';
+const React = {
+  createElement: (
+    type: any,
+    props: any,
+    ...children: any[]
+  ): { type: string; props: any; children: any[] } => ({
+    type,
+    props: props || {},
+    children: children.flat(),
+  }),
+  Fragment: "Fragment", // Simple representation for Fragment
+};
+// --- End Dummy React ---
+
 // Define the structure for your custom context
 interface MyCustomContext extends RenderContextBase {
-  // Example: Add custom data needed by other callbacks
+  // jsx is already in RenderContextBase
   appName: string;
+  initialData?: Record<string, any>;
 }
 
-// Define the structure for your static render output if you want to be specific
+// Define the structure for your static render output
 interface MyStaticRenderOutput {
   meta: string;
   body: string;
+  initialDataScript?: string;
 }
+
+// Your main application component (example)
+const App = ({ name, initialData }: { name: string; initialData?: any }) => {
+  return React.createElement(
+    "div",
+    null,
+    React.createElement("h1", null, `Hello from ${name}!`),
+    React.createElement("p", null, `URL: ${initialData?.url}`),
+    React.createElement("div", { id: "root" }, "App content goes here"), // Make sure your client-side hydration matches
+  );
+};
 
 const myCoreCallbacks: CoreRenderCallbacks<MyCustomContext> = {
   async setup(requestUrl: string, props: Record<string, any>) {
-    // Basic JSX setup. In a real app, you'd wrap App with
-    // Routers, Context Providers (State, Helmet, Styles), etc.
-    // For this example, we'll imagine a simple App component.
-    const jsx = React.createElement(
-      "div",
-      null,
-      `App for ${requestUrl} with props: ${JSON.stringify(props)}`,
-    );
-    return { jsx, appName: "My Universal App" };
+    // In a real app, you'd wrap App with:
+    // - Routers (e.g., <StaticRouter location={requestUrl}>)
+    // - Context Providers (State, Helmet for meta, Style Collectors for CSS-in-JS)
+    const appName = "My Universal React App";
+    const initialData = { url: requestUrl, fromServer: true, ...props };
+
+    // The main JSX for your application
+    const jsx = React.createElement(App, { name: appName, initialData });
+
+    return {
+      jsx, // This is React.ReactElement
+      appName,
+      initialData,
+    };
   },
   cleanup(context) {
     console.log(`Cleanup for ${context.appName}`);
+    // e.g., seal style sheets for styled-components, clear React Query caches
   },
   onError(error, context, errorContext) {
     console.error(
@@ -150,21 +243,38 @@ const myCoreCallbacks: CoreRenderCallbacks<MyCustomContext> = {
 };
 
 const myStreamCallbacks: StreamSpecificCallbacks<MyCustomContext> = {
+  getReactNode(context) {
+    // Typically, context.jsx is already your fully prepared React element
+    return context.jsx;
+  },
   async onResponseStart(res, context) {
-    console.log(`Stream starting for ${context.appName}`);
-    // res.setHeader("X-Custom-Header", "Streaming Started");
+    console.log(
+      `Stream starting for ${context.appName} to URL ${context.initialData?.url}`,
+    );
+    // You could set custom headers here, e.g., res.setHeader("X-Render-Mode", "Stream");
   },
   async onWriteMeta(res, context) {
-    // Example: Generate meta tags
-    res.write(`<title>${context.appName}</title>`);
+    // Write meta tags. In a real app, you'd use something like React Helmet Async
+    // and extract tags from your context if you prepared them in `setup`.
+    res.write(`<title>${context.appName} - Stream</title>`);
     res.write(
-      `<meta name="description" content="Streamed with ${context.appName}">`,
+      `<meta name="description" content="Streamed with ${context.appName} for ${context.initialData?.url}">`,
     );
   },
-  // createResponseTransformer can be added here if needed
+  // createRenderStreamTransformer can be used for things like styled-components:
+  // createRenderStreamTransformer(context) {
+  //   if (context.styledComponentsSheet) { // Assuming sheet was created in setup
+  //     return context.styledComponentsSheet.interleaveWithNodeStream();
+  //   }
+  //   return undefined;
+  // },
   async onBeforeWriteClosingHtml(res, context) {
-    // Example: Write some data before HTML closes
-    // res.write(`<script>console.log("Stream almost done for ${context.appName}");</script>`);
+    // Useful for injecting data needed by the client before the HTML fully closes
+    if (context.initialData) {
+      res.write(
+        `<script>window.__INITIAL_DATA__ = ${JSON.stringify(context.initialData)}</script>`,
+      );
+    }
   },
   async onResponseEnd(res, context) {
     console.log(`Stream ended for ${context.appName}`);
@@ -176,101 +286,133 @@ const myStaticCallbacks: StaticSpecificCallbacks<
   MyStaticRenderOutput
 > = {
   async render(context): Promise<MyStaticRenderOutput> {
-    const body = renderToString(context.jsx);
+    // Use React's renderToString for static output
+    const body = renderToString(context.jsx as React.ReactElement); // Cast because dummy React is simplified
+    const meta = `<title>${context.appName} - Static</title><meta name="description" content="Static render of ${context.appName} for ${context.initialData?.url}">`;
+
+    let initialDataScript = "";
+    if (context.initialData) {
+      initialDataScript = `<script>window.__INITIAL_DATA__ = ${JSON.stringify(context.initialData)}</script>`;
+    }
+
     return {
-      meta: `<title>${context.appName}</title><meta name="description" content="Static ${context.appName}">`,
-      body,
+      meta,
+      body, // This would be the main app HTML string
+      initialDataScript,
     };
   },
 };
 
 async function startServer() {
-  // Create a Vite dev server
   const vite = await createViteServer({
     server: { middlewareMode: true },
-    appType: "custom", //important for SSR
+    appType: "custom", // Important for SSR with Vite
   });
 
   const app = await createSsrServer<MyCustomContext>({
-    vite, // Pass the Vite instance
+    vite,
     coreCallbacks: myCoreCallbacks,
-    streamCallbacks: myStreamCallbacks, // Provide if streaming is needed
-    staticCallbacks: myStaticCallbacks, // Provide if static rendering is needed
+    streamCallbacks: myStreamCallbacks, // Enable streaming
+    staticCallbacks: myStaticCallbacks, // Enable static rendering
     basePath: "/app", // Optional: if your app is not at the root
     configureExpressApp: (expressApp, viteDevServer) => {
-      // Optional: add custom middleware or routes to Express
-      expressApp.use("/custom-route", (req, res) => res.send("Custom Route!"));
+      // Add any custom Express middleware or routes *before* SSR handlers
+      expressApp.use("/my-custom-ping", (req, res) =>
+        res.send("pong from custom Express route!"),
+      );
+
+      // You can also serve static assets with Vite's middleware
+      // expressApp.use(viteDevServer.middlewares); // Already handled by default if not customizing too much
     },
   });
 
   const port = process.env.PORT || 3000;
   http.createServer(app).listen(port, () => {
-    // Use app from createSsrServer
-    console.log(`SSR server started on http://localhost:${port}`);
+    console.log(
+      `SSR server with React example started on http://localhost:${port}`,
+    );
+    console.log(`Static endpoint: POST http://localhost:${port}/app/static`);
+    console.log(`Stream endpoint: POST http://localhost:${port}/app/stream`);
+    console.log(`Health check: GET http://localhost:${port}/app/health`);
+    console.log(
+      'Try: curl -X POST -H "Content-Type: application/json" -d \'{"url":"/test", "props": {"message":"hello from props"}}\' http://localhost:3000/app/static',
+    );
+    console.log(
+      'And: curl -X POST -H "Content-Type: application/json" -d \'{"url":"/test-stream", "props": {"message":"streaming props"}, "template": "<html><head><!-- SSR_META --></head><body><!-- SSR_BODY --></body></html>"}\' http://localhost:3000/app/stream',
+    );
   });
 }
-
-// Dummy React for example to run, replace with actual React import
-const React = {
-  createElement: (type: any, props: any, ...children: any[]) => ({
-    type,
-    props,
-    children,
-  }),
-};
 
 startServer();
 ```
 
 ## Server Endpoints
 
-The server exposes the following POST endpoints (paths are relative to the `basePath` option):
+The server created by `createSsrServer` exposes these POST endpoints (paths are relative to `basePath`, which defaults to `/`):
 
-- `/` or `/static`: For static SSR.
+- `/static` (or `/`): For static SSR.
   - Request body: `{ "url": string, "props"?: Record<string, any> }`
-  - Response: JSON object (`TRenderOutput`) whose structure is determined by your `staticCallbacks.render` implementation (e.g., `{ meta: string, body: string }`).
+  - Response: JSON object whose structure is determined by your `staticCallbacks.render` (e.g., `{ html: "...", meta: "..." }`).
 - `/stream`: For streaming SSR.
   - Request body: `{ "url": string, "props"?: Record<string, any>, "template": string }`
   - Response: HTML stream.
 
-It also exposes a GET endpoint for health checks:
+And a GET endpoint for health checks:
 
-- `/health` (relative to `basePath`): Returns `{ status: "OK", timestamp: "..." }`
+- `/health`: Returns `{ status: "OK", timestamp: "..." }`.
 
 ## HTML Template for Streaming
 
-When using streaming (`/stream` endpoint), your backend (e.g., Rails) needs to provide an HTML template string in the `template` field of the request body.
-The server, particularly the `streamHandler`, will process this template.
+When using the `/stream` endpoint, your backend (e.g., Rails) must provide an HTML template string in the `template` field of the request body.
 
-The HTML template **must** include these markers for content injection:
+The template needs markers for content injection:
 
-- `<!-- SSR_META -->`: Where metadata (e.g., `<title>`, `<meta>` tags, often written via `streamCallbacks.onWriteMeta`) will be injected. Your provided template should have this marker. The part of the template _before_ `<!-- SSR_META -->` is written first.
-- `<!-- SSR_BODY -->`: Where the main application content will be streamed. The part of the template _between_ `<!-- SSR_META -->` and `<!-- SSR_BODY -->` is written after `onWriteMeta` completes, and then the React stream is piped into this location. The part _after_ `<!-- SSR_BODY -->` is written once the React stream ends (after `onBeforeWriteClosingHtml`).
+- `<!-- SSR_BODY -->`: **Mandatory.** This is where your main app content will be streamed.
+- `<!-- SSR_META -->`: **Recommended.** Used by `streamCallbacks.onWriteMeta` to inject meta tags, title, etc., into the `<head>`.
 
-The `parseLayoutTemplate` utility in `universal-renderer` splits the provided `template` string using these markers to construct the response.
-
-Example structure of an HTML template provided in the request:
+**Example Template:**
 
 ```html
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!-- SSR_META -->
+    <!-- Link your CSS, etc. here or via onWriteMeta -->
   </head>
   <body>
-    <div id="root"><!-- SSR_BODY --></div>
-    <!-- Client-side JS bundles, state scripts, etc., would be part of the template sections -->
-    <!-- or injected via callbacks like onBeforeWriteClosingHtml -->
+    <div id="app-container">
+      <!-- Or your preferred root element structure -->
+      <!-- SSR_BODY -->
+    </div>
+    <!-- Link your client-side JS bundle here, possibly after SSR_BODY -->
+    <!-- Example: <script type="module" src="/src/entry-client.tsx"></script> -->
   </body>
 </html>
 ```
 
-## Vite Configuration
-
-The server uses Vite internally with a pre-configured setup optimized for SSR. Direct customization of the Vite configuration via `createSsrServer` options is not currently supported. Vite's middleware mode is used to handle module loading and HMR during development.
+The server uses these markers to insert the generated content appropriately.
 
 ## Advanced Customization
 
-The power of `universal-renderer` lies in its callback system (`CoreRenderCallbacks`, `StreamSpecificCallbacks`, `StaticSpecificCallbacks`). By implementing these interfaces and defining your own `TContext` extending `RenderContextBase`, you can integrate virtually any JavaScript library or framework for SSR. This allows you to manage complex state, custom styling solutions, or unique routing requirements while leveraging the robust server infrastructure provided.
+The callback system is designed for flexibility. You can integrate various libraries for:
+
+- Routing (e.g., React Router)
+- State Management (e.g., Redux, Zustand, React Query)
+- Styling (e.g., Styled Components, Emotion)
+- Meta Tag Management (e.g., React Helmet Async)
+
+Refer to the type definitions (`RenderContextBase`, `CoreRenderCallbacks`, `StaticSpecificCallbacks`, `StreamSpecificCallbacks`) for full details on all available callback functions and their signatures to tailor the SSR process to your specific stack.
+
+## Original Features (For Reference)
+
+This section is a carry-over from the original README for more detailed feature listing if needed.
+
+- **Framework Agnostic Core**: The core is designed to support any SSR setup through a flexible callback system.
+- **Vite-Powered**: Leverages Vite for fast HMR during development and efficient module loading.
+- **Static & Streaming SSR**: Supports static rendering and streaming SSR. **Note:** The current streaming implementation uses React's `renderToPipeableStream` and is therefore specific to React.
+- **Customizable Rendering Lifecycle**: Use `RenderCallbacks` to integrate your specific libraries for routing, state management, styling, and metadata.
+- **Type-Safe Customization**: Generic types for `SetupResultBase` and `RenderCallbacks` ensure type safety even with complex custom setups.
+- **Default React Setup**: Includes pre-configured callbacks for common React ecosystems (React Router, React Helmet Async, React Query, Styled Components).
+  - _(Note: The examples above show manual setup; a full "default React setup" package/module is not part of this core library but can be built using these primitives)._
