@@ -1,7 +1,6 @@
-import { Transform } from "node:stream";
-import React from "react";
-
 import type { Express, Request, Response } from "express";
+import type { Transform } from "node:stream";
+import type { ReactElement } from "react";
 import type { ViteDevServer } from "vite";
 
 // --- User Application & Configuration ---
@@ -11,7 +10,7 @@ import type { ViteDevServer } from "vite";
  * and allowing for arbitrary user-defined data.
  */
 export interface RenderContextBase {
-  jsx: React.ReactElement; // The main JSX element to be rendered
+  jsx: ReactElement; // The main JSX element to be rendered
   [key: string]: any; // Allows users to pass through other context/instances they manage
 }
 
