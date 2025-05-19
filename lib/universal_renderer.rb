@@ -1,6 +1,7 @@
-require 'universal_renderer/version'
-require 'universal_renderer/engine'
-require 'universal_renderer/configuration'
+require "universal_renderer/version"
+require "universal_renderer/engine"
+require "universal_renderer/configuration"
+require "universal_renderer/ssr_scrubber"
 
 module UniversalRenderer
   class << self

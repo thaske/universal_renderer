@@ -4,41 +4,52 @@ import { renderToPipeableStream } from "react-dom/server";
 import type { ViteDevServer } from "vite";
 
 import type {
-  AppSetupResultBase,
   CoreRenderCallbacks,
+  RenderContextBase,
   RenderRequestProps,
   StreamSpecificCallbacks,
-} from "./types";
+} from "@/types";
 
 import {
-  getHtmlTemplate,
   handleGenericError,
   handleStreamError,
   parseLayoutTemplate,
   SSR_MARKERS,
-} from "./utils";
+} from "@/utils";
 
+/**
+ * Creates a stream handler for the SSR server.
+ *
+ * @param vite - The Vite dev server instance.
+ * @param callbacks - The callbacks for the stream handler.
+ * @returns A function that handles streaming rendering requests.
+ */
 function createStreamHandler<
-  TSetupResult extends AppSetupResultBase = AppSetupResultBase,
+  TContext extends RenderContextBase = RenderContextBase,
 >(
   vite: ViteDevServer,
   callbacks: {
-    coreCallbacks: CoreRenderCallbacks<TSetupResult>;
-    streamCallbacks: StreamSpecificCallbacks<TSetupResult>;
-  }
+    coreCallbacks: CoreRenderCallbacks<TContext>;
+    streamCallbacks: StreamSpecificCallbacks<TContext>;
+  },
 ) {
   const { coreCallbacks, streamCallbacks } = callbacks;
 
   return async function streamHandler(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<void> {
-    let resultFromSetup: TSetupResult | undefined;
+    let context: TContext | undefined;
 
     try {
-      const { url, props = {} } = req.body as {
+      const {
+        url,
+        props = {},
+        template = "",
+      } = req.body as {
         url: string;
         props: RenderRequestProps;
+        template: string;
       };
 
       if (!url) {
@@ -46,51 +57,40 @@ function createStreamHandler<
         return;
       }
 
-      const htmlTemplate = getHtmlTemplate(props);
-
-      if (!htmlTemplate.includes(SSR_MARKERS.ROOT)) {
-        console.error("[SSR] HTML template is missing SSR_ROOT marker.");
+      if (!template.includes(SSR_MARKERS.BODY)) {
+        console.error("[SSR] HTML template is missing SSR_BODY marker.");
         res.status(500).send("Server Error: Invalid HTML template.");
         return;
       }
 
-      if (!htmlTemplate.includes(SSR_MARKERS.META)) {
+      if (!template.includes(SSR_MARKERS.META)) {
         console.warn(
-          `[SSR] HTML template is missing SSR_META marker (${SSR_MARKERS.META}). Meta content will not be injected by parseLayoutTemplate.`
+          `[SSR] HTML template is missing SSR_META marker (${SSR_MARKERS.META}). Meta content will not be injected.`,
         );
       }
 
-      if (!htmlTemplate.includes(SSR_MARKERS.STATE)) {
-        console.warn(
-          `[SSR] HTML template is missing SSR_STATE marker (${SSR_MARKERS.STATE}). State will not be injected by parseLayoutTemplate.`
-        );
-      }
+      context = await coreCallbacks.setup(url, props);
 
-      resultFromSetup = await coreCallbacks.setup(url, props);
+      if (!context) {
+        console.error("[SSR] setup did not return a context.");
 
-      if (!resultFromSetup) {
-        console.error("[SSR] setup did not return a result.");
         if (!res.headersSent) {
           res
             .status(500)
             .send(
-              "Server Error: Application setup failed to produce a valid result."
+              "Server Error: Application setup failed to produce a valid context.",
             );
         } else if (!res.writableEnded) {
           res.end();
         }
+
         return;
       }
-      const result = resultFromSetup;
 
-      const shellContext =
-        (await streamCallbacks.getShellContext?.(result)) || {};
-      const { meta = "", state } = shellContext;
+      await streamCallbacks.onResponseStart?.(res, context);
 
-      await streamCallbacks.onResponseStart?.(res, result, shellContext);
-
-      const { pipe } = renderToPipeableStream(result.jsx, {
-        onShellReady: async () => {
+      const { pipe } = renderToPipeableStream(context.jsx, {
+        async onShellReady() {
           try {
             if (!res.headersSent) {
               res.statusCode = 200;
@@ -99,113 +99,123 @@ function createStreamHandler<
             }
 
             const {
-              headAndInitialContentChunk,
-              divCloseAndStateScriptChunk: rawDivCloseAndStateScriptChunk,
-              finalHtmlChunk: rawFinalHtmlChunk,
-            } = parseLayoutTemplate(htmlTemplate, meta);
+              beforeMetaChunk,
+              afterMetaAndBeforeBodyChunk,
+              afterBodyChunk,
+            } = parseLayoutTemplate(template);
 
-            res.write(headAndInitialContentChunk);
+            res.write(beforeMetaChunk);
 
-            let streamToPipe: NodeJS.WritableStream = res;
+            await streamCallbacks.onWriteMeta?.(res, context!);
+
+            res.write(afterMetaAndBeforeBodyChunk);
+
             const userTransformStream =
-              streamCallbacks.createResponseTransformer?.(result);
+              streamCallbacks.createResponseTransformer?.(context!);
 
-            const reactOutputRelay = new PassThrough();
-            pipe(reactOutputRelay);
+            const reactOutputStream = new PassThrough();
 
-            if (userTransformStream) {
-              streamToPipe = userTransformStream;
-              reactOutputRelay.pipe(userTransformStream).pipe(res);
-            } else {
-              reactOutputRelay.pipe(res);
-            }
-
-            reactOutputRelay.on("end", async () => {
-              try {
-                await streamCallbacks.onBeforeWriteClosingHtml?.(
-                  res,
-                  result,
-                  shellContext
-                );
-
-                res.write(rawDivCloseAndStateScriptChunk);
-                if (state !== undefined) {
-                  if (htmlTemplate.includes(SSR_MARKERS.STATE)) {
-                    res.write(JSON.stringify(state));
-                  } else {
-                    console.warn(
-                      "[SSR] State was provided, but SSR_STATE marker is missing in HTML template. State will not be injected."
-                    );
-                  }
-                }
-                res.end(rawFinalHtmlChunk);
-              } catch (endError) {
-                handleStreamError(
-                  "onStreamEnd (writing state/final chunks)",
-                  endError,
-                  res,
-                  result,
-                  coreCallbacks
-                );
-              }
-            });
-
-            reactOutputRelay.on("error", (streamError) => {
+            // Setup stream error handling
+            reactOutputStream.on("error", (streamError: unknown) => {
               handleStreamError(
                 "React render stream or user transform",
                 streamError,
                 res,
-                result,
-                coreCallbacks
+                context!,
+                coreCallbacks,
               );
             });
+
+            // Create a promise that resolves when the stream ends
+            const streamEndPromise = new Promise<void>((resolve) => {
+              reactOutputStream.on("end", resolve);
+            });
+
+            // Pipe React stream but don't end response yet
+            if (userTransformStream) {
+              reactOutputStream
+                .pipe(userTransformStream)
+                .pipe(res, { end: false });
+            } else {
+              reactOutputStream.pipe(res, { end: false });
+            }
+
+            // Start the React streaming
+            pipe(reactOutputStream);
+
+            // Wait for React content to be fully streamed
+            await streamEndPromise;
+
+            try {
+              await streamCallbacks.onBeforeWriteClosingHtml?.(res, context!);
+            } catch (endError) {
+              handleStreamError(
+                "onBeforeWriteClosingHtml",
+                endError,
+                res,
+                context!,
+                coreCallbacks,
+              );
+            }
+
+            try {
+              res.end(afterBodyChunk);
+            } catch (endError) {
+              handleStreamError(
+                "onStreamEnd (writing state/final chunks)",
+                endError,
+                res,
+                context!,
+                coreCallbacks,
+              );
+            }
           } catch (shellError) {
             handleStreamError(
               "onShellReady",
               shellError,
               res,
-              result,
-              coreCallbacks
+              context!,
+              coreCallbacks,
             );
           }
         },
-        onShellError: (error: unknown) => {
+        onShellError(error: unknown) {
           handleStreamError(
             "onShellError (React)",
             error,
             res,
-            result,
-            coreCallbacks
+            context!,
+            coreCallbacks,
           );
         },
-        onError: (error: unknown) => {
+        onError(error: unknown) {
           handleStreamError(
             "onError (React renderToPipeableStream)",
             error,
             res,
-            result,
-            coreCallbacks
+            context!,
+            coreCallbacks,
           );
         },
         bootstrapScripts: [],
       });
 
       res.on("finish", () => {
-        streamCallbacks.onResponseEnd?.(res, result);
-        coreCallbacks.cleanup(result);
+        if (context) {
+          streamCallbacks.onResponseEnd?.(res, context);
+          coreCallbacks.cleanup(context);
+        }
       });
     } catch (error: unknown) {
-      const currentResult = resultFromSetup;
-      handleGenericError(error, res, vite, currentResult, coreCallbacks);
-      if (currentResult) {
+      handleGenericError(error, res, context, coreCallbacks);
+
+      if (context) {
         try {
-          if (!res.writableEnded) {
-            coreCallbacks.cleanup(currentResult);
-          }
+          if (!res.writableEnded) coreCallbacks.cleanup(context);
         } catch (cleanupErr) {
           console.error(
             "[SSR] Error during cleanup after generic error:",
-            cleanupErr
+            cleanupErr,
           );
         }
       }

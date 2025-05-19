@@ -3,48 +3,54 @@ module UniversalRenderer
     extend ActiveSupport::Concern
 
     included do
+      include ActionController::Live
       helper UniversalRenderer::SsrHelpers
       before_action :initialize_props
     end
 
-    protected
+    private
 
     def default_render
       return super unless request.format.html?
-
-      use_ssr_streaming? ? render_ssr_stream : render_ssr
-    end
-
-    def render_ssr
-      @ssr = UniversalRenderer::StaticClient.static(request.original_url, @universal_renderer_props)
-      return unless @ssr.present?
-
-      rendered_content = render_to_string(template: 'universal_renderer/index')
-      Rails.logger.debug "SSR Rendered Content: #{rendered_content.inspect}"
-      render template: 'universal_renderer/index'
+      if use_ssr_streaming?
+        render_ssr_stream
+      else
+        @ssr =
+          UniversalRenderer::StaticClient.static(
+            request.original_url,
+            @universal_renderer_props
+          )
+        super
+      end
     end
 
     def render_ssr_stream
-      full_layout = render_to_string(template: 'universal_renderer/stream', formats: [:html])
+      set_streaming_headers
+
+      full_layout = render_to_string
+
+      split_index = full_layout.index("<!-- SSR_META -->")
+      before_meta = full_layout[0...split_index]
+      after_meta = full_layout[split_index..]
+
+      response.stream.write(before_meta)
 
       current_props = @universal_renderer_props.dup
-      current_props[:_railsLayoutHtml] = full_layout
 
       streaming_succeeded =
-        UniversalRenderer::StreamClient.stream(request.original_url, current_props, response)
+        UniversalRenderer::StreamClient.stream(
+          request.original_url,
+          current_props,
+          after_meta,
+          response
+        )
 
       handle_ssr_stream_fallback(response) unless streaming_succeeded
-    end
-
-    def use_ssr_streaming?
-      %w[1 true yes y].include?(ENV['ENABLE_SSR_STREAMING']&.downcase)
     end
 
     def initialize_props
       @universal_renderer_props = {}
     end
-
-    private
 
     def add_props(key_or_hash, data_value = nil)
       if data_value.nil? && key_or_hash.is_a?(Hash)
@@ -77,20 +83,50 @@ module UniversalRenderer
       end
     end
 
+    def use_ssr_streaming?
+      %w[1 true yes y].include?(ENV["ENABLE_SSR_STREAMING"]&.downcase)
+    end
+
+    def set_streaming_headers
+      # Tell Cloudflare / proxies not to cache or buffer.
+      response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+      response.headers["Pragma"] = "no-cache"
+      response.headers["Expires"] = "0"
+
+      # Disable Nginx buffering per-response.
+      response.headers["X-Accel-Buffering"] = "no"
+      response.headers["Content-Type"] = "text/html"
+
+      # Remove Content-Length header to prevent buffering.
+      response.headers.delete("Content-Length")
+    end
+
     def handle_ssr_stream_fallback(response)
       # SSR streaming failed or was not possible (e.g. server down, config missing).
       # Ensure response hasn't been touched in a way that prevents a new render.
       return unless response.committed? || response.body.present?
 
       Rails.logger.error(
-        'SSR stream fallback:' \
-          'Cannot render default fallback template because response was already committed or body present.'
+        "SSR stream fallback:" \
+          "Cannot render default fallback template because response was already committed or body present."
       )
       # Close the stream if it's still open to prevent client connection from hanging
       # when we can't render a fallback page due to already committed response
       response.stream.close unless response.stream.closed?
       # If response not committed, no explicit render is called here,
       # allowing Rails' default rendering behavior to take over.
+    end
+
+    # Overrides the built-in render_to_string.
+    # If you call render_to_string with no explicit template/partial/inline,
+    # it will fall back to 'ssr/index'.
+    def render_to_string(options = {}, *args, &block)
+      if options.is_a?(Hash) && !options.key?(:template) &&
+           !options.key?(:partial) && !options.key?(:inline) &&
+           !options.key?(:json) && !options.key?(:xml)
+        options = options.merge(template: "application/index")
+      end
+      super(options, *args, &block)
     end
   end
 end

@@ -1,97 +1,69 @@
 import type { Response } from "express";
-import type { ViteDevServer } from "vite";
+
 import type {
-  AppSetupResultBase,
   CoreRenderCallbacks,
   LayoutChunks,
-  RenderRequestProps,
-} from "./types";
+  RenderContextBase,
+} from "@/types";
 
 /**
  * SSR Markers for HTML template injection during streaming.
  */
 export enum SSR_MARKERS {
   META = "<!-- SSR_META -->",
-  ROOT = "<!-- SSR_ROOT -->",
-  STATE = "<!-- SSR_STATE -->",
+  BODY = "<!-- SSR_BODY -->",
 }
 
 /**
  * Parses the HTML layout template and extracts the different parts using SSR_MARKERS.
- * The layout is expected to have markers for meta, root, and state injection points.
+ * The layout is expected to have markers for meta and body injection points.
+ *
+ * @param layout - The HTML layout template.
+ * @returns The parsed layout chunks.
  */
-export function parseLayoutTemplate(
-  layout: string,
-  metaContent: string
-): LayoutChunks {
-  const [partBeforeRoot, remainderAfterRoot] = layout.split(SSR_MARKERS.ROOT);
-
-  const headAndInitialContentChunk = partBeforeRoot.replace(
-    SSR_MARKERS.META,
-    metaContent
+export function parseLayoutTemplate(layout: string): LayoutChunks {
+  const [beforeMetaChunk, afterMetaChunk] = layout.split(SSR_MARKERS.META);
+  const [afterMetaAndBeforeBodyChunk, afterBodyChunk] = afterMetaChunk.split(
+    SSR_MARKERS.BODY,
   );
-
-  if (remainderAfterRoot === undefined) {
-    // This case implies SSR_MARKERS.ROOT was not found or was the last thing in the template.
-    // Depending on desired behavior, this could be an error or a specific handling case.
-    // For now, assume it means no content after root and no state marker.
-    console.warn(
-      `[SSR] SSR_MARKERS.ROOT ("${SSR_MARKERS.ROOT}") not found or at the end of the HTML template.`
-    );
-    return {
-      headAndInitialContentChunk,
-      divCloseAndStateScriptChunk: "",
-      finalHtmlChunk: "",
-    };
-  }
-
-  const [partBetweenRootAndState, partAfterState] = remainderAfterRoot.split(
-    SSR_MARKERS.STATE
-  );
-
-  if (partBetweenRootAndState === undefined) {
-    console.warn(
-      `[SSR] SSR_MARKERS.STATE ("${SSR_MARKERS.STATE}") not found after SSR_MARKERS.ROOT in the HTML template.`
-    );
-    return {
-      headAndInitialContentChunk,
-      divCloseAndStateScriptChunk: "", // Or treat remainderAfterRoot as this if STATE is optional for some setups
-      finalHtmlChunk: remainderAfterRoot, // Assuming everything after ROOT is final if STATE is missing
-    };
-  }
 
   return {
-    headAndInitialContentChunk,
-    divCloseAndStateScriptChunk: partBetweenRootAndState,
-    finalHtmlChunk: partAfterState || "",
+    beforeMetaChunk,
+    afterMetaAndBeforeBodyChunk,
+    afterBodyChunk,
   };
 }
 
 /**
  * Generic error handler middleware for Express.
  * It attempts to fix the stack trace with Vite and sends a 500 response.
+ *
+ * @param error - The error to handle.
+ * @param res - The Express response object.
+ * @param context - The render context.
+ * @param renderCallbacks - The render callbacks.
  */
 export function handleGenericError<
-  TSetupResult extends AppSetupResultBase = AppSetupResultBase,
+  TContext extends RenderContextBase = RenderContextBase,
 >(
   error: Error | unknown,
   res: Response,
-  vite?: ViteDevServer,
-  appSetupResult?: TSetupResult,
-  renderCallbacks?: CoreRenderCallbacks<TSetupResult>
+  context?: TContext,
+  renderCallbacks?: CoreRenderCallbacks<TContext>,
 ): void {
-  console.error("[SSR] Generic error:", error);
-  if (vite && error instanceof Error) {
-    vite.ssrFixStacktrace(error);
+  if (renderCallbacks?.onError) {
+    renderCallbacks.onError(error, context);
   }
 
-  if (appSetupResult && renderCallbacks?.cleanup) {
+  console.error("[SSR] Generic error:", error);
+
+  if (context && renderCallbacks?.cleanup) {
     try {
-      renderCallbacks.cleanup(appSetupResult);
+      renderCallbacks.cleanup(context);
     } catch (cleanupError) {
       console.error(
         "[SSR] Error during cleanup after generic error:",
-        cleanupError
+        cleanupError,
       );
     }
   }
@@ -114,24 +86,32 @@ export function handleGenericError<
 
 /**
  * Handles errors that occur within a stream, ensuring resources are cleaned up.
+ *
+ * @param context - The context in which the error occured in.
+ * @param error - The error to handle.
+ * @param res - The Express response object.
+ * @param renderContext - The render context.
+ * @param renderCallbacks - The render callbacks.
  */
 export function handleStreamError<
-  TSetupResult extends AppSetupResultBase = AppSetupResultBase,
+  TContext extends RenderContextBase = RenderContextBase,
 >(
-  context: string,
+  errorContext: string,
   error: Error | unknown,
   res: Response,
-  appSetupResult: TSetupResult,
-  renderCallbacks: CoreRenderCallbacks<TSetupResult>
+  renderContext: TContext,
+  renderCallbacks: CoreRenderCallbacks<TContext>,
 ): void {
-  console.error(`[SSR] ${context} error:`, error);
+  if (renderCallbacks.onError) {
+    renderCallbacks.onError(error, renderContext, errorContext);
+  }
 
   try {
-    renderCallbacks.cleanup(appSetupResult);
+    renderCallbacks.cleanup(renderContext);
   } catch (cleanupError) {
     console.error(
       "[SSR] Error during cleanup after stream error:",
-      cleanupError
+      cleanupError,
     );
   }
 
@@ -139,46 +119,11 @@ export function handleStreamError<
     res
       .status(500)
       .send(
-        `<h1>Streaming Error</h1><p>Error during ${context}. Please check server logs.</p>`
+        `<h1>Streaming Error</h1><p>Error during ${errorContext}. Please check server logs.</p>`,
       );
   } else if (!res.writableEnded) {
     res.end("<!-- Streaming Error -->");
   } else {
     res.destroy();
   }
-}
-
-/**
- * Default HTML template to be used if no htmlTemplatePath is provided and
- * _railsLayoutHtml is not in props. This is a very basic template.
- */
-export const DEFAULT_HTML_TEMPLATE = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  ${SSR_MARKERS.META}
-</head>
-<body>
-  <div id="root">${SSR_MARKERS.ROOT}</div>
-  <script>
-    window.__INITIAL_STATE__ = ${SSR_MARKERS.STATE};
-  </script>
-</body>
-</html>
-`;
-
-/**
- * Retrieves the HTML template.
- * If `_railsLayoutHtml` is provided in the props, it will be used.
- * Otherwise, it defaults to `DEFAULT_HTML_TEMPLATE`.
- * @param props - Optional rendering request properties that might contain `_railsLayoutHtml`.
- * @returns A promise that resolves to the HTML template string.
- */
-export function getHtmlTemplate(props?: RenderRequestProps): string {
-  if (props?._railsLayoutHtml) {
-    return props._railsLayoutHtml;
-  }
-  return DEFAULT_HTML_TEMPLATE;
 }

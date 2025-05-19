@@ -9,3 +9,9 @@ Metrics/MethodLength:
 
 Metrics/AbcSize:
   Enabled: false
+
+inherit_from:
+  - node_modules/@prettier/plugin-ruby/rubocop.yml
+
+IfUnlessModifier:
+  Enabled: false

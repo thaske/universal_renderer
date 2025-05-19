@@ -1,11 +1,11 @@
 <% content_for :meta do %>
-  <%= sanitize @ssr[:meta], scrubber: SsrScrubber.new %>
+  <%= sanitize_ssr @ssr[:meta] %>
 <% end %>
 
 <div id="root" data-ssr="true">
-  <%= sanitize @ssr[:body], scrubber: SsrScrubber.new %>
+  <%= sanitize_ssr @ssr[:body] %>
 </div>
 
 <script id="state" type="application/json">
-  <%= sanitize json_escape(@ssr[:state].to_json), scrubber: SsrScrubber.new %>
+  <%= sanitize_ssr json_escape(@ssr[:state].to_json) %>
 </script>

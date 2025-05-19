@@ -9,5 +9,5 @@
 /test/dummy/storage/
 /test/dummy/tmp/
 repomix-output.md
-dist/
 .tsbuildinfo
+dist/

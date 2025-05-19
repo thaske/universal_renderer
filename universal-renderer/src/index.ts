@@ -5,13 +5,14 @@ import express, {
   type Response,
 } from "express";
 import path from "node:path";
-import { createServer } from "vite";
 
-import createStaticHandler from "./staticHandler";
-import createStreamHandler from "./streamHandler";
-import type { AppSetupResultBase, CreateSsrServerOptions } from "./types";
-import { handleGenericError } from "./utils";
-export * from "./types";
+import createStaticHandler from "@/staticHandler";
+import createStreamHandler from "@/streamHandler";
+import { handleGenericError } from "@/utils";
+
+import type { CreateSsrServerOptions, RenderContextBase } from "@/types";
+
+export * from "@/types";
 
 /**
  * Creates and configures an SSR server with Vite and Express.
@@ -20,31 +21,28 @@ export * from "./types";
  * @returns An Express app instance, already configured and ready to be started with app.listen().
  */
 export async function createSsrServer<
-  TSetupResult extends AppSetupResultBase = AppSetupResultBase,
+  TContext extends RenderContextBase = RenderContextBase,
 >({
+  vite,
   configureExpressApp,
   basePath = "/",
   coreCallbacks,
   streamCallbacks,
   staticCallbacks,
-}: CreateSsrServerOptions<TSetupResult>): Promise<Express> {
-  if (!staticCallbacks && !streamCallbacks) {
-    throw new Error(
-      "Either `staticCallbacks` or `streamCallbacks` must be provided."
-    );
-  }
+}: CreateSsrServerOptions<TContext>): Promise<Express> {
+  if (!vite) throw new Error("Vite instance is required.");
 
-  const vite = await createServer({
-    server: { middlewareMode: true, allowedHosts: ["tempo.ssr"] },
-    appType: "custom",
-  });
+  if (!staticCallbacks && !streamCallbacks)
+    throw new Error(
+      "Either `staticCallbacks` or `streamCallbacks` must be provided.",
+    );
 
   const app = express();
 
-  if (configureExpressApp) await configureExpressApp(app, vite);
-
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+
+  if (configureExpressApp) await configureExpressApp(app, vite);
 
   // Use Vite's connect instance as middleware. This will enable HMR and other Vite features.
   // The `vite.middlewares` is a Connect instance, which is compatible with Express.
@@ -55,7 +53,7 @@ export async function createSsrServer<
     `${basePath === "/" ? "" : basePath}/health`,
     (_req: Request, res: Response) => {
       res.json({ status: "OK", timestamp: new Date().toISOString() });
-    }
+    },
   );
 
   // Register SSR routes
@@ -63,31 +61,32 @@ export async function createSsrServer<
   const routePath = (p: string) => path.posix.join(basePath, p);
 
   if (staticCallbacks) {
-    const staticRenderHandler = createStaticHandler<TSetupResult>(vite, {
+    const staticRenderHandler = createStaticHandler<TContext>(vite, {
       coreCallbacks,
       staticCallbacks,
     });
+
     app.post(routePath("/"), staticRenderHandler);
     app.post(routePath("/static"), staticRenderHandler);
   }
 
   if (streamCallbacks) {
-    const streamRenderHandler = createStreamHandler<TSetupResult>(vite, {
+    const streamRenderHandler = createStreamHandler<TContext>(vite, {
       coreCallbacks,
       streamCallbacks,
     });
+
     app.post(routePath("/stream"), streamRenderHandler);
   }
 
   // Generic error handler
   app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
     // Vite's error middleware might have already handled it if it's a Vite-specific error
-    if (res.headersSent) {
-      return next(err); // Delegate to Express default error handler if headers are sent
-    }
-    handleGenericError<TSetupResult>(err, res, vite, undefined, coreCallbacks);
+    // Delegate to Express default error handler if headers are sent
+    if (res.headersSent) return next(err);
+    else handleGenericError<TContext>(err, res, undefined, coreCallbacks);
   });
 
-  return app;
   // The user will call app.listen(port, () => { ... }) on the returned app instance
+  return app;
 }
