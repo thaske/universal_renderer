@@ -1,7 +1,7 @@
-Documentation:
+Style/Documentation:
   Enabled: false
 
-FrozenStringLiteralComment:
+Style/FrozenStringLiteralComment:
   Enabled: false
 
 Metrics/MethodLength:
@@ -13,5 +13,8 @@ Metrics/AbcSize:
 inherit_from:
   - node_modules/@prettier/plugin-ruby/rubocop.yml
 
-IfUnlessModifier:
+Style/IfUnlessModifier:
   Enabled: false
+
+AllCops:
+  NewCops: enable
