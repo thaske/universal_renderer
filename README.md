@@ -43,6 +43,37 @@ UniversalRenderer.configure do |config|
 end
 ```
 
+## Basic Usage
+
+After installation, you can pass data to your SSR service using `add_prop` in your controllers:
+
+```ruby
+class ProductsController < ApplicationController
+  enable_ssr # enables SSR for every action in this controller
+
+  def show
+    @product = Product.find(params[:id])
+
+    add_prop(:product, @product.as_json)
+
+    fetch_ssr # or fetch on demand
+
+    # @ssr will now contain the SSR response, where the symbolized keys
+    # are the same keys returned by the SSR server response.
+  end
+end
+```
+
+```erb
+<%# now you can use the instance variable @ssr in your layout %>
+
+<% content_for :ssr_meta do %>
+  <%= @ssr[:head] %>
+<% end %>
+
+<%= @ssr[:html] %>
+```
+
 ## Setting Up the SSR Server
 
 To set up the SSR server for your Rails application:
@@ -97,91 +128,92 @@ To set up the SSR server for your Rails application:
    }
    ```
 
-3. Create an SSR entry point at `app/frontend/ssr/ssr.ts`:
+3. Update your `application.tsx` to hydrate the SSR state:
 
-   ```ts
-   import { renderToString } from "react-dom/server";
-   import { createSsrServer } from "universal-renderer";
-   import { createServer as createViteServer } from "vite";
+   ```tsx
+   import { HelmetProvider } from "@dr.pogodin/react-helmet";
+   import { createRoot, hydrateRoot } from "react-dom/client";
+   import { Hydrate, QueryClient, QueryClientProvider } from "react-query";
+   import { BrowserRouter } from "react-router";
 
-   import setup from "@/ssr/setup";
+   import App from "@/App";
+   import Metadata from "@/components/Metadata";
 
-   const vite = await createViteServer({
-     server: { middlewareMode: true },
-     appType: "custom",
-   });
+   const queryClient = new QueryClient();
+   const stateElement = document.getElementById("state")!;
+   const state = JSON.parse(stateElement.textContent);
 
-   const app = await createSsrServer({
-     vite,
-     callbacks: {
-       // as typeof is a little hack to get the types to resolve correctly
-       // since Vite's ssrLoadModule doesn't include the types
-       setup: (await vite.ssrLoadModule("@/ssr/setup")).default as typeof setup,
-       render: async ({ jsx, helmetContext, sheet, state }) => {
-         const root = renderToString(jsx);
-         const meta = extractMeta(helmetContext);
-         const styles = sheet.getStyleTags();
-         return { meta, root, styles, state };
-       },
-       cleanup: async ({ sheet, queryClient }) => {
-         sheet?.seal();
-         queryClient?.clear();
-       },
-       onError: (error, context, errorContext) => {
-         vite.ssrFixStacktrace(error);
-         console.error(error);
-       },
-     },
-   });
+   const app = (
+     <HelmetProvider>
+       <Metadata url={window.location.href} />
+       <QueryClientProvider client={queryClient}>
+         <Hydrate state={state}>
+           <BrowserRouter>
+             <App />
+           </BrowserRouter>
+         </Hydrate>
+       </QueryClientProvider>
+     </HelmetProvider>
+   );
 
-   app.listen(3001, () => {
-     console.log(`[SSR] server started on http://localhost:3001`);
-   });
+   const rootElement = document.getElementById("root")!;
+   hydrateRoot(rootElement, app);
    ```
 
-4. Build the SSR bundle:
+4. Create an SSR entry point at `app/frontend/ssr/ssr.ts`:
+
+```ts
+import { renderToString } from "react-dom/server";
+import { createSsrServer } from "universal-renderer";
+import { createServer as createViteServer } from "vite";
+
+import setup from "@/ssr/setup";
+
+const vite = await createViteServer({
+  server: { middlewareMode: true },
+  appType: "custom",
+});
+
+const app = await createSsrServer({
+  vite,
+  callbacks: {
+    // as typeof is a little hack to get the types to resolve correctly
+    // since Vite's ssrLoadModule doesn't include the types
+    setup: (await vite.ssrLoadModule("@/ssr/setup")).default as typeof setup,
+    render: async ({ jsx, helmetContext, sheet, state }) => {
+      const root = renderToString(jsx);
+      const meta = extractMeta(helmetContext);
+      const styles = sheet.getStyleTags();
+      return { meta, root, styles, state };
+    },
+    cleanup: async ({ sheet, queryClient }) => {
+      sheet?.seal();
+      queryClient?.clear();
+    },
+    onError: (error, context, errorContext) => {
+      vite.ssrFixStacktrace(error);
+      console.error(error);
+    },
+  },
+});
+
+app.listen(3001, () => {
+  console.log(`[SSR] server started on http://localhost:3001`);
+});
+```
+
+5. Build the SSR bundle:
 
    ```bash
    $ bin/vite build --ssr
    ```
 
-5. Start your servers:
+6. Start your servers:
 
    ```Procfile
    web: bin/rails s
    ssr: bin/vite ssr
    ```
-
-## Basic Usage
-
-After installation, you can pass data to your SSR service using `add_prop` in your controllers:
-
-```ruby
-class ProductsController < ApplicationController
-  enable_ssr # enables SSR for every action in this controller
-
-  def show
-    @product = Product.find(params[:id])
-
-    add_prop(:product, @product.as_json)
-
-    fetch_ssr # or fetch on demand
-
-    # @ssr will now contain the SSR response, where the symbolized keys
-    # are the same keys returned by the SSR server response.
-  end
-end
-```
-
-```erb
-<%# now you can use the instance variable @ssr in your layout %>
-
-<% content_for :ssr_meta do %>
-  <%= @ssr[:head] %>
-<% end %>
-
-<%= @ssr[:html] %>
-```
 
 ## Contributing
 
