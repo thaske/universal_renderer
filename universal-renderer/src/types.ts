@@ -17,9 +17,11 @@ export interface RenderContextBase {
 /**
  * Core callbacks for application setup and cleanup, common to all rendering strategies.
  * @template TContext The type of the context passed between callbacks.
+ * @template TRenderOutput The type of the output from the static render callback.
  */
-export interface CoreRenderCallbacks<
+export interface RenderCallbacks<
   TContext extends RenderContextBase = RenderContextBase,
+  TRenderOutput extends Record<string, any> = Record<string, any>,
 > {
   /**
    * Sets up the main application component with necessary providers (Router, Helmet, QueryClient, etc.).
@@ -32,6 +34,14 @@ export interface CoreRenderCallbacks<
     requestUrl: string,
     props: Record<string, any>,
   ) => Promise<TContext> | TContext;
+
+  /**
+   * Renders the application to a static object where keys and values are strings.
+   * The \`jsx\` for rendering is typically available in the context object.
+   * @param context The context object passed between callbacks.
+   * @returns A promise or direct result containing the statically rendered HTML parts.
+   */
+  render?: (context: TContext) => Promise<TRenderOutput> | TRenderOutput;
 
   /**
    * Performs cleanup of resources after rendering.
@@ -114,26 +124,6 @@ export interface StreamSpecificCallbacks<
 }
 
 /**
- * Callbacks specific to the static HTML rendering strategy.
- * These are used after the common `setup` and before the common `cleanup`.
- * @template TContext The type of the context passed between callbacks.
- * @template TRenderOutput The type of the output from the static render callback.
- */
-export interface StaticSpecificCallbacks<
-  TContext extends RenderContextBase = RenderContextBase,
-  TRenderOutput extends Record<string, any> = Record<string, any>,
-> {
-  /**
-   * Renders the application to a static object where keys and values are strings.
-   * This is called after the common \`setup\` and before the common \`cleanup\`.
-   * The \`jsx\` for rendering is typically available in the context object.
-   * @param context The context object passed between callbacks.
-   * @returns A promise or direct result containing the statically rendered HTML parts.
-   */
-  render: (context: TContext) => Promise<TRenderOutput> | TRenderOutput;
-}
-
-/**
  * Options for the main createSsrServer function.
  * @template TContext The type of the context used by render callbacks.
  * @template TRenderOutput The type of the output from the static render callback.
@@ -145,14 +135,11 @@ export interface CreateSsrServerOptions<
   /** The Vite dev server instance. */
   vite: ViteDevServer;
 
-  /** Callbacks for core application setup and cleanup. */
-  coreCallbacks: CoreRenderCallbacks<TContext>;
+  /** Callbacks for application setup and cleanup. */
+  renderCallbacks: RenderCallbacks<TContext, TRenderOutput>;
 
   /** Optional: Callbacks specific to the streaming rendering strategy. */
   streamCallbacks?: StreamSpecificCallbacks<TContext>;
-
-  /** Optional: Callbacks specific to the static HTML rendering strategy. */
-  staticCallbacks?: StaticSpecificCallbacks<TContext, TRenderOutput>;
 
   /** Base path for the application, if not running at root. Defaults to '/'. */
   basePath?: string;
@@ -195,7 +182,7 @@ export interface StreamPipelineOptions<
   jsx: React.ReactElement;
   res: Response;
   req: Request;
-  coreCallbacks: CoreRenderCallbacks<TContext>;
+  renderCallbacks: RenderCallbacks<TContext>;
   streamCallbacks: StreamSpecificCallbacks<TContext>;
   renderContext: TContext;
   viteDevServer: ViteDevServer;

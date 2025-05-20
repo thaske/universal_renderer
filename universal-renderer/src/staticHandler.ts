@@ -1,10 +1,9 @@
 import type { Request, Response } from "express";
 
 import type {
-  CoreRenderCallbacks,
+  RenderCallbacks,
   RenderContextBase,
   RenderRequestProps,
-  StaticSpecificCallbacks,
 } from "@/types";
 
 import { handleGenericError } from "@/utils";
@@ -17,11 +16,9 @@ import { handleGenericError } from "@/utils";
  */
 export default function createStaticHandler<
   TContext extends RenderContextBase = RenderContextBase,
->(callbacks: {
-  coreCallbacks: CoreRenderCallbacks<TContext>;
-  staticCallbacks?: StaticSpecificCallbacks<TContext>;
-}) {
-  const { coreCallbacks, staticCallbacks } = callbacks;
+  TRenderOutput extends Record<string, any> = Record<string, any>,
+>(callbacks: { renderCallbacks: RenderCallbacks<TContext, TRenderOutput> }) {
+  const { renderCallbacks } = callbacks;
 
   return async function staticHandler(
     req: Request,
@@ -41,7 +38,7 @@ export default function createStaticHandler<
         return;
       }
 
-      context = await coreCallbacks.setup(url, props);
+      context = await renderCallbacks.setup(url, props);
 
       if (!context) {
         console.error("[SSR] setup did not return a context.");
@@ -59,9 +56,9 @@ export default function createStaticHandler<
         return;
       }
 
-      if (!staticCallbacks || !staticCallbacks.render) {
+      if (!renderCallbacks.render) {
         console.error(
-          "Static rendering is not configured: staticCallbacks.render is missing.",
+          "Static rendering is not configured: renderCallbacks.render is missing.",
         );
 
         res.status(500).json({
@@ -71,14 +68,19 @@ export default function createStaticHandler<
         return;
       }
 
-      const renderResult = await staticCallbacks.render(context);
+      const renderResult = await renderCallbacks.render(context);
 
       res.json(renderResult);
     } catch (error: unknown) {
-      handleGenericError<TContext>(error, res, context, coreCallbacks);
+      handleGenericError<TContext, TRenderOutput>(
+        error,
+        res,
+        context,
+        renderCallbacks,
+      );
     } finally {
       if (context) {
-        coreCallbacks.cleanup(context);
+        renderCallbacks.cleanup(context);
       }
     }
   };

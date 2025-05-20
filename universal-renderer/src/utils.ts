@@ -1,10 +1,6 @@
 import type { Response } from "express";
 
-import type {
-  CoreRenderCallbacks,
-  LayoutChunks,
-  RenderContextBase,
-} from "@/types";
+import type { LayoutChunks, RenderCallbacks, RenderContextBase } from "@/types";
 
 /**
  * SSR Markers for HTML template injection during streaming.
@@ -45,11 +41,12 @@ export function parseLayoutTemplate(layout: string): LayoutChunks {
  */
 export function handleGenericError<
   TContext extends RenderContextBase = RenderContextBase,
+  TRenderOutput extends Record<string, any> = Record<string, any>,
 >(
   error: Error | unknown,
   res: Response,
   context?: TContext,
-  renderCallbacks?: CoreRenderCallbacks<TContext>,
+  renderCallbacks?: RenderCallbacks<TContext, TRenderOutput>,
 ): void {
   if (renderCallbacks?.onError) {
     renderCallbacks.onError(error, context);
@@ -100,7 +97,7 @@ export function handleStreamError<
   error: Error | unknown,
   res: Response,
   renderContext: TContext,
-  renderCallbacks: CoreRenderCallbacks<TContext>,
+  renderCallbacks: RenderCallbacks<TContext>,
 ): void {
   if (renderCallbacks.onError) {
     renderCallbacks.onError(error, renderContext, errorContext);
