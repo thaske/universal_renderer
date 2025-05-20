@@ -59,44 +59,42 @@ To set up the SSR server for your Rails application:
 
 2. Create a `setup` function at `app/frontend/ssr/setup.ts`:
 
-   ```ts
-    import {
-      HelmetProvider,
-      type HelmetDataContext,
-    } from "@dr.pogodin/react-helmet";
-    import { dehydrate, QueryClient, QueryClientProvider } from "react-query";
-    import { StaticRouter } from "react-router";
-    import { ServerStyleSheet } from "styled-components";
+   ```tsx
+   import {
+     HelmetProvider,
+     type HelmetDataContext,
+   } from "@dr.pogodin/react-helmet";
+   import { dehydrate, QueryClient, QueryClientProvider } from "react-query";
+   import { StaticRouter } from "react-router";
+   import { ServerStyleSheet } from "styled-components";
 
-    import App from "@/App";
-    import Metadata from "@/components/Metadata";
+   import App from "@/App";
+   import Metadata from "@/components/Metadata";
 
-    export default function setup(url: string, props: any) {
-      const pathname = new URL(url).pathname;
+   export default function setup(url: string, props: any) {
+     const pathname = new URL(url).pathname;
 
-      const helmetContext: HelmetDataContext = {};
-      const sheet = new ServerStyleSheet();
-      const queryClient = new QueryClient();
+     const helmetContext: HelmetDataContext = {};
+     const sheet = new ServerStyleSheet();
+     const queryClient = new QueryClient();
 
-      const { query_data } = props;
-      query_data.forEach(({ key, data }) =>
-        queryClient.setQueryData(key, data)
-      );
-      const state = dehydrate(queryClient);
+     const { query_data } = props;
+     query_data.forEach(({ key, data }) => queryClient.setQueryData(key, data));
+     const state = dehydrate(queryClient);
 
-      const jsx = sheet.collectStyles(
-        <HelmetProvider context={helmetContext}>
-          <Metadata url={url} />
-          <QueryClientProvider client={queryClient}>
-            <StaticRouter location={pathname}>
-              <App />
-            </StaticRouter>
-          </QueryClientProvider>
-        </HelmetProvider>
-      );
+     const jsx = sheet.collectStyles(
+       <HelmetProvider context={helmetContext}>
+         <Metadata url={url} />
+         <QueryClientProvider client={queryClient}>
+           <StaticRouter location={pathname}>
+             <App />
+           </StaticRouter>
+         </QueryClientProvider>
+       </HelmetProvider>,
+     );
 
-      return { jsx, helmetContext, sheet, state, queryClient };
-    }
+     return { jsx, helmetContext, sheet, state, queryClient };
+   }
    ```
 
 3. Create an SSR entry point at `app/frontend/ssr/ssr.ts`:
