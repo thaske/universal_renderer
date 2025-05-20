@@ -9,7 +9,7 @@
     },
     "universal-renderer": {
       "name": "universal-renderer",
-      "version": "0.2.2",
+      "version": "0.2.4",
       "dependencies": {
         "express": "^5.1.0",
       },

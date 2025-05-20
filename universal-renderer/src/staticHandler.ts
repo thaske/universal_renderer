@@ -1,5 +1,4 @@
 import type { Request, Response } from "express";
-import type { ViteDevServer } from "vite";
 
 import type {
   CoreRenderCallbacks,
@@ -13,19 +12,15 @@ import { handleGenericError } from "@/utils";
 /**
  * Creates a static handler for the SSR server.
  *
- * @param vite - The Vite dev server instance.
  * @param callbacks - The callbacks for the static handler.
  * @returns A function that handles static rendering requests.
  */
 export default function createStaticHandler<
   TContext extends RenderContextBase = RenderContextBase,
->(
-  vite: ViteDevServer,
-  callbacks: {
-    coreCallbacks: CoreRenderCallbacks<TContext>;
-    staticCallbacks?: StaticSpecificCallbacks<TContext>;
-  },
-) {
+>(callbacks: {
+  coreCallbacks: CoreRenderCallbacks<TContext>;
+  staticCallbacks?: StaticSpecificCallbacks<TContext>;
+}) {
   const { coreCallbacks, staticCallbacks } = callbacks;
 
   return async function staticHandler(

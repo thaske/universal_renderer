@@ -11,3 +11,5 @@
 repomix-output.md
 .tsbuildinfo
 dist/
+
+*.gem

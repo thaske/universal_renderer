@@ -1,7 +1,6 @@
-import { Transform } from "node:stream";
-import React from "react";
-
 import type { Express, Request, Response } from "express";
+import type { Transform } from "node:stream";
+import type { ReactElement } from "react";
 import type { ViteDevServer } from "vite";
 
 // --- User Application & Configuration ---
@@ -11,7 +10,7 @@ import type { ViteDevServer } from "vite";
  * and allowing for arbitrary user-defined data.
  */
 export interface RenderContextBase {
-  jsx: React.ReactElement; // The main JSX element to be rendered
+  jsx: ReactElement; // The main JSX element to be rendered
   [key: string]: any; // Allows users to pass through other context/instances they manage
 }
 
@@ -64,6 +63,13 @@ export interface StreamSpecificCallbacks<
   TContext extends RenderContextBase = RenderContextBase,
 > {
   /**
+   * Returns the React node to be rendered.
+   * @param context The context object passed between callbacks.
+   * @returns The React node to be rendered.
+   */
+  getReactNode: (context: TContext) => React.ReactNode;
+
+  /**
    * Optional: Called once before any part of the HTML document is written to the response for streaming.
    * Useful for setting custom headers or performing other initial setup on the response.
    * @param res The Express Response object.
@@ -79,16 +85,17 @@ export interface StreamSpecificCallbacks<
   onWriteMeta?: (res: Response, context: TContext) => Promise<void> | void;
 
   /**
-   * Optional: Creates a transform stream to pipe the React render stream through.
-   * Useful for injecting styles (e.g., styled-components) or other stream transformations.
+   * Optional: Creates a transform stream to pipe the application's render stream through.
+   * This allows for modifications to the rendered HTML (e.g., injecting styles for styled-components)
+   * before it is sent to the client.
    * @param context The context object passed between callbacks.
    * @returns A Transform stream or undefined.
    */
-  createResponseTransformer?: (context: TContext) => Transform | undefined;
+  createRenderStreamTransformer?: (context: TContext) => Transform | undefined;
 
   /**
-   * Optional: Called after the main React content stream has finished,
-   * but *before* the HTML parts containing the state script and the final closing HTML tags are written.
+   * Optional: Called after the main application content stream has finished,
+   * but *before* the HTML parts containing any state scripts and the final closing HTML tags are written.
    * @param res The Express Response object.
    * @param context The context object passed between callbacks.
    */
@@ -167,8 +174,7 @@ export interface CreateSsrServerOptions<
  * Props typically received in the request body for rendering.
  */
 export interface RenderRequestProps {
-  _railsLayoutHtml?: string; // For streaming, layout provided by Rails
-  [key: string]: any; // Other props
+  [key: string]: any;
 }
 
 /**

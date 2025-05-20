@@ -1,0 +1,47 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+
+# Project Snapshot
+
+Universal Renderer ships **two decoupled artifacts**:
+
+| Part            | Role & Contents                                                                    | Main entry-point            |
+| --------------- | ---------------------------------------------------------------------------------- | --------------------------- |
+| **Ruby Gem**    | Rails integration: helpers, template streaming, early-hints utilities, generators. | `lib/universal_renderer.rb` |
+| **NPM package** | Boots a Vite dev server and exposes helpers that speak the Gem's JSON protocol.    | `src/index.ts`              |
+
+They communicate only through HTTP + structured JSON, so either side can be
+swapped independently.
+
+# High-level Goals
+
+1. **Simple API surface** - sensible defaults that work for 80% of apps.
+2. **Frontend-agnostic** - React, Vue, Svelte, Solid
+3. **First-class DX** - thorough JSDoc/TSDoc & YARD, example app.
+
+# Coding Guidelines
+
+## Ruby (Gem)
+
+- Follow the style enforced by `.rubocop.yml`.
+- Prefer composition over inheritance - service objects > fat helpers.
+- Document every public method with YARD.
+
+## TypeScript / JavaScript (NPM)
+
+- Follow best practices for typescript.
+- Target **ES2022**; publish dual ESM + CJS builds under `dist/`.
+- Isolate Vite glue in `src/vite/`, React-specific code in `src/react/`.
+
+## Shared
+
+- No side-effects at module top-level; keep startup deterministic.
+- Write integration tests that spin up a real Rails + Vite pair (`spec/integration/`).
+- Comments should explain _why_, not _what_.
+
+# Contributing
+
+If anything feels clunky, **simplify the API first**

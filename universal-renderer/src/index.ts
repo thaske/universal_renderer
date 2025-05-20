@@ -32,10 +32,11 @@ export async function createSsrServer<
 }: CreateSsrServerOptions<TContext>): Promise<Express> {
   if (!vite) throw new Error("Vite instance is required.");
 
-  if (!staticCallbacks && !streamCallbacks)
+  if (!staticCallbacks && !streamCallbacks) {
     throw new Error(
       "Either `staticCallbacks` or `streamCallbacks` must be provided.",
     );
+  }
 
   const app = express();
 
@@ -61,7 +62,7 @@ export async function createSsrServer<
   const routePath = (p: string) => path.posix.join(basePath, p);
 
   if (staticCallbacks) {
-    const staticRenderHandler = createStaticHandler<TContext>(vite, {
+    const staticRenderHandler = createStaticHandler<TContext>({
       coreCallbacks,
       staticCallbacks,
     });
@@ -71,7 +72,7 @@ export async function createSsrServer<
   }
 
   if (streamCallbacks) {
-    const streamRenderHandler = createStreamHandler<TContext>(vite, {
+    const streamRenderHandler = createStreamHandler<TContext>({
       coreCallbacks,
       streamCallbacks,
     });

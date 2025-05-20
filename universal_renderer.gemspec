@@ -17,7 +17,6 @@ Gem::Specification.new do |spec|
   spec.metadata["allowed_push_host"] = "https://rubygems.org"
 
   spec.metadata["homepage_uri"] = spec.homepage
-  spec.metadata["source_code_uri"] = spec.homepage
   spec.metadata["changelog_uri"] = "#{spec.homepage}/blob/main/CHANGELOG.md"
 
   spec.files =
@@ -25,6 +24,6 @@ Gem::Specification.new do |spec|
       Dir["{app,config,db,lib}/**/*", "MIT-LICENSE", "Rakefile", "README.md"]
     end
 
-  spec.add_dependency "loofah"
-  spec.add_dependency "rails", ">= 7.1.5.1"
+  spec.add_dependency "loofah", "~> 2.24"
+  spec.add_runtime_dependency "rails", "~> 7.1", ">= 7.1.5.1"
 end
