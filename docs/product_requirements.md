@@ -23,7 +23,7 @@ The project aims to simplify the complexities of SSR, offering improved performa
   - Handles communication with an external SSR server.
   - Supports both static and streaming SSR responses.
   - Provides Rails controller concerns (`UniversalRenderer::Rendering`) to override `default_render` for automatic SSR.
-  - Offers helper methods (`add_props`) to pass data from Rails controllers to the SSR service.
+  - Offers helper methods (`add_prop`) to pass data from Rails controllers to the SSR service.
   - Includes view helpers (`ssr_meta`, `ssr_body`) for template integration, crucial for streaming.
   - Configurable SSR server URL, timeout, and stream path via initializer or environment variables.
   - Fallback to client-side rendering (CSR) on SSR failure.
