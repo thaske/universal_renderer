@@ -35,6 +35,10 @@ module UniversalRenderer
         )
     end
 
+    def use_ssr_streaming?
+      self.class.try(:ssr_streaming_preference)
+    end
+
     private
 
     def default_render
@@ -46,10 +50,6 @@ module UniversalRenderer
         fetch_ssr
         super
       end
-    end
-
-    def use_ssr_streaming?
-      self.class.try(:ssr_streaming_preference)
     end
 
     def render_ssr_stream

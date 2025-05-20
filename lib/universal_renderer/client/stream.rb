@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-require_relative "error_logger"
-require_relative "execution"
-require_relative "setup"
+require_relative "stream/error_logger"
+require_relative "stream/execution"
+require_relative "stream/setup"
 
 module UniversalRenderer
   module Client

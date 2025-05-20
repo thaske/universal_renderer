@@ -24,12 +24,13 @@ import {
  */
 function createStreamHandler<
   TContext extends RenderContextBase = RenderContextBase,
->(callbacks: {
+>({
+  callbacks,
+  streamCallbacks,
+}: {
   callbacks: Callbacks<TContext>;
   streamCallbacks: StreamSpecificCallbacks<TContext>;
 }) {
-  const { callbacks, streamCallbacks } = callbacks;
-
   return async function streamHandler(
     req: Request,
     res: Response,
