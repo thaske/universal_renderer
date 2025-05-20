@@ -1,6 +1,6 @@
 import type { Response } from "express";
 
-import type { LayoutChunks, RenderCallbacks, RenderContextBase } from "@/types";
+import type { Callbacks, LayoutChunks, RenderContextBase } from "@/types";
 
 /**
  * SSR Markers for HTML template injection during streaming.
@@ -37,26 +37,25 @@ export function parseLayoutTemplate(layout: string): LayoutChunks {
  * @param error - The error to handle.
  * @param res - The Express response object.
  * @param context - The render context.
- * @param renderCallbacks - The render callbacks.
+ * @param callbacks - The render callbacks.
  */
 export function handleGenericError<
   TContext extends RenderContextBase = RenderContextBase,
-  TRenderOutput extends Record<string, any> = Record<string, any>,
 >(
   error: Error | unknown,
   res: Response,
   context?: TContext,
-  renderCallbacks?: RenderCallbacks<TContext, TRenderOutput>,
+  callbacks?: Callbacks<TContext>,
 ): void {
-  if (renderCallbacks?.onError) {
-    renderCallbacks.onError(error, context);
+  if (callbacks?.onError) {
+    callbacks.onError(error, context);
   }
 
   console.error("[SSR] Generic error:", error);
 
-  if (context && renderCallbacks?.cleanup) {
+  if (context && callbacks?.cleanup) {
     try {
-      renderCallbacks.cleanup(context);
+      callbacks.cleanup(context);
     } catch (cleanupError) {
       console.error(
         "[SSR] Error during cleanup after generic error:",
@@ -88,7 +87,7 @@ export function handleGenericError<
  * @param error - The error to handle.
  * @param res - The Express response object.
  * @param renderContext - The render context.
- * @param renderCallbacks - The render callbacks.
+ * @param callbacks - The render callbacks.
  */
 export function handleStreamError<
   TContext extends RenderContextBase = RenderContextBase,
@@ -97,14 +96,14 @@ export function handleStreamError<
   error: Error | unknown,
   res: Response,
   renderContext: TContext,
-  renderCallbacks: RenderCallbacks<TContext>,
+  callbacks: Callbacks<TContext>,
 ): void {
-  if (renderCallbacks.onError) {
-    renderCallbacks.onError(error, renderContext, errorContext);
+  if (callbacks.onError) {
+    callbacks.onError(error, renderContext, errorContext);
   }
 
   try {
-    renderCallbacks.cleanup(renderContext);
+    callbacks.cleanup(renderContext);
   } catch (cleanupError) {
     console.error(
       "[SSR] Error during cleanup after stream error:",

@@ -1,4 +1,4 @@
-import type { Express, Request, Response } from "express";
+import type { Express, Response } from "express";
 import type { Transform } from "node:stream";
 import type { ReactElement } from "react";
 import type { ViteDevServer } from "vite";
@@ -17,11 +17,9 @@ export interface RenderContextBase {
 /**
  * Core callbacks for application setup and cleanup, common to all rendering strategies.
  * @template TContext The type of the context passed between callbacks.
- * @template TRenderOutput The type of the output from the static render callback.
  */
-export interface RenderCallbacks<
+export interface BaseRenderCallbacks<
   TContext extends RenderContextBase = RenderContextBase,
-  TRenderOutput extends Record<string, any> = Record<string, any>,
 > {
   /**
    * Sets up the main application component with necessary providers (Router, Helmet, QueryClient, etc.).
@@ -34,14 +32,6 @@ export interface RenderCallbacks<
     requestUrl: string,
     props: Record<string, any>,
   ) => Promise<TContext> | TContext;
-
-  /**
-   * Renders the application to a static object where keys and values are strings.
-   * The \`jsx\` for rendering is typically available in the context object.
-   * @param context The context object passed between callbacks.
-   * @returns A promise or direct result containing the statically rendered HTML parts.
-   */
-  render?: (context: TContext) => Promise<TRenderOutput> | TRenderOutput;
 
   /**
    * Performs cleanup of resources after rendering.
@@ -63,6 +53,35 @@ export interface RenderCallbacks<
     errorContext?: string,
   ) => void;
 }
+
+/**
+ * Defines the render method for static rendering.
+ * @template TContext The type of the context passed to render.
+ * @template TRenderOutput The type of the output from the render method.
+ */
+export interface RenderMethod<
+  TContext extends RenderContextBase = RenderContextBase,
+  TRenderOutput extends Record<string, any> = Record<string, any>,
+> {
+  /**
+   * Renders the application to a static object where keys and values are strings.
+   * The \`jsx\` for rendering is typically available in the context object.
+   * @param context The context object passed between callbacks.
+   * @returns A promise or direct result containing the statically rendered HTML parts.
+   */
+  render: (context: TContext) => Promise<TRenderOutput> | TRenderOutput;
+}
+
+/**
+ * Combined interface for all render callbacks, including base and render method.
+ * @template TContext The type of the context passed between callbacks.
+ * @template TRenderOutput The type of the output from the render method.
+ */
+export interface Callbacks<
+  TContext extends RenderContextBase = RenderContextBase,
+  TRenderOutput extends Record<string, any> = Record<string, any>,
+> extends BaseRenderCallbacks<TContext>,
+    Partial<RenderMethod<TContext, TRenderOutput>> {}
 
 /**
  * Callbacks specific to the streaming rendering strategy.
@@ -136,7 +155,7 @@ export interface CreateSsrServerOptions<
   vite: ViteDevServer;
 
   /** Callbacks for application setup and cleanup. */
-  renderCallbacks: RenderCallbacks<TContext, TRenderOutput>;
+  callbacks: Callbacks<TContext, TRenderOutput>;
 
   /** Optional: Callbacks specific to the streaming rendering strategy. */
   streamCallbacks?: StreamSpecificCallbacks<TContext>;
@@ -171,20 +190,4 @@ export interface LayoutChunks {
   beforeMetaChunk: string;
   afterMetaAndBeforeBodyChunk: string;
   afterBodyChunk: string;
-}
-
-/**
- * Options specific to the stream pipeline setup.
- */
-export interface StreamPipelineOptions<
-  TContext extends RenderContextBase = RenderContextBase,
-> {
-  jsx: React.ReactElement;
-  res: Response;
-  req: Request;
-  renderCallbacks: RenderCallbacks<TContext>;
-  streamCallbacks: StreamSpecificCallbacks<TContext>;
-  renderContext: TContext;
-  viteDevServer: ViteDevServer;
-  htmlTemplate: string;
 }

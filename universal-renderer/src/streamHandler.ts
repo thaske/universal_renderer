@@ -3,7 +3,7 @@ import { PassThrough } from "node:stream";
 import { renderToPipeableStream } from "react-dom/server.node";
 
 import type {
-  RenderCallbacks,
+  Callbacks,
   RenderContextBase,
   RenderRequestProps,
   StreamSpecificCallbacks,
@@ -25,10 +25,10 @@ import {
 function createStreamHandler<
   TContext extends RenderContextBase = RenderContextBase,
 >(callbacks: {
-  renderCallbacks: RenderCallbacks<TContext>;
+  callbacks: Callbacks<TContext>;
   streamCallbacks: StreamSpecificCallbacks<TContext>;
 }) {
-  const { renderCallbacks, streamCallbacks } = callbacks;
+  const { callbacks, streamCallbacks } = callbacks;
 
   return async function streamHandler(
     req: Request,
@@ -64,7 +64,7 @@ function createStreamHandler<
         );
       }
 
-      context = await renderCallbacks.setup(url, props);
+      context = await callbacks.setup(url, props);
 
       if (!context) {
         console.error("[SSR] setup did not return a context.");
@@ -115,7 +115,7 @@ function createStreamHandler<
               streamError,
               res,
               context!,
-              renderCallbacks,
+              callbacks,
             );
           });
 
@@ -143,38 +143,32 @@ function createStreamHandler<
               endError,
               res,
               context!,
-              renderCallbacks,
+              callbacks,
             );
           }
 
           res.end(afterBodyChunk);
         },
         onShellError(error: unknown) {
-          handleStreamError(
-            "onShellError",
-            error,
-            res,
-            context!,
-            renderCallbacks,
-          );
+          handleStreamError("onShellError", error, res, context!, callbacks);
         },
         onError(error: unknown) {
-          handleStreamError("onError", error, res, context!, renderCallbacks);
+          handleStreamError("onError", error, res, context!, callbacks);
         },
       });
 
       res.on("finish", () => {
         if (context) {
           streamCallbacks.onResponseEnd?.(res, context);
-          renderCallbacks.cleanup(context);
+          callbacks.cleanup(context);
         }
       });
     } catch (error: unknown) {
-      handleGenericError(error, res, context, renderCallbacks);
+      handleGenericError(error, res, context, callbacks);
 
       if (context) {
         try {
-          if (!res.writableEnded) renderCallbacks.cleanup(context);
+          if (!res.writableEnded) callbacks.cleanup(context);
         } catch (cleanupErr) {
           console.error(
             "[SSR] Error during cleanup after generic error:",
