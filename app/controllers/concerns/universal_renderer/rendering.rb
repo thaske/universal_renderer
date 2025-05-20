@@ -4,22 +4,45 @@ module UniversalRenderer
 
     included do
       include ActionController::Live
+
       helper UniversalRenderer::SsrHelpers
+
       before_action :initialize_props
+
+      class_attribute :enable_ssr, instance_writer: false, default: false
+
+      class_attribute :ssr_streaming_preference,
+                      instance_writer: false,
+                      default: nil
+    end
+
+    module ClassMethods
+      def enable_ssr(options = {})
+        self.enable_ssr = true
+
+        return unless options.key?(:streaming)
+
+        self.ssr_streaming_preference = options[:streaming]
+      end
+    end
+
+    def render_ssr
+      @ssr =
+        UniversalRenderer::StaticClient.static(
+          request.original_url,
+          @universal_renderer_props
+        )
     end
 
     private
 
     def default_render
-      return super unless request.format.html?
+      return super unless self.class.enable_ssr && request.format.html?
+
       if use_ssr_streaming?
         render_ssr_stream
       else
-        @ssr =
-          UniversalRenderer::StaticClient.static(
-            request.original_url,
-            @universal_renderer_props
-          )
+        render_ssr
         super
       end
     end
@@ -52,7 +75,7 @@ module UniversalRenderer
       @universal_renderer_props = {}
     end
 
-    def add_props(key_or_hash, data_value = nil)
+    def add_prop(key_or_hash, data_value = nil)
       if data_value.nil? && key_or_hash.is_a?(Hash)
         @universal_renderer_props.merge!(key_or_hash.deep_stringify_keys)
       else
@@ -62,7 +85,7 @@ module UniversalRenderer
 
     # Allows a prop to be treated as an array, pushing new values to it.
     # If the prop does not exist or is nil, it's initialized as an array.
-    # If the prop exists but is not an array (e.g., set as a scalar by `add_props`),
+    # If the prop exists but is not an array (e.g., set as a scalar by `add_prop`),
     # its current value will be converted into the first element of the new array.
     # If `value_to_add` is an array, its elements are concatenated. Otherwise, `value_to_add` is appended.
     def push_prop(key, value_to_add)
@@ -81,10 +104,6 @@ module UniversalRenderer
       else
         @universal_renderer_props[prop_key] << value_to_add
       end
-    end
-
-    def use_ssr_streaming?
-      %w[1 true yes y].include?(ENV["ENABLE_SSR_STREAMING"]&.downcase)
     end
 
     def set_streaming_headers
@@ -113,20 +132,9 @@ module UniversalRenderer
       # Close the stream if it's still open to prevent client connection from hanging
       # when we can't render a fallback page due to already committed response
       response.stream.close unless response.stream.closed?
+
       # If response not committed, no explicit render is called here,
       # allowing Rails' default rendering behavior to take over.
-    end
-
-    # Overrides the built-in render_to_string.
-    # If you call render_to_string with no explicit template/partial/inline,
-    # it will fall back to 'ssr/index'.
-    def render_to_string(options = {}, *args, &block)
-      if options.is_a?(Hash) && !options.key?(:template) &&
-           !options.key?(:partial) && !options.key?(:inline) &&
-           !options.key?(:json) && !options.key?(:xml)
-        options = options.merge(template: "application/index")
-      end
-      super(options, *args, &block)
     end
   end
 end
