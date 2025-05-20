@@ -4,9 +4,7 @@ module UniversalRenderer
 
     included do
       include ActionController::Live
-
-      helper UniversalRenderer::SsrHelpers
-
+      helper UniversalRenderer::SSR::Helpers
       before_action :initialize_props
     end
 
@@ -21,7 +19,7 @@ module UniversalRenderer
     end
 
     # Fetches Server-Side Rendered (SSR) content for the current request.
-    # This method makes a blocking call to the SSR service using {UniversalRenderer::Client.fetch}
+    # This method makes a blocking call to the SSR service using {UniversalRenderer::Client::Base.fetch}
     # and stores the result in the `@ssr` instance variable.
     #
     # The SSR content is fetched based on the `request.original_url` and the
@@ -31,7 +29,7 @@ module UniversalRenderer
     #   or `nil` if the fetch fails or SSR is not configured.
     def fetch_ssr
       @ssr =
-        UniversalRenderer::Client.fetch(
+        UniversalRenderer::Client::Base.fetch(
           request.original_url,
           @universal_renderer_props
         )
@@ -68,7 +66,7 @@ module UniversalRenderer
       current_props = @universal_renderer_props.dup
 
       streaming_succeeded =
-        UniversalRenderer::StreamClient.stream(
+        UniversalRenderer::Client::Stream.stream(
           request.original_url,
           current_props,
           after_meta,
