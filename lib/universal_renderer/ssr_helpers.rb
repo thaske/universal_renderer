@@ -37,7 +37,7 @@ module UniversalRenderer
     #   @return [Boolean, nil] The value of `ssr_streaming_preference` (true, false, or nil).
     #     In conditional contexts, `nil` will behave as `false`.
     def use_ssr_streaming?
-      controller.class.try(:ssr_streaming_preference)
+      controller.use_ssr_streaming?
     end
   end
 end

@@ -4,6 +4,8 @@ require "universal_renderer/configuration"
 require "universal_renderer/ssr_scrubber"
 require "universal_renderer/client"
 require "universal_renderer/stream_client"
+require "universal_renderer/rendering"
+require "universal_renderer/ssr_helpers"
 
 module UniversalRenderer
   class << self

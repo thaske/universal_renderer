@@ -8,39 +8,14 @@ module UniversalRenderer
       helper UniversalRenderer::SsrHelpers
 
       before_action :initialize_props
-
-      # @!attribute enable_ssr
-      #   @!scope class
-      #   A class attribute to enable or disable Server-Side Rendering (SSR) for controllers.
-      #   When set to `true`, the controller will attempt to use SSR for HTML requests.
-      #   Defaults to `false`.
-      #   @return [Boolean]
-      class_attribute :enable_ssr, instance_writer: false, default: false
-
-      # @!attribute ssr_streaming_preference
-      #   @!scope class
-      #   A class attribute to set the preference for SSR streaming.
-      #   Can be `true` to enforce streaming, `false` to disable streaming (and use blocking SSR fetch).
-      #   Defaults to `nil`.
-      #   @return [Boolean, nil]
-      class_attribute :ssr_streaming_preference,
-                      instance_writer: false,
-                      default: nil
     end
 
-    module ClassMethods
-      # Enables Server-Side Rendering (SSR) for the controller.
-      #
-      # @param options [Hash] Configuration options for SSR.
-      # @option options [Boolean, nil] :streaming Specifies the preference for using SSR streaming.
-      #   - `true`: Prefer SSR streaming.
-      #   - `false` or `nil`: Disable SSR streaming (use blocking SSR fetch).
-      # @return [void]
+    class_methods do
       def enable_ssr(options = {})
+        class_attribute :enable_ssr, instance_writer: false
         self.enable_ssr = true
 
-        return unless options.key?(:streaming)
-
+        class_attribute :ssr_streaming_preference, instance_writer: false
         self.ssr_streaming_preference = options[:streaming]
       end
     end
@@ -73,6 +48,10 @@ module UniversalRenderer
         fetch_ssr
         super
       end
+    end
+
+    def use_ssr_streaming?
+      self.class.try(:ssr_streaming_preference)
     end
 
     def render_ssr_stream
@@ -123,7 +102,7 @@ module UniversalRenderer
     end
 
     # Allows a prop to be treated as an array, pushing new values to it.
-    # If the prop does not exist or is `nil`, it's initialized as an empty array.
+    # If the prop does not exist or is `nil`, it\'s initialized as an empty array.
     # If the prop exists but is not an array (e.g., set as a scalar by `add_prop`),
     # its current value will be converted into the first element of the new array.
     # If `value_to_add` is an array, its elements are concatenated to the existing array.
@@ -173,19 +152,19 @@ module UniversalRenderer
 
     def handle_ssr_stream_fallback(response)
       # SSR streaming failed or was not possible (e.g. server down, config missing).
-      # Ensure response hasn't been touched in a way that prevents a new render.
+      # Ensure response hasn\'t been touched in a way that prevents a new render.
       return unless response.committed? || response.body.present?
 
       Rails.logger.error(
         "SSR stream fallback:" \
           "Cannot render default fallback template because response was already committed or body present."
       )
-      # Close the stream if it's still open to prevent client connection from hanging
-      # when we can't render a fallback page due to already committed response
+      # Close the stream if it\'s still open to prevent client connection from hanging
+      # when we can\'t render a fallback page due to already committed response
       response.stream.close unless response.stream.closed?
 
       # If response not committed, no explicit render is called here,
-      # allowing Rails' default rendering behavior to take over.
+      # allowing Rails\' default rendering behavior to take over.
     end
   end
 end
