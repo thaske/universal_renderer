@@ -49,12 +49,17 @@ After installation, you can pass data to your SSR service using `add_prop` in yo
 
 ```ruby
 class ProductsController < ApplicationController
-  enable_ssr # enables SSR for every action in this controller
+  enable_ssr # enables SSR controller-wide
 
   def show
     @product = Product.find(params[:id])
 
+    # We can use the provided add_prop method to set a single value.
     add_prop(:product, @product.as_json)
+
+    # We can use the provided push_prop method to push multiple values to an array.
+    # This is useful for pushing data to React Query.
+    push_prop(:query_data, { key: ["currentUser"], data: current_user.as_json })
 
     fetch_ssr # or fetch on demand
 
@@ -65,13 +70,22 @@ end
 ```
 
 ```erb
-<%# now you can use the instance variable @ssr in your layout %>
+<%# Now you can use the instance variable @ssr in your layout. %>
+<%# We'll send it with keys :meta, :styles, :root, and :state below. %>
+<%# We can use the provided sanitize_ssr helper to sanitize our content %>
 
-<% content_for :ssr_meta do %>
-  <%= @ssr[:head] %>
+<% content_for :meta do %>
+  <%= sanitize_ssr @ssr[:meta] %>
 <% end %>
 
-<%= @ssr[:html] %>
+<div id="root">
+  <%= sanitize_ssr @ssr[:styles] %>
+  <%= sanitize_ssr @ssr[:root] %>
+</div>
+
+<script id="state" type="application/json">
+  <%= json_escape(@ssr[:state].to_json) %>
+</script>
 ```
 
 ## Setting Up the SSR Server
