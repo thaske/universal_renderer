@@ -16,7 +16,7 @@ The system comprises two primary parts:
   - **Configuration Module:** Allows setting SSR server URL, timeouts, and paths.
   - **Rendering Concern (`UniversalRenderer::Rendering`):** Overrides default Rails rendering to initiate SSR.
   - **HTTP Clients (`StaticClient`, `StreamClient`):** Responsible for making requests to the SSR server and handling responses.
-  - **Props Management (`add_props`):** Allows passing data from Rails controllers to the SSR server.
+  - **Props Management (`add_prop`):** Allows passing data from Rails controllers to the SSR server.
   - **View Helpers (`SsrHelpers`):** Provides helpers like `ssr_meta` and `ssr_body` for layout integration.
 - \*\*External SSR Server (Node.js - `universal-renderer` NPM package):
   - **HTTP Server (Express.js):** Listens for rendering requests from the Ruby gem.
@@ -32,7 +32,7 @@ The interaction between these components varies slightly depending on whether st
 ### 3.1. Static Rendering Flow
 
 1.  A user sends an HTTP request to a Rails application route.
-2.  The Rails controller action is executed. `add_props` may be called to accumulate data for SSR.
+2.  The Rails controller action is executed. `add_prop` may be called to accumulate data for SSR.
 3.  The `UniversalRenderer::Rendering` concern intercepts the rendering process (e.g., via `default_render`).
 4.  The `StaticClient` in the gem constructs a JSON payload containing the request URL and accumulated props.
 5.  The `StaticClient` sends a POST request to the configured static endpoint on the SSR server (e.g., `http://localhost:3001/`).
@@ -45,7 +45,7 @@ The interaction between these components varies slightly depending on whether st
 ### 3.2. Streaming Rendering Flow
 
 1.  A user sends an HTTP request to a Rails application route.
-2.  The Rails controller action is executed. `add_props` may be called.
+2.  The Rails controller action is executed. `add_prop` may be called.
 3.  The `UniversalRenderer::Rendering` concern intercepts rendering.
 4.  Rails begins rendering the layout (e.g., `application.html.erb`). The layout **must** contain `ssr_meta` and `ssr_body` helpers.
 5.  The gem captures the layout up to the `<!-- SSR_META -->` marker (output by `ssr_meta`) and streams this initial part of the HTML response to the client.
@@ -76,7 +76,7 @@ sequenceDiagram
     participant FrontendApp as Frontend Code (e.g., React, Vite)
 
     User->>+RailsApp: HTTP Request
-    RailsApp->>RailsApp: Controller action (add_props)
+    RailsApp->>RailsApp: Controller action (add_prop)
 
     alt Static Rendering
         RailsApp->>+SSRServer: POST / (url, props)
