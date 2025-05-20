@@ -162,45 +162,45 @@ To set up the SSR server for your Rails application:
 
 4. Create an SSR entry point at `app/frontend/ssr/ssr.ts`:
 
-```ts
-import { renderToString } from "react-dom/server";
-import { createSsrServer } from "universal-renderer";
-import { createServer as createViteServer } from "vite";
+   ```ts
+   import { renderToString } from "react-dom/server";
+   import { createSsrServer } from "universal-renderer";
+   import { createServer as createViteServer } from "vite";
 
-import setup from "@/ssr/setup";
+   import setup from "@/ssr/setup";
 
-const vite = await createViteServer({
-  server: { middlewareMode: true },
-  appType: "custom",
-});
+   const vite = await createViteServer({
+     server: { middlewareMode: true },
+     appType: "custom",
+   });
 
-const app = await createSsrServer({
-  vite,
-  callbacks: {
-    // as typeof is a little hack to get the types to resolve correctly
-    // since Vite's ssrLoadModule doesn't include the types
-    setup: (await vite.ssrLoadModule("@/ssr/setup")).default as typeof setup,
-    render: async ({ jsx, helmetContext, sheet, state }) => {
-      const root = renderToString(jsx);
-      const meta = extractMeta(helmetContext);
-      const styles = sheet.getStyleTags();
-      return { meta, root, styles, state };
-    },
-    cleanup: async ({ sheet, queryClient }) => {
-      sheet?.seal();
-      queryClient?.clear();
-    },
-    onError: (error, context, errorContext) => {
-      vite.ssrFixStacktrace(error);
-      console.error(error);
-    },
-  },
-});
+   const app = await createSsrServer({
+     vite,
+     callbacks: {
+       // as typeof is a little hack to get the types to resolve correctly
+       // since Vite's ssrLoadModule doesn't include the types
+       setup: (await vite.ssrLoadModule("@/ssr/setup")).default as typeof setup,
+       render: async ({ jsx, helmetContext, sheet, state }) => {
+         const root = renderToString(jsx);
+         const meta = extractMeta(helmetContext);
+         const styles = sheet.getStyleTags();
+         return { meta, root, styles, state };
+       },
+       cleanup: async ({ sheet, queryClient }) => {
+         sheet?.seal();
+         queryClient?.clear();
+       },
+       onError: (error, context, errorContext) => {
+         vite.ssrFixStacktrace(error);
+         console.error(error);
+       },
+     },
+   });
 
-app.listen(3001, () => {
-  console.log(`[SSR] server started on http://localhost:3001`);
-});
-```
+   app.listen(3001, () => {
+     console.log(`[SSR] server started on http://localhost:3001`);
+   });
+   ```
 
 5. Build the SSR bundle:
 
