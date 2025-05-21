@@ -66,10 +66,18 @@ class ProductsController < ApplicationController
     # @ssr will now contain the SSR response, where the symbolized keys
     # are the same keys returned by the SSR server response.
   end
+
+  def default_render
+    # If you want to re-use the same layout across multiple actions.
+    # You can also put this in your ApplicationController.
+    render "ssr/index"
+  end
 end
 ```
 
 ```erb
+<%# "ssr/index" %>
+
 <%# Now you can use the instance variable @ssr in your layout. %>
 <%# We'll send it with keys :meta, :styles, :root, and :state below. %>
 <%# We can use the provided sanitize_ssr helper to sanitize our content %>
