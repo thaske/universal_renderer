@@ -1,5 +1,7 @@
 # UniversalRenderer
 
+[![Gem Version](https://img.shields.io/gem/v/universal_renderer)](https://rubygems.org/gems/universal_renderer) [![NPM Version](https://img.shields.io/npm/v/universal-renderer)](https://www.npmjs.com/package/universal-renderer)
+
 A streamlined solution for integrating Server-Side Rendering (SSR) into Rails applications.
 
 ## Overview
