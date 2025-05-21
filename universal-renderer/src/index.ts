@@ -10,7 +10,7 @@ import createStaticHandler from "@/staticHandler";
 import createStreamHandler from "@/streamHandler";
 import { handleGenericError } from "@/utils";
 
-import type { CreateSsrServerOptions, RenderContextBase } from "@/types";
+import type { CreateSsrServerOptions } from "@/types";
 
 export * from "@/types";
 
@@ -21,7 +21,7 @@ export * from "@/types";
  * @returns An Express app instance, already configured and ready to be started with app.listen().
  */
 export async function createSsrServer<
-  TContext extends RenderContextBase = RenderContextBase,
+  TContext extends Record<string, any> = Record<string, any>,
 >({
   middleware,
   basePath = "/",
@@ -53,14 +53,11 @@ export async function createSsrServer<
   // Ensure base path is handled correctly if not root
   const routePath = (p: string) => path.posix.join(basePath, p);
 
-  if (callbacks.render) {
-    const staticRenderHandler = createStaticHandler<TContext>({
-      callbacks,
-    });
-
-    app.post(routePath("/"), staticRenderHandler);
-    app.post(routePath("/static"), staticRenderHandler);
-  }
+  const staticRenderHandler = createStaticHandler<TContext>({
+    callbacks,
+  });
+  app.post(routePath("/"), staticRenderHandler);
+  app.post(routePath("/static"), staticRenderHandler);
 
   if (streamCallbacks) {
     const streamRenderHandler = createStreamHandler<TContext>({

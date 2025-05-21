@@ -1,24 +1,14 @@
 import type { Express, Response } from "express";
 import type { Transform } from "node:stream";
-import type { ReactElement } from "react";
 
 // --- User Application & Configuration ---
-
-/**
- * Base context object for rendering, containing the essential JSX
- * and allowing for arbitrary user-defined data.
- */
-export interface RenderContextBase {
-  jsx: ReactElement; // The main JSX element to be rendered
-  [key: string]: any; // Allows users to pass through other context/instances they manage
-}
 
 /**
  * Core callbacks for application setup and cleanup, common to all rendering strategies.
  * @template TContext The type of the context passed between callbacks.
  */
 export interface BaseCallbacks<
-  TContext extends RenderContextBase = RenderContextBase,
+  TContext extends Record<string, any> = Record<string, any>,
   TRenderOutput extends Record<string, any> = Record<string, any>,
 > {
   /**
@@ -68,7 +58,7 @@ export interface BaseCallbacks<
  * @template TContext The type of the context passed between callbacks.
  */
 export interface StreamSpecificCallbacks<
-  TContext extends RenderContextBase = RenderContextBase,
+  TContext extends Record<string, any> = Record<string, any>,
 > {
   /**
    * Returns the React node to be rendered.
@@ -120,7 +110,7 @@ export interface StreamSpecificCallbacks<
  * @template TRenderOutput The type of the output from the static render callback.
  */
 export interface CreateSsrServerOptions<
-  TContext extends RenderContextBase = RenderContextBase,
+  TContext extends Record<string, any> = Record<string, any>,
   TRenderOutput extends Record<string, any> = Record<string, any>,
 > {
   /** Callbacks for application setup and cleanup. */

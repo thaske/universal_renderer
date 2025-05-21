@@ -4,7 +4,6 @@ import { renderToPipeableStream } from "react-dom/server.node";
 
 import type {
   BaseCallbacks,
-  RenderContextBase,
   RenderRequestProps,
   StreamSpecificCallbacks,
 } from "@/types";
@@ -17,9 +16,7 @@ import { handleGenericError, handleStreamError, SSR_MARKERS } from "@/utils";
  * @param callbacks - The callbacks for the stream handler, including framework-specific delegate.
  * @returns A function that handles streaming rendering requests.
  */
-function createStreamHandler<
-  TContext extends RenderContextBase = RenderContextBase,
->({
+function createStreamHandler<TContext extends Record<string, any>>({
   callbacks,
   streamCallbacks,
 }: {
