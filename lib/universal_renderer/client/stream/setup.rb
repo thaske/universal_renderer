@@ -3,12 +3,12 @@ module UniversalRenderer
     class Stream
       module Setup
         class << self
-          def _ensure_ssr_server_url_configured?(config)
+          def ensure_ssr_server_url_configured?(config)
             config.ssr_url.present?
           end
 
-          def _build_stream_request_components(body, config)
-            # Ensure ssr_url is present, though _ensure_ssr_server_url_configured? should have caught this.
+          def build_stream_request_components(body, config)
+            # Ensure ssr_url is present, though ensure_ssr_server_url_configured? should have caught this.
             # However, direct calls to this method might occur, so a check or reliance on config.ssr_url is important.
             if config.ssr_url.blank?
               raise ArgumentError, "SSR URL is not configured."

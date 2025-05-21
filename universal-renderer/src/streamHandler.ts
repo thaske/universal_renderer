@@ -41,16 +41,15 @@ function createStreamHandler<TContext extends Record<string, any>>({
       };
 
       if (!url) {
-        res.status(400).send("URL is required in the request body.");
+        console.error("[SSR] URL is missing in request body");
+        res.end();
         return;
       }
-
       if (!template.includes(SSR_MARKERS.BODY)) {
         console.error("[SSR] HTML template is missing SSR_BODY marker.");
-        res.status(500).send("Server Error: Invalid HTML template.");
+        res.end();
         return;
       }
-
       if (!template.includes(SSR_MARKERS.META)) {
         console.warn(
           `[SSR] HTML template is missing SSR_META marker (${SSR_MARKERS.META}). Meta content will not be injected.`,
@@ -58,20 +57,9 @@ function createStreamHandler<TContext extends Record<string, any>>({
       }
 
       context = await callbacks.setup(url, props);
-
       if (!context) {
         console.error("[SSR] setup did not return a context.");
-
-        if (!res.headersSent) {
-          res
-            .status(500)
-            .send(
-              "Server Error: Application setup failed to produce a valid context.",
-            );
-        } else if (!res.writableEnded) {
-          res.end();
-        }
-
+        res.end();
         return;
       }
 
@@ -101,7 +89,6 @@ function createStreamHandler<TContext extends Record<string, any>>({
             const streamEndPromise = new Promise<void>((resolve) => {
               renderOutputStream.on("end", resolve);
             });
-
             if (userTransformStream) {
               renderOutputStream
                 .pipe(userTransformStream)
@@ -109,13 +96,9 @@ function createStreamHandler<TContext extends Record<string, any>>({
             } else {
               renderOutputStream.pipe(res, { end: false });
             }
-
             pipe(renderOutputStream);
-
             await streamEndPromise;
-
             await streamCallbacks.onBeforeWriteClosingHtml?.(res, context!);
-
             res.end(tail);
           },
           onShellError(error: unknown) {
@@ -135,6 +118,7 @@ function createStreamHandler<TContext extends Record<string, any>>({
       });
     } catch (error: unknown) {
       handleGenericError(error, res, context, callbacks);
+
       if (context) {
         try {
           callbacks.cleanup(context);

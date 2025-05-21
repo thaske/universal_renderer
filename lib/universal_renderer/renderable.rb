@@ -31,7 +31,7 @@ module UniversalRenderer
       @ssr =
         UniversalRenderer::Client::Base.fetch(
           request.original_url,
-          @universal_renderer_props,
+          @universal_renderer_props
         )
     end
 
@@ -41,7 +41,6 @@ module UniversalRenderer
 
     def render(*args, **kwargs)
       return super unless self.class.enable_ssr
-
       return super unless request.format.html?
 
       if use_ssr_streaming?
@@ -60,11 +59,11 @@ module UniversalRenderer
       current_props = @universal_renderer_props.dup
 
       streaming_succeeded =
-        UniversalRenderer::Client::Stream.stream(
+        UniversalRenderer::Client::Stream.call(
           request.original_url,
           current_props,
           full_layout,
-          response,
+          response
         )
 
       # SSR streaming failed or was not possible (e.g. server down, config missing).
@@ -73,7 +72,7 @@ module UniversalRenderer
       else
         Rails.logger.error(
           "SSR stream fallback: " \
-            "Streaming failed, proceeding with standard rendering.",
+            "Streaming failed, proceeding with standard rendering."
         )
         false
       end

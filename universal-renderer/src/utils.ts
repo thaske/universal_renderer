@@ -63,18 +63,11 @@ export function handleGenericError<
     }
   }
 
-  const errorMessage =
-    error instanceof Error ? error.stack || error.message : String(error);
-
-  if (!res.headersSent) {
-    res.status(500).send(`<h1>Server Error</h1><pre>${errorMessage}</pre>`);
-  } else if (!res.writableEnded) {
-    // If headers are sent but stream not ended, try to end it with an error indication if possible,
-    // or just destroy.
-    res.end("<!-- Server Error -->");
+  // Silently close the connection without sending error response
+  // to allow Rails to fallback to regular rendering
+  if (!res.writableEnded) {
+    res.end();
   } else {
-    // If response already ended, there's not much to do besides logging.
-    // Forcibly destroy might be an option if the connection is still open.
     res.destroy();
   }
 }
@@ -97,9 +90,8 @@ export function handleStreamError<
   renderContext: TContext,
   callbacks: BaseCallbacks<TContext>,
 ): void {
-  if (callbacks.error) {
-    callbacks.error(error, renderContext, errorContext);
-  }
+  if (callbacks.error) callbacks.error(error, renderContext, errorContext);
+  console.error(`[SSR] Stream error in ${errorContext}:`, error);
 
   try {
     callbacks.cleanup(renderContext);
@@ -110,14 +102,10 @@ export function handleStreamError<
     );
   }
 
-  if (!res.headersSent) {
-    res
-      .status(500)
-      .send(
-        `<h1>Streaming Error</h1><p>Error during ${errorContext}. Please check server logs.</p>`,
-      );
-  } else if (!res.writableEnded) {
-    res.end("<!-- Streaming Error -->");
+  // Silently end the response without sending error content
+  // to allow Rails to detect the failure and fallback gracefully
+  if (!res.writableEnded) {
+    res.end();
   } else {
     res.destroy();
   }
