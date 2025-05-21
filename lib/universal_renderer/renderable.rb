@@ -45,7 +45,8 @@ module UniversalRenderer
       return super unless request.format.html?
 
       if use_ssr_streaming?
-        render_ssr_stream(*args, **kwargs)
+        success = render_ssr_stream(*args, **kwargs)
+        super unless success
       else
         fetch_ssr
         super
@@ -55,36 +56,27 @@ module UniversalRenderer
     private
 
     def render_ssr_stream(*args, **kwargs)
-      set_streaming_headers
-
       full_layout = render_to_string(*args, **kwargs)
-
-      split_index = full_layout.index(SSR::Placeholders::META)
-      before_meta = full_layout[0...split_index]
-      after_meta = full_layout[split_index..]
-
-      response.stream.write(before_meta)
-
       current_props = @universal_renderer_props.dup
 
       streaming_succeeded =
         UniversalRenderer::Client::Stream.stream(
           request.original_url,
           current_props,
-          after_meta,
+          full_layout,
           response,
         )
 
       # SSR streaming failed or was not possible (e.g. server down, config missing).
-      unless streaming_succeeded
+      if streaming_succeeded
+        response.stream.close unless response.stream.closed?
+      else
         Rails.logger.error(
           "SSR stream fallback: " \
             "Streaming failed, proceeding with standard rendering.",
         )
-        response.stream.write(after_meta)
+        false
       end
-
-      response.stream.close unless response.stream.closed?
     end
 
     def initialize_props
@@ -143,20 +135,6 @@ module UniversalRenderer
       else
         @universal_renderer_props[prop_key] << value_to_add
       end
-    end
-
-    def set_streaming_headers
-      # Tell Cloudflare / proxies not to cache or buffer.
-      response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-      response.headers["Pragma"] = "no-cache"
-      response.headers["Expires"] = "0"
-
-      # Disable Nginx buffering per-response.
-      response.headers["X-Accel-Buffering"] = "no"
-      response.headers["Content-Type"] = "text/html"
-
-      # Remove Content-Length header to prevent buffering.
-      response.headers.delete("Content-Length")
     end
   end
 end

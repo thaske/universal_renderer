@@ -1,25 +1,15 @@
 import type { Express, Response } from "express";
 import type { Transform } from "node:stream";
-import type { ReactElement } from "react";
-import type { ViteDevServer } from "vite";
 
 // --- User Application & Configuration ---
-
-/**
- * Base context object for rendering, containing the essential JSX
- * and allowing for arbitrary user-defined data.
- */
-export interface RenderContextBase {
-  jsx: ReactElement; // The main JSX element to be rendered
-  [key: string]: any; // Allows users to pass through other context/instances they manage
-}
 
 /**
  * Core callbacks for application setup and cleanup, common to all rendering strategies.
  * @template TContext The type of the context passed between callbacks.
  */
-export interface BaseRenderCallbacks<
-  TContext extends RenderContextBase = RenderContextBase,
+export interface BaseCallbacks<
+  TContext extends Record<string, any> = Record<string, any>,
+  TRenderOutput extends Record<string, any> = Record<string, any>,
 > {
   /**
    * Sets up the main application component with necessary providers (Router, Helmet, QueryClient, etc.).
@@ -32,6 +22,14 @@ export interface BaseRenderCallbacks<
     requestUrl: string,
     props: Record<string, any>,
   ) => Promise<TContext> | TContext;
+
+  /**
+   * Renders the application to a static object where keys and values are strings.
+   * The \`jsx\` for rendering is typically available in the context object.
+   * @param context The context object passed between callbacks.
+   * @returns A promise or direct result containing the statically rendered HTML parts.
+   */
+  render: (context: TContext) => Promise<TRenderOutput> | TRenderOutput;
 
   /**
    * Performs cleanup of resources after rendering.
@@ -47,7 +45,7 @@ export interface BaseRenderCallbacks<
    * @param errorContext A string describing the context of the error.
    * @param context The context object passed between callbacks.
    */
-  onError?: (
+  error?: (
     error: Error | unknown,
     context?: TContext,
     errorContext?: string,
@@ -55,41 +53,12 @@ export interface BaseRenderCallbacks<
 }
 
 /**
- * Defines the render method for static rendering.
- * @template TContext The type of the context passed to render.
- * @template TRenderOutput The type of the output from the render method.
- */
-export interface RenderMethod<
-  TContext extends RenderContextBase = RenderContextBase,
-  TRenderOutput extends Record<string, any> = Record<string, any>,
-> {
-  /**
-   * Renders the application to a static object where keys and values are strings.
-   * The \`jsx\` for rendering is typically available in the context object.
-   * @param context The context object passed between callbacks.
-   * @returns A promise or direct result containing the statically rendered HTML parts.
-   */
-  render: (context: TContext) => Promise<TRenderOutput> | TRenderOutput;
-}
-
-/**
- * Combined interface for all render callbacks, including base and render method.
- * @template TContext The type of the context passed between callbacks.
- * @template TRenderOutput The type of the output from the render method.
- */
-export interface Callbacks<
-  TContext extends RenderContextBase = RenderContextBase,
-  TRenderOutput extends Record<string, any> = Record<string, any>,
-> extends BaseRenderCallbacks<TContext>,
-    Partial<RenderMethod<TContext, TRenderOutput>> {}
-
-/**
  * Callbacks specific to the streaming rendering strategy.
  * These are used after the common `setup` and before the common `cleanup`.
  * @template TContext The type of the context passed between callbacks.
  */
 export interface StreamSpecificCallbacks<
-  TContext extends RenderContextBase = RenderContextBase,
+  TContext extends Record<string, any> = Record<string, any>,
 > {
   /**
    * Returns the React node to be rendered.
@@ -99,19 +68,12 @@ export interface StreamSpecificCallbacks<
   getReactNode: (context: TContext) => React.ReactNode;
 
   /**
-   * Optional: Called once before any part of the HTML document is written to the response for streaming.
-   * Useful for setting custom headers or performing other initial setup on the response.
+   * Returns the meta tags to be written to the head of the HTML document.
    * @param res The Express Response object.
    * @param context The context object passed between callbacks.
+   * @returns The meta tags to be written to the head of the HTML document.
    */
-  onResponseStart?: (res: Response, context: TContext) => Promise<void> | void;
-
-  /**
-   * Optional: Called after the meta tag has been written to the response.
-   * @param res The Express Response object.
-   * @param context The context object passed between callbacks.
-   */
-  onWriteMeta?: (res: Response, context: TContext) => Promise<void> | void;
+  getMetaTags?: (context: TContext) => Promise<string> | string;
 
   /**
    * Optional: Creates a transform stream to pipe the application's render stream through.
@@ -148,14 +110,11 @@ export interface StreamSpecificCallbacks<
  * @template TRenderOutput The type of the output from the static render callback.
  */
 export interface CreateSsrServerOptions<
-  TContext extends RenderContextBase = RenderContextBase,
+  TContext extends Record<string, any> = Record<string, any>,
   TRenderOutput extends Record<string, any> = Record<string, any>,
 > {
-  /** The Vite dev server instance. */
-  vite: ViteDevServer;
-
   /** Callbacks for application setup and cleanup. */
-  callbacks: Callbacks<TContext, TRenderOutput>;
+  callbacks: BaseCallbacks<TContext, TRenderOutput>;
 
   /** Optional: Callbacks specific to the streaming rendering strategy. */
   streamCallbacks?: StreamSpecificCallbacks<TContext>;
@@ -166,12 +125,8 @@ export interface CreateSsrServerOptions<
   /**
    * Allows customization of the Express app instance before routes are added.
    * @param app The Express app instance.
-   * @param vite The ViteDevServer instance.
    */
-  configureExpressApp?: (
-    app: Express,
-    vite: ViteDevServer,
-  ) => void | Promise<void>;
+  middleware?: (app: Express) => void | Promise<void>;
 }
 
 // --- Internal Types for Server & Handlers ---

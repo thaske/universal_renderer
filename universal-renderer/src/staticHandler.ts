@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 
-import type { Callbacks, RenderContextBase, RenderRequestProps } from "@/types";
+import type { BaseCallbacks, RenderRequestProps } from "@/types";
 
 import { handleGenericError } from "@/utils";
 
@@ -11,8 +11,8 @@ import { handleGenericError } from "@/utils";
  * @returns A function that handles static rendering requests.
  */
 export default function createStaticHandler<
-  TContext extends RenderContextBase = RenderContextBase,
->({ callbacks }: { callbacks: Callbacks<TContext> }) {
+  TContext extends Record<string, any>,
+>({ callbacks }: { callbacks: BaseCallbacks<TContext> }) {
   return async function staticHandler(
     req: Request,
     res: Response,

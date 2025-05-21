@@ -1,6 +1,6 @@
 import type { Response } from "express";
 
-import type { Callbacks, LayoutChunks, RenderContextBase } from "@/types";
+import type { BaseCallbacks, LayoutChunks } from "@/types";
 
 /**
  * SSR Markers for HTML template injection during streaming.
@@ -32,7 +32,6 @@ export function parseLayoutTemplate(layout: string): LayoutChunks {
 
 /**
  * Generic error handler middleware for Express.
- * It attempts to fix the stack trace with Vite and sends a 500 response.
  *
  * @param error - The error to handle.
  * @param res - The Express response object.
@@ -40,15 +39,15 @@ export function parseLayoutTemplate(layout: string): LayoutChunks {
  * @param callbacks - The render callbacks.
  */
 export function handleGenericError<
-  TContext extends RenderContextBase = RenderContextBase,
+  TContext extends Record<string, any> = Record<string, any>,
 >(
   error: Error | unknown,
   res: Response,
   context?: TContext,
-  callbacks?: Callbacks<TContext>,
+  callbacks?: BaseCallbacks<TContext>,
 ): void {
-  if (callbacks?.onError) {
-    callbacks.onError(error, context);
+  if (callbacks?.error) {
+    callbacks.error(error, context);
   }
 
   console.error("[SSR] Generic error:", error);
@@ -90,16 +89,16 @@ export function handleGenericError<
  * @param callbacks - The render callbacks.
  */
 export function handleStreamError<
-  TContext extends RenderContextBase = RenderContextBase,
+  TContext extends Record<string, any> = Record<string, any>,
 >(
   errorContext: string,
   error: Error | unknown,
   res: Response,
   renderContext: TContext,
-  callbacks: Callbacks<TContext>,
+  callbacks: BaseCallbacks<TContext>,
 ): void {
-  if (callbacks.onError) {
-    callbacks.onError(error, renderContext, errorContext);
+  if (callbacks.error) {
+    callbacks.error(error, renderContext, errorContext);
   }
 
   try {

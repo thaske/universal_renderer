@@ -187,23 +187,22 @@ To set up the SSR server for your Rails application:
 4. Create an SSR entry point at `app/frontend/ssr/ssr.ts`:
 
    ```ts
-   import { renderToString } from "react-dom/server";
+   import { renderToString } from "react-dom/server.node";
    import { createSsrServer } from "universal-renderer";
-   import { createServer as createViteServer } from "vite";
-
    import setup from "@/ssr/setup";
-
-   const vite = await createViteServer({
-     server: { middlewareMode: true },
-     appType: "custom",
-   });
+   import {
+     createRenderStreamTransformer,
+     extractMeta,
+     getRequestLogger,
+     getStateElement,
+   } from "@/ssr/utils";
 
    const app = await createSsrServer({
-     vite,
+     middleware: (app) => {
+       app.use(getRequestLogger());
+     },
      callbacks: {
-       // as typeof is a little hack to get the types to resolve correctly
-       // since Vite's ssrLoadModule doesn't include the types
-       setup: (await vite.ssrLoadModule("@/ssr/setup")).default as typeof setup,
+       setup: setup,
        render: async ({ jsx, helmetContext, sheet, state }) => {
          const root = renderToString(jsx);
          const meta = extractMeta(helmetContext);
@@ -214,9 +213,16 @@ To set up the SSR server for your Rails application:
          sheet?.seal();
          queryClient?.clear();
        },
-       onError: (error, context, errorContext) => {
-         vite.ssrFixStacktrace(error);
-         console.error(error);
+       error: (error, _, errorContext) => {
+         console.error(`[SSR] ${errorContext} error:`, error);
+       },
+     },
+     streamCallbacks: {
+       getReactNode: async ({ jsx }) => jsx,
+       getMetaTags: async ({ helmetContext }) => extractMeta(helmetContext),
+       createRenderStreamTransformer,
+       onBeforeWriteClosingHtml: async (res, { state }) => {
+         res.write(getStateElement(state) + "\n");
        },
      },
    });
