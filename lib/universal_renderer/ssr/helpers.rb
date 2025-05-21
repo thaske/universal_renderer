@@ -6,7 +6,7 @@ module UniversalRenderer
       #   This placeholder is used by the rendering process to inject SSR metadata.
       #   @return [String] The HTML-safe string "<!-- SSR_META -->".
       def ssr_meta
-        "<!-- SSR_META -->".html_safe
+        Placeholders::META.html_safe
       end
 
       # @!method ssr_body
@@ -14,7 +14,7 @@ module UniversalRenderer
       #   This placeholder is used by the rendering process to inject the main SSR body.
       #   @return [String] The HTML-safe string "<!-- SSR_BODY -->".
       def ssr_body
-        "<!-- SSR_BODY -->".html_safe
+        Placeholders::BODY.html_safe
       end
 
       # @!method sanitize_ssr(html)

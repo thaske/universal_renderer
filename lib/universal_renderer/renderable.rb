@@ -1,5 +1,5 @@
 module UniversalRenderer
-  module Rendering
+  module Renderable
     extend ActiveSupport::Concern
 
     included do
@@ -41,23 +41,25 @@ module UniversalRenderer
 
     private
 
-    def default_render
-      return super unless self.class.enable_ssr && request.format.html?
+    def render(*args, **kwargs)
+      return super unless self.class.enable_ssr
+
+      return super unless request.format.html?
 
       if use_ssr_streaming?
-        render_ssr_stream
+        render_ssr_stream(*args, **kwargs)
       else
         fetch_ssr
         super
       end
     end
 
-    def render_ssr_stream
+    def render_ssr_stream(*args, **kwargs)
       set_streaming_headers
 
-      full_layout = render_to_string
+      full_layout = render_to_string(*args, **kwargs)
 
-      split_index = full_layout.index("<!-- SSR_META -->")
+      split_index = full_layout.index(SSR::Placeholders::META)
       before_meta = full_layout[0...split_index]
       after_meta = full_layout[split_index..]
 
@@ -73,7 +75,16 @@ module UniversalRenderer
           response
         )
 
-      handle_ssr_stream_fallback(response) unless streaming_succeeded
+      # SSR streaming failed or was not possible (e.g. server down, config missing).
+      unless streaming_succeeded
+        Rails.logger.error(
+          "SSR stream fallback: " \
+            "Streaming failed, proceeding with standard rendering."
+        )
+        response.stream.write(after_meta)
+      end
+
+      response.stream.close unless response.stream.closed?
     end
 
     def initialize_props
@@ -146,23 +157,6 @@ module UniversalRenderer
 
       # Remove Content-Length header to prevent buffering.
       response.headers.delete("Content-Length")
-    end
-
-    def handle_ssr_stream_fallback(response)
-      # SSR streaming failed or was not possible (e.g. server down, config missing).
-      # Ensure response hasn\'t been touched in a way that prevents a new render.
-      return unless response.committed? || response.body.present?
-
-      Rails.logger.error(
-        "SSR stream fallback:" \
-          "Cannot render default fallback template because response was already committed or body present."
-      )
-      # Close the stream if it\'s still open to prevent client connection from hanging
-      # when we can\'t render a fallback page due to already committed response
-      response.stream.close unless response.stream.closed?
-
-      # If response not committed, no explicit render is called here,
-      # allowing Rails\' default rendering behavior to take over.
     end
   end
 end
