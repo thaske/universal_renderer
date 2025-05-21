@@ -81,9 +81,8 @@ module UniversalRenderer
           "SSR stream fallback: " \
             "Streaming failed, proceeding with standard rendering."
         )
+        response.stream.write(after_meta)
       end
-
-      response.stream.write(after_meta)
 
       response.stream.close unless response.stream.closed?
     end
