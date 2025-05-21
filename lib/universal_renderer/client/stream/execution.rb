@@ -13,7 +13,7 @@ module UniversalRenderer
               Execution._handle_node_response_streaming(
                 node_res,
                 response,
-                stream_uri
+                stream_uri,
               )
 
               return true
@@ -28,18 +28,18 @@ module UniversalRenderer
               Execution._handle_streaming_for_node_error(
                 node_res,
                 response,
-                stream_uri
+                stream_uri,
               )
             end
           rescue StandardError => e
             Rails.logger.error(
-              "Error during SSR data transfer or stream writing from #{stream_uri}: #{e.class.name} - #{e.message}"
+              "Error during SSR data transfer or stream writing from #{stream_uri}: #{e.class.name} - #{e.message}",
             )
 
             Execution._write_generic_html_error(
               response.stream,
               "Streaming Error",
-              "<p>A problem occurred while loading content. Please refresh.</p>"
+              "<p>A problem occurred while loading content. Please refresh.</p>",
             )
           ensure
             response.stream.close unless response.stream.closed?
@@ -53,7 +53,7 @@ module UniversalRenderer
 
           def _handle_streaming_for_node_error(node_res, response, stream_uri)
             Rails.logger.error(
-              "SSR stream server at #{stream_uri} responded with #{node_res.code} #{node_res.message}."
+              "SSR stream server at #{stream_uri} responded with #{node_res.code} #{node_res.message}.",
             )
 
             is_potentially_viewable_error =
@@ -61,19 +61,19 @@ module UniversalRenderer
 
             if is_potentially_viewable_error
               Rails.logger.info(
-                "Attempting to stream HTML error page from Node SSR server."
+                "Attempting to stream HTML error page from Node SSR server.",
               )
               Execution._stream_response_body(node_res, response.stream)
             else
               Rails.logger.warn(
                 "Node SSR server error response Content-Type ('#{node_res["Content-Type"]}') is not text/html. " \
-                  "Injecting generic error message into the stream."
+                  "Injecting generic error message into the stream.",
               )
 
               Execution._write_generic_html_error(
                 response.stream,
                 "Application Error",
-                "<p>There was an issue rendering this page. Please try again later.</p>"
+                "<p>There was an issue rendering this page. Please try again later.</p>",
               )
             end
           end
