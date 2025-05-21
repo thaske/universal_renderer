@@ -62,7 +62,8 @@ module UniversalRenderer
              Errno::EHOSTUNREACH,
              Net::OpenTimeout,
              Net::ReadTimeout,
-             SocketError => e
+             SocketError,
+             IOError => e
         uri_str_for_conn_error =
           stream_uri_obj ? stream_uri_obj.to_s : full_ssr_url_for_log
 
