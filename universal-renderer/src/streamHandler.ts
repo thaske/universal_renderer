@@ -3,18 +3,13 @@ import { PassThrough } from "node:stream";
 import { renderToPipeableStream } from "react-dom/server.node";
 
 import type {
-  Callbacks,
+  BaseCallbacks,
   RenderContextBase,
   RenderRequestProps,
   StreamSpecificCallbacks,
 } from "@/types";
 
-import {
-  handleGenericError,
-  handleStreamError,
-  parseLayoutTemplate,
-  SSR_MARKERS,
-} from "@/utils";
+import { handleGenericError, handleStreamError, SSR_MARKERS } from "@/utils";
 
 /**
  * Creates a stream handler for the SSR server.
@@ -28,7 +23,7 @@ function createStreamHandler<
   callbacks,
   streamCallbacks,
 }: {
-  callbacks: Callbacks<TContext>;
+  callbacks: BaseCallbacks<TContext>;
   streamCallbacks: StreamSpecificCallbacks<TContext>;
 }) {
   return async function streamHandler(
@@ -83,80 +78,57 @@ function createStreamHandler<
         return;
       }
 
-      await streamCallbacks.onResponseStart?.(res, context);
+      const { pipe } = renderToPipeableStream(
+        await streamCallbacks.getReactNode(context),
+        {
+          async onAllReady() {
+            const [head, tail] = template.split(SSR_MARKERS.BODY);
 
-      const { pipe } = renderToPipeableStream(context.jsx, {
-        async onShellReady() {
-          if (!res.headersSent) {
-            res.statusCode = 200;
-            res.setHeader("Content-Type", "text/html; charset=utf-8");
-            res.setHeader("Transfer-Encoding", "chunked");
-          }
+            const metaTags = await streamCallbacks.getMetaTags?.(context!);
+            if (metaTags) res.write(head.replace(SSR_MARKERS.META, metaTags));
+            else res.write(head);
 
-          const {
-            beforeMetaChunk,
-            afterMetaAndBeforeBodyChunk,
-            afterBodyChunk,
-          } = parseLayoutTemplate(template);
+            const userTransformStream =
+              streamCallbacks.createRenderStreamTransformer?.(context!);
 
-          res.write(beforeMetaChunk);
+            const renderOutputStream = new PassThrough();
+            renderOutputStream.on("error", (streamError: unknown) => {
+              handleStreamError(
+                "Application render stream or user transform",
+                streamError,
+                res,
+                context!,
+                callbacks,
+              );
+            });
+            const streamEndPromise = new Promise<void>((resolve) => {
+              renderOutputStream.on("end", resolve);
+            });
 
-          await streamCallbacks.onWriteMeta?.(res, context!);
+            if (userTransformStream) {
+              renderOutputStream
+                .pipe(userTransformStream)
+                .pipe(res, { end: false });
+            } else {
+              renderOutputStream.pipe(res, { end: false });
+            }
 
-          res.write(afterMetaAndBeforeBodyChunk);
+            pipe(renderOutputStream);
 
-          const userTransformStream =
-            streamCallbacks.createRenderStreamTransformer?.(context!);
+            await streamEndPromise;
 
-          const renderOutputStream = new PassThrough();
-
-          renderOutputStream.on("error", (streamError: unknown) => {
-            handleStreamError(
-              "Application render stream or user transform",
-              streamError,
-              res,
-              context!,
-              callbacks,
-            );
-          });
-
-          const streamEndPromise = new Promise<void>((resolve) => {
-            renderOutputStream.on("end", resolve);
-          });
-
-          if (userTransformStream) {
-            renderOutputStream
-              .pipe(userTransformStream)
-              .pipe(res, { end: false });
-          } else {
-            renderOutputStream.pipe(res, { end: false });
-          }
-
-          pipe(renderOutputStream);
-
-          await streamEndPromise;
-
-          try {
             await streamCallbacks.onBeforeWriteClosingHtml?.(res, context!);
-          } catch (endError) {
-            handleStreamError(
-              "onBeforeWriteClosingHtml",
-              endError,
-              res,
-              context!,
-              callbacks,
-            );
-          }
 
-          res.end(afterBodyChunk);
+            res.end(tail);
+          },
+          onShellError(error: unknown) {
+            handleStreamError("onShellError", error, res, context!, callbacks);
+          },
+          onError(error: unknown) {
+            handleStreamError("onError", error, res, context!, callbacks);
+          },
         },
-        onShellError(error: unknown) {
-          handleStreamError("onShellError", error, res, context!, callbacks);
-        },
-        onError(error: unknown) {
-          handleStreamError("onError", error, res, context!, callbacks);
-        },
-      });
+      );
 
       res.on("finish", () => {
         if (context) {
@@ -166,10 +138,9 @@ function createStreamHandler<
       });
     } catch (error: unknown) {
       handleGenericError(error, res, context, callbacks);
-
       if (context) {
         try {
-          if (!res.writableEnded) callbacks.cleanup(context);
+          callbacks.cleanup(context);
         } catch (cleanupErr) {
           console.error(
             "[SSR] Error during cleanup after generic error:",
