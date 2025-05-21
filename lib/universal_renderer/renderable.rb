@@ -31,15 +31,13 @@ module UniversalRenderer
       @ssr =
         UniversalRenderer::Client::Base.fetch(
           request.original_url,
-          @universal_renderer_props
+          @universal_renderer_props,
         )
     end
 
     def use_ssr_streaming?
       self.class.try(:ssr_streaming_preference)
     end
-
-    private
 
     def render(*args, **kwargs)
       return super unless self.class.enable_ssr
@@ -53,6 +51,8 @@ module UniversalRenderer
         super
       end
     end
+
+    private
 
     def render_ssr_stream(*args, **kwargs)
       set_streaming_headers
@@ -72,14 +72,14 @@ module UniversalRenderer
           request.original_url,
           current_props,
           after_meta,
-          response
+          response,
         )
 
       # SSR streaming failed or was not possible (e.g. server down, config missing).
       unless streaming_succeeded
         Rails.logger.error(
           "SSR stream fallback: " \
-            "Streaming failed, proceeding with standard rendering."
+            "Streaming failed, proceeding with standard rendering.",
         )
         response.stream.write(after_meta)
       end
