@@ -1,7 +1,6 @@
 import type { Express, Response } from "express";
 import type { Transform } from "node:stream";
 import type { ReactElement } from "react";
-import type { ViteDevServer } from "vite";
 
 // --- User Application & Configuration ---
 
@@ -47,7 +46,7 @@ export interface BaseRenderCallbacks<
    * @param errorContext A string describing the context of the error.
    * @param context The context object passed between callbacks.
    */
-  onError?: (
+  error?: (
     error: Error | unknown,
     context?: TContext,
     errorContext?: string,
@@ -151,9 +150,6 @@ export interface CreateSsrServerOptions<
   TContext extends RenderContextBase = RenderContextBase,
   TRenderOutput extends Record<string, any> = Record<string, any>,
 > {
-  /** The Vite dev server instance. */
-  vite: ViteDevServer;
-
   /** Callbacks for application setup and cleanup. */
   callbacks: Callbacks<TContext, TRenderOutput>;
 
@@ -166,12 +162,8 @@ export interface CreateSsrServerOptions<
   /**
    * Allows customization of the Express app instance before routes are added.
    * @param app The Express app instance.
-   * @param vite The ViteDevServer instance.
    */
-  configureExpressApp?: (
-    app: Express,
-    vite: ViteDevServer,
-  ) => void | Promise<void>;
+  middleware?: (app: Express) => void | Promise<void>;
 }
 
 // --- Internal Types for Server & Handlers ---

@@ -15,7 +15,7 @@ import type { CreateSsrServerOptions, RenderContextBase } from "@/types";
 export * from "@/types";
 
 /**
- * Creates and configures an SSR server with Vite and Express.
+ * Creates and configures an SSR server with Express.
  *
  * @param options Configuration options for the SSR server.
  * @returns An Express app instance, already configured and ready to be started with app.listen().
@@ -23,14 +23,11 @@ export * from "@/types";
 export async function createSsrServer<
   TContext extends RenderContextBase = RenderContextBase,
 >({
-  vite,
-  configureExpressApp,
+  middleware,
   basePath = "/",
   callbacks,
   streamCallbacks,
 }: CreateSsrServerOptions<TContext>): Promise<Express> {
-  if (!vite) throw new Error("Vite instance is required.");
-
   if (!callbacks.render && !streamCallbacks) {
     throw new Error(
       "Either `callbacks.render` or `streamCallbacks` must be provided.",
@@ -42,11 +39,7 @@ export async function createSsrServer<
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
-  if (configureExpressApp) await configureExpressApp(app, vite);
-
-  // Use Vite's connect instance as middleware. This will enable HMR and other Vite features.
-  // The `vite.middlewares` is a Connect instance, which is compatible with Express.
-  app.use(vite.middlewares);
+  if (middleware) await middleware(app);
 
   // Health check endpoint
   app.get(
@@ -80,7 +73,6 @@ export async function createSsrServer<
 
   // Generic error handler
   app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-    // Vite's error middleware might have already handled it if it's a Vite-specific error
     // Delegate to Express default error handler if headers are sent
     if (res.headersSent) return next(err);
     else handleGenericError<TContext>(err, res, undefined, callbacks);

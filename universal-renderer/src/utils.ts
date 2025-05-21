@@ -32,7 +32,6 @@ export function parseLayoutTemplate(layout: string): LayoutChunks {
 
 /**
  * Generic error handler middleware for Express.
- * It attempts to fix the stack trace with Vite and sends a 500 response.
  *
  * @param error - The error to handle.
  * @param res - The Express response object.
@@ -47,8 +46,8 @@ export function handleGenericError<
   context?: TContext,
   callbacks?: Callbacks<TContext>,
 ): void {
-  if (callbacks?.onError) {
-    callbacks.onError(error, context);
+  if (callbacks?.error) {
+    callbacks.error(error, context);
   }
 
   console.error("[SSR] Generic error:", error);
@@ -98,8 +97,8 @@ export function handleStreamError<
   renderContext: TContext,
   callbacks: Callbacks<TContext>,
 ): void {
-  if (callbacks.onError) {
-    callbacks.onError(error, renderContext, errorContext);
+  if (callbacks.error) {
+    callbacks.error(error, renderContext, errorContext);
   }
 
   try {

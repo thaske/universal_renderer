@@ -214,7 +214,7 @@ To set up the SSR server for your Rails application:
          sheet?.seal();
          queryClient?.clear();
        },
-       onError: (error, context, errorContext) => {
+       error: (error, context, errorContext) => {
          vite.ssrFixStacktrace(error);
          console.error(error);
        },
