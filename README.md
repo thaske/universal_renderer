@@ -198,11 +198,8 @@ To set up the SSR server for your Rails application:
    } from "@/ssr/utils";
 
    const app = await createSsrServer({
-     middleware: (app) => {
-       app.use(getRequestLogger());
-     },
      callbacks: {
-       setup: setup,
+       setup,
        render: async ({ jsx, helmetContext, sheet, state }) => {
          const root = renderToString(jsx);
          const meta = extractMeta(helmetContext);
@@ -212,17 +209,6 @@ To set up the SSR server for your Rails application:
        cleanup: async ({ sheet, queryClient }) => {
          sheet?.seal();
          queryClient?.clear();
-       },
-       error: (error, _, errorContext) => {
-         console.error(`[SSR] ${errorContext} error:`, error);
-       },
-     },
-     streamCallbacks: {
-       getReactNode: async ({ jsx }) => jsx,
-       getMetaTags: async ({ helmetContext }) => extractMeta(helmetContext),
-       createRenderStreamTransformer,
-       onBeforeWriteClosingHtml: async (res, { state }) => {
-         res.write(getStateElement(state) + "\n");
        },
      },
    });
