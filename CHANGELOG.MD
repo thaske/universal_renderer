@@ -73,31 +73,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 -->
 
-## [0.4.0] - 2025-05-21
+## 0.4.0 - 2025-05-21
+
+### Ruby Gem
+
+#### Added
+
+- Support for returning streaming status to enable fallback rendering
+
+#### Changed
+
+- Improved streaming implementation with simpler layout handling
+- Removed direct header manipulation from renderable module
+- Updated streaming API to return success/failure status
+- Added trailing commas to multi-line logging statements
+
+#### Fixed
+
+- Fixed error handling in streaming mode
 
 ### NPM Package
 
 #### Added
 
-- CJS exports
+- CJS exports alongside ESM
+- Streamlined React stream rendering with simplified API
+- Support for custom middleware integration without Vite dependency
 
 #### Changed
 
-- configureExpressApp -> middleware
-- onError callback -> error callback
+- Renamed `configureExpressApp` to `middleware`
+- Renamed `onError` callback to `error` callback
+- Simplified template handling for React streams
+- Updated TypeScript types for better flexibility
+- Build scripts now generate both ESM and CJS formats
 
 #### Fixed
 
 - Fixed hot module reloading for Vue components
 - Resolved path resolution in Windows environments
 
-#### Deprecated
-
-- Legacy API methods, see migration guide
-- Direct DOM manipulation utilities
-
 #### Removed
 
-- Importing Vite dependency injection in createSsrServer
-
-[0.4.0]: https://github.com/thaske/universal_renderer/releases/tag/v0.4.0
+- Vite dependency requirement in `createSsrServer`
+- Removed mandatory Vite middleware usage
