@@ -41,7 +41,3 @@ swapped independently.
 - No side-effects at module top-level; keep startup deterministic.
 - Write integration tests that spin up a real Rails + Vite pair (`spec/integration/`).
 - Comments should explain _why_, not _what_.
-
-# Contributing
-
-If anything feels clunky, **simplify the API first**
