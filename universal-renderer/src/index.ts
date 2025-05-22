@@ -1,6 +1,11 @@
 import createHandler from "@/handler";
 import createStreamHandler from "@/streamHandler";
 import type { CreateServerOptions } from "@/types/serverOptions";
+import {
+  adaptViteMiddleware,
+  type ConnectMiddleware,
+} from "@/viteMiddlewareAdapter";
+export { adaptViteMiddleware } from "@/viteMiddlewareAdapter";
 
 /**
  * Creates and configures an SSR server with Bun.
@@ -10,7 +15,11 @@ import type { CreateServerOptions } from "@/types/serverOptions";
  */
 export async function createServer<
   TContext extends Record<string, any> = Record<string, any>,
->({ port, ...options }: CreateServerOptions<TContext>): Promise<any> {
+>({
+  port,
+  middleware,
+  ...options
+}: CreateServerOptions<TContext>): Promise<any> {
   if (!options.render) {
     throw new Error(
       "Either `callbacks.render` or `streamCallbacks` must be provided.",
@@ -24,20 +33,26 @@ export async function createServer<
     streamCallbacks,
   });
 
+  const routes: Record<string, any> = {
+    "/health": () =>
+      Response.json({
+        status: "OK",
+        timestamp: new Date().toISOString(),
+      }),
+    "/": { POST: handler },
+    "/static": { POST: handler },
+    "/stream": { POST: streamHandler },
+  };
+
+  if (middleware) {
+    const viteHandler = adaptViteMiddleware(middleware as ConnectMiddleware);
+    routes["/*"] = { GET: viteHandler, HEAD: viteHandler };
+  }
+
   const server = Bun.serve({
     port,
     development: import.meta.env.MODE !== "production",
-
-    routes: {
-      "/health": () =>
-        Response.json({
-          status: "OK",
-          timestamp: new Date().toISOString(),
-        }),
-      "/": { POST: handler },
-      "/static": { POST: handler },
-      "/stream": { POST: streamHandler },
-    },
+    routes,
 
     // Fallback for unmatched routes or older Bun versions.
     fetch(req: Request) {
