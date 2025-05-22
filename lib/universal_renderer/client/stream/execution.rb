@@ -2,7 +2,7 @@ module UniversalRenderer
   module Client
     class Stream
       module Execution
-        def perform_streaming(
+        def self.perform_streaming(
           http_client,
           http_post_request,
           response,
