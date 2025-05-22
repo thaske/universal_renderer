@@ -24,6 +24,19 @@ export interface BaseCallbacks<
   ) => Promise<TContext> | TContext;
 
   /**
+   * Optional: Provides custom HTML content to be displayed when an error occurs during rendering.
+   * This content will be injected into the main body of the HTML response.
+   * If not provided, a generic error message will be displayed.
+   * @param error The error that occurred.
+   * @param context The context object, if available.
+   * @returns A promise or direct string containing the HTML error content.
+   */
+  getErrorContent?: (
+    error: unknown,
+    context?: TContext,
+  ) => Promise<string> | string;
+
+  /**
    * Renders the application to a static object where keys and values are strings.
    * The \`jsx\` for rendering is typically available in the context object.
    * @param context The context object passed between callbacks.
@@ -145,4 +158,12 @@ export interface LayoutChunks {
   beforeMetaChunk: string;
   afterMetaAndBeforeBodyChunk: string;
   afterBodyChunk: string;
+}
+
+/**
+ * SSR Markers for HTML template injection during streaming.
+ */
+export enum SSR_MARKERS {
+  META = "<!-- SSR_META -->",
+  BODY = "<!-- SSR_BODY -->",
 }
