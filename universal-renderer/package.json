@@ -1,6 +1,6 @@
 {
   "name": "universal-renderer",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Server-Side Rendering (SSR) server for the universal_renderer Ruby gem.",
   "license": "MIT",
   "author": "thaske",
@@ -11,8 +11,8 @@
   },
   "bugs": "https://github.com/thaske/universal_renderer/issues",
   "scripts": {
-    "build": "tsdown src/ --format esm --format cjs",
-    "watch": "tsdown src/ --watch --format esm --format cjs"
+    "build": "tsdown src/ --format esm",
+    "watch": "tsdown src/ --format esm --watch"
   },
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
@@ -21,16 +21,12 @@
     "README.md",
     "LICENSE"
   ],
-  "dependencies": {
-    "express": "^5.1.0"
-  },
   "peerDependencies": {
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "vite": "^6.3.5"
   },
   "devDependencies": {
-    "@types/express": "^5.0.2",
     "@types/node": "^22.15.18",
     "@types/react": "^19.1.4",
     "@types/react-dom": "^19.1.5",
@@ -39,15 +35,12 @@
     "typescript": "^5.8.3"
   },
   "keywords": [
-    "express",
+    "bun",
     "react",
     "server-side-rendering",
     "ssr",
     "vite"
   ],
-  "engines": {
-    "node": ">=18.0.0"
-  },
   "publishConfig": {
     "access": "public"
   }

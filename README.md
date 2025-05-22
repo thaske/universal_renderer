@@ -16,6 +16,16 @@ UniversalRenderer helps you forward rendering requests to external SSR services,
 - **Automatic fallback** to client-side rendering if SSR fails
 - **View helpers** for easy integration into your layouts
 
+## Requirements
+
+> **Heads-up ⚠️** &nbsp;The JavaScript side of UniversalRenderer is **Bun-native**.
+>
+> • You **must** run the SSR server with **Bun ≥ 1.2**.
+>
+> • The exported helpers call Bun's built-in HTTP router and `Response` implementation; they **will not boot under Node, Deno, or Cloudflare Workers**.
+>
+> • The Ruby gem is runtime-agnostic and continues to work on every platform – only the SSR service requires Bun.
+
 ## Installation
 
 1. Add to your Gemfile:
@@ -65,8 +75,9 @@ class ProductsController < ApplicationController
 
     fetch_ssr # or fetch on demand
 
-    # @ssr will now contain the SSR response, where the symbolized keys
-    # are the same keys returned by the SSR server response.
+    # @ssr will now contain a UniversalRenderer::SSR::Response which exposes
+    # `.head`, `.body` and optional `.body_attrs` values returned by the SSR
+    # service.
   end
 
   def default_render
@@ -80,22 +91,17 @@ end
 ```erb
 <%# "ssr/index" %>
 
-<%# Now you can use the instance variable @ssr in your layout. %>
-<%# We'll send it with keys :meta, :styles, :root, and :state below. %>
-<%# We can use the provided sanitize_ssr helper to sanitize our content %>
+<%# Inject SSR snippets using the provided helpers. When streaming is enabled
+     these render HTML placeholders (<!-- SSR_HEAD --> / <!-- SSR_BODY -->);
+     otherwise they output the sanitised HTML returned by the SSR service. %>
 
-<% content_for :meta do %>
-  <%= sanitize_ssr @ssr[:meta] %>
-<% end %>
+<head>
+  <%= ssr_head %>
+</head>
 
 <div id="root">
-  <%= sanitize_ssr @ssr[:styles] %>
-  <%= sanitize_ssr @ssr[:root] %>
+  <%= ssr_body %>
 </div>
-
-<script id="state" type="application/json">
-  <%= json_escape(@ssr[:state].to_json) %>
-</script>
 ```
 
 ## Setting Up the SSR Server
@@ -119,7 +125,7 @@ To set up the SSR server for your Rails application:
      HelmetProvider,
      type HelmetDataContext,
    } from "@dr.pogodin/react-helmet";
-   import { dehydrate, QueryClient, QueryClientProvider } from "react-query";
+   import { QueryClient, QueryClientProvider } from "react-query";
    import { StaticRouter } from "react-router";
    import { ServerStyleSheet } from "styled-components";
 
@@ -133,7 +139,7 @@ To set up the SSR server for your Rails application:
      const sheet = new ServerStyleSheet();
      const queryClient = new QueryClient();
 
-     const { query_data } = props;
+     const { query_data = [] } = props;
      query_data.forEach(({ key, data }) => queryClient.setQueryData(key, data));
      const state = dehydrate(queryClient);
 
@@ -145,29 +151,32 @@ To set up the SSR server for your Rails application:
              <App />
            </StaticRouter>
          </QueryClientProvider>
+         <template id="state" data-state={JSON.stringify(state)} />
        </HelmetProvider>,
      );
 
-     return { jsx, helmetContext, sheet, state, queryClient };
+     return { jsx, helmetContext, sheet, queryClient };
    }
    ```
 
-3. Update your `application.tsx` to hydrate the SSR state:
+3. Update your `application.tsx` to hydrate on the client:
 
    ```tsx
    import { HelmetProvider } from "@dr.pogodin/react-helmet";
-   import { createRoot, hydrateRoot } from "react-dom/client";
-   import { Hydrate, QueryClient, QueryClientProvider } from "react-query";
+   import { hydrateRoot } from "react-dom/client";
    import { BrowserRouter } from "react-router";
-
+   import { Hydrate, QueryClient, QueryClientProvider } from "react-query";
    import App from "@/App";
    import Metadata from "@/components/Metadata";
 
    const queryClient = new QueryClient();
-   const stateElement = document.getElementById("state")!;
-   const state = JSON.parse(stateElement.textContent);
 
-   const app = (
+   const stateEl = document.getElementById("state");
+   const state = JSON.parse(stateEl?.dataset.state ?? "{}");
+   stateEl?.remove();
+
+   hydrateRoot(
+     document.getElementById("root")!,
      <HelmetProvider>
        <Metadata url={window.location.href} />
        <QueryClientProvider client={queryClient}>
@@ -177,44 +186,40 @@ To set up the SSR server for your Rails application:
            </BrowserRouter>
          </Hydrate>
        </QueryClientProvider>
-     </HelmetProvider>
+     </HelmetProvider>,
    );
-
-   const rootElement = document.getElementById("root")!;
-   hydrateRoot(rootElement, app);
    ```
 
 4. Create an SSR entry point at `app/frontend/ssr/ssr.ts`:
 
    ```ts
+   import { head, transform } from "@/ssr/utils";
    import { renderToString } from "react-dom/server.node";
-   import { createSsrServer } from "universal-renderer";
-   import setup from "@/ssr/setup";
-   import {
-     createRenderStreamTransformer,
-     extractMeta,
-     getRequestLogger,
-     getStateElement,
-   } from "@/ssr/utils";
+   import { createServer } from "universal-renderer";
+   import { createServer as createViteServer } from "vite";
 
-   const app = await createSsrServer({
-     callbacks: {
-       setup,
-       render: async ({ jsx, helmetContext, sheet, state }) => {
-         const root = renderToString(jsx);
-         const meta = extractMeta(helmetContext);
-         const styles = sheet.getStyleTags();
-         return { meta, root, styles, state };
-       },
-       cleanup: async ({ sheet, queryClient }) => {
-         sheet?.seal();
-         queryClient?.clear();
-       },
-     },
+   const vite = await createViteServer({
+     server: { middlewareMode: true },
+     appType: "custom",
    });
 
-   app.listen(3001, () => {
-     console.log(`[SSR] server started on http://localhost:3001`);
+   await createServer({
+     port: 3001,
+     middleware: vite.middlewares,
+
+     setup: (await import("@/ssr/setup")).default,
+     render: ({ app, helmet, sheet }) => {
+       const root = renderToString(app);
+       const styles = sheet.getStyleTags();
+       return {
+         head: head({ helmet }),
+         body: `${root}\n${styles}`,
+       };
+     },
+     cleanup: ({ sheet, queryClient }) => {
+       sheet?.seal();
+       queryClient?.clear();
+     },
    });
    ```
 

@@ -1,80 +1,77 @@
-import express, {
-  type Express,
-  type NextFunction,
-  type Request,
-  type Response,
-} from "express";
-import path from "node:path";
-
-import createStaticHandler from "@/staticHandler";
+import createHandler from "@/handler";
+import { adaptMiddleware, type ConnectMiddleware } from "@/middlewareAdapter";
 import createStreamHandler from "@/streamHandler";
-import { handleGenericError } from "@/utils";
-
-import type { CreateSsrServerOptions } from "@/types";
-
-export * from "@/types";
+import type { CreateServerOptions } from "@/types/serverOptions";
+export { adaptMiddleware } from "@/middlewareAdapter";
 
 /**
- * Creates and configures an SSR server with Express.
+ * Creates and configures an SSR server with Bun.
  *
  * @param options Configuration options for the SSR server.
- * @returns An Express app instance, already configured and ready to be started with app.listen().
+ * @returns A Bun server instance, already configured and ready to be started with server.listen().
  */
-export async function createSsrServer<
+export async function createServer<
   TContext extends Record<string, any> = Record<string, any>,
 >({
+  port,
   middleware,
-  basePath = "/",
-  callbacks,
-  streamCallbacks,
-}: CreateSsrServerOptions<TContext>): Promise<Express> {
-  if (!callbacks.render && !streamCallbacks) {
+  ...options
+}: CreateServerOptions<TContext>): Promise<any> {
+  if (!options.render) {
     throw new Error(
       "Either `callbacks.render` or `streamCallbacks` must be provided.",
     );
   }
 
-  const app = express();
-
-  app.use(express.json({ limit: "50mb" }));
-  app.use(express.urlencoded({ extended: true, limit: "50mb" }));
-
-  if (middleware) await middleware(app);
-
-  // Health check endpoint
-  app.get(
-    `${basePath === "/" ? "" : basePath}/health`,
-    (_req: Request, res: Response) => {
-      res.json({ status: "OK", timestamp: new Date().toISOString() });
-    },
-  );
-
-  // Register SSR routes
-  // Ensure base path is handled correctly if not root
-  const routePath = (p: string) => path.posix.join(basePath, p);
-
-  const staticRenderHandler = createStaticHandler<TContext>({
+  const { streamCallbacks, ...callbacks } = options;
+  const handler = createHandler<TContext>({ callbacks });
+  const streamHandler = createStreamHandler<TContext>({
     callbacks,
+    streamCallbacks,
   });
-  app.post(routePath("/"), staticRenderHandler);
-  app.post(routePath("/static"), staticRenderHandler);
 
-  if (streamCallbacks) {
-    const streamRenderHandler = createStreamHandler<TContext>({
-      callbacks,
-      streamCallbacks,
-    });
+  const routes: Record<string, any> = {
+    "/health": () =>
+      Response.json({
+        status: "OK",
+        timestamp: new Date().toISOString(),
+      }),
+    "/": { POST: handler },
+    "/static": { POST: handler },
+    "/stream": { POST: streamHandler },
+  };
 
-    app.post(routePath("/stream"), streamRenderHandler);
+  if (middleware) {
+    const middlewareHandler = adaptMiddleware(middleware as ConnectMiddleware);
+    routes["/*"] = { GET: middlewareHandler, HEAD: middlewareHandler };
   }
 
-  // Generic error handler
-  app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-    // Delegate to Express default error handler if headers are sent
-    if (res.headersSent) return next(err);
-    else handleGenericError<TContext>(err, res, undefined, callbacks);
+  const server = Bun.serve({
+    port,
+    development: import.meta.env.MODE !== "production",
+    routes,
+
+    // Fallback for unmatched routes or older Bun versions.
+    fetch(req: Request) {
+      return new Response("Not Found", { status: 404 });
+    },
+
+    error(err) {
+      console.error("[SSR] Unhandled server error:", err);
+
+      // Decide on a response format – JSON is safest because every route in this
+      // package speaks JSON.  During development we can expose the stack trace
+      // too, but hide it in production.
+      const body =
+        import.meta.env.MODE !== "production"
+          ? { error: err.message, stack: err.stack }
+          : { error: "Internal Server Error" };
+
+      return Response.json(body, { status: 500 });
+    },
   });
 
-  // The user will call app.listen(port, () => { ... }) on the returned app instance
-  return app;
+  console.log(`[SSR] Server running on http://localhost:${port}`);
+
+  return server;
 }

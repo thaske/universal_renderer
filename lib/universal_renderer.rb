@@ -4,6 +4,8 @@ require "universal_renderer/configuration"
 
 require "universal_renderer/renderable"
 
+require "universal_renderer/ssr/response"
+
 require "universal_renderer/client/base"
 require "universal_renderer/client/stream"
 

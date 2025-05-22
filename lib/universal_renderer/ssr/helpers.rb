@@ -1,12 +1,18 @@
 module UniversalRenderer
   module SSR
     module Helpers
-      # @!method ssr_meta
-      #   Outputs a meta tag placeholder for SSR content.
+      # @!method ssr_head
+      #   Outputs a head placeholder for SSR content.
       #   This placeholder is used by the rendering process to inject SSR metadata.
-      #   @return [String] The HTML-safe string "<!-- SSR_META -->".
-      def ssr_meta
-        Placeholders::META.html_safe
+      #   @return [String] The HTML-safe string "<!-- SSR_HEAD -->".
+      def ssr_head
+        if ssr_streaming?
+          Placeholders::HEAD.html_safe
+        elsif @ssr && @ssr.head.present?
+          sanitize_ssr(@ssr.head)
+        else
+          ""
+        end
       end
 
       # @!method ssr_body
@@ -14,7 +20,13 @@ module UniversalRenderer
       #   This placeholder is used by the rendering process to inject the main SSR body.
       #   @return [String] The HTML-safe string "<!-- SSR_BODY -->".
       def ssr_body
-        Placeholders::BODY.html_safe
+        if ssr_streaming?
+          Placeholders::BODY.html_safe
+        elsif @ssr && @ssr.body.present?
+          sanitize_ssr(@ssr.body)
+        else
+          ""
+        end
       end
 
       # @!method sanitize_ssr(html)
@@ -28,7 +40,7 @@ module UniversalRenderer
         sanitize(html, scrubber: Scrubber.new)
       end
 
-      # @!method use_ssr_streaming?
+      # @!method ssr_streaming?
       #   Determines if SSR streaming should be used for the current request.
       #   The decision is based solely on the `ssr_streaming_preference` class attribute
       #   set on the controller.
@@ -37,8 +49,8 @@ module UniversalRenderer
       #   - If `ssr_streaming_preference` is `nil` (not set), streaming is disabled.
       #   @return [Boolean, nil] The value of `ssr_streaming_preference` (true, false, or nil).
       #     In conditional contexts, `nil` will behave as `false`.
-      def use_ssr_streaming?
-        controller.use_ssr_streaming?
+      def ssr_streaming?
+        controller.ssr_streaming?
       end
     end
   end

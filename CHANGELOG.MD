@@ -73,6 +73,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 -->
 
+## 0.4.1 - 2025-05-21
+
+### Ruby Gem
+
+#### Added
+
+- Introduced `UniversalRenderer::SSR::Response` value object to formalise the contract with the Node SSR service.
+- `Client::Base.fetch` now returns a typed `SSR::Response` instance.
+- `universal_renderer.rb` autoloads the new response object for application code.
+
+#### Changed
+
+- Renamed `Stream.stream` method to `Stream.call` for clearer intent
+- Improved method visibility by removing underscore prefixes from internal methods
+- Simplified error handling in streaming module
+- Streamlined response handling for cleaner fallback to standard rendering
+- Renamed SSR placeholder constant from `META` to `HEAD` for clearer semantics
+- Renamed `use_ssr_streaming?` to `ssr_streaming?` for more explicit naming
+- Error logging helpers in the streaming pipeline are now public and have descriptive names
+- Bumped gem version constant and `Gemfile.lock` to `0.4.1`.
+
+#### Fixed
+
+- Fixed streaming failure detection and logging
+- Improved error handling when SSR server is unavailable
+
+### NPM Package
+
+#### Added
+
+- Native Bun HTTP server support through the new `createServer` helper with zero external runtime dependencies
+- JSON rendering pipeline with `setup`, `render`, and `cleanup` lifecycle callbacks
+- Streaming-specific hooks (`onReady`, `onChunk`, `onFinish`) for fine-grained control over React SSR
+- Strongly-typed `ServerOptions` contract (`src/types/serverOptions.ts`) and internal `SSR_MARKERS` constants
+- Development typings for Bun via `@types/bun`
+
+#### Changed
+
+- Replaced Express with Bun — the package **no longer depends on `express`**; bundle size and cold-start time reduced
+- Stream handler completely rewritten for stricter type-safety, meta-tag injection, and hardened error handling
+- Build & watch scripts migrated to Bun; `engines` field removed; peer-dependencies updated
+- Consolidated all exports into the top-level entry file; removed framework-specific sub-paths
+- Error responses are now signalled only via status codes; bodies kept empty for smaller payloads
+- Simplified error handling in stream handlers and improved graceful failure mode to allow Rails fallback
+- Streamlined response handling and error reporting
+- Cleaned up README SSR example by removing a redundant `<script id="state">` tag.
+
+#### Removed
+
+- `express` and `@types/express` dependencies
+- Legacy files `staticHandler.ts`, `utils.ts`, and `types.ts`
+- Deprecated `configureExpressApp` helper (renamed to `middleware` in 0.4.0)
+
+#### Fixed
+
+- Unhandled promise rejections when clients disconnected mid-stream
+- Memory leak in the previous Express pipeline
+
 ## 0.4.0 - 2025-05-21
 
 ### Ruby Gem

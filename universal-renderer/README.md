@@ -1,50 +1,52 @@
-# Universal Renderer
+# universal-renderer (NPM)
 
-A lightweight, frontend-agnostic server-side rendering solution for Rails applications.
+SSR micro-server that pairs with the `universal_renderer` Ruby gem.
 
-## Overview
-
-Universal Renderer consists of two decoupled components:
-
-1. **Ruby Gem** (`universal_renderer`): Provides Rails integration through helpers, template streaming, early-hints utilities, and generators.
-
-2. **NPM Package** (`universal-renderer`): Handles JavaScript rendering through a Vite-powered server that communicates with the Rails application.
-
-These components communicate via HTTP and structured JSON, allowing either side to be swapped independently.
-
-## Features
-
-- **Simple API surface** with sensible defaults
-- **Frontend-agnostic** - works with React, Vue, Svelte, Solid, and more
-- **First-class developer experience** with comprehensive documentation
-- **Flexible rendering options** - static and streaming rendering support
-
-## How It Works
-
-1. The Rails application uses the Ruby gem to handle requests
-2. When server-side rendering is needed, the gem forwards rendering requests to the Node.js server
-3. The Node.js server renders the JavaScript application and returns structured JSON
-4. The Rails application integrates the rendered content into the response
+• **Bun-only** – requires Bun ≥ 1.2.
+• **Framework-agnostic** – just start a server and hand it JSX/HTML.
 
 ## Installation
 
-Add both components to your application:
-
-```
-# In your Rails application
-gem 'universal_renderer'
-
-# In your JavaScript application
-npm install universal-renderer
+```bash
+bun add universal-renderer
 ```
 
-## Documentation
+## Example
 
-For detailed documentation and usage instructions, see:
+```ts
+// ssr.ts
+import { createServer } from "universal-renderer";
+import { renderToString } from "react-dom/server.node";
+import App from "./App";
 
-- Ruby Gem: `lib/universal_renderer.rb`
-- NPM Package: `src/index.ts`
+await createServer({
+  port: 3001,
+  setup: (await import("./setup")).default,
+  render: ({ app }) => ({ body: renderToString(app) }),
+});
+```
 
-## Contributing
+Point the gem at `http://localhost:3001` and you're done.
 
-Contributions are welcome! Please follow the coding guidelines in the project documentation.
+## API
+
+`createServer(options)` spins up a Bun router.
+Each request arrives as `{ url, props }` JSON and must respond with:
+
+```ts
+export type RenderOutput = {
+  head?: string; // <head> inner HTML
+  body: string; // rendered markup (required)
+  bodyAttrs?: string; // optional attributes for <body>
+};
+```
+
+`options`:
+
+- `setup(url, props)` → `{ jsx, ...ctx }` &mdash; prepare the app.
+- `render({ app, ...ctx })` → `RenderOutput` &mdash; stringify markup.
+- `cleanup(ctx)` (optional) &mdash; dispose per-request resources.
+
+Need streaming or Vite middleware? Check `src/index.ts`.
+
+For a full Rails + React walk-through, see the root repo README.
