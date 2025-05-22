@@ -8,10 +8,8 @@ import path from "node:path";
 
 import createStaticHandler from "@/staticHandler";
 import createStreamHandler from "@/streamHandler";
-import { handleGenericError } from "@/utils";
-
 import type { CreateSsrServerOptions } from "@/types";
-
+import { handleError } from "@/utils";
 export * from "@/types";
 
 /**
@@ -36,45 +34,72 @@ export async function createSsrServer<
 
   const app = express();
 
-  app.use(express.json({ limit: "50mb" }));
-  app.use(express.urlencoded({ extended: true, limit: "50mb" }));
-
   if (middleware) await middleware(app);
 
-  // Health check endpoint
-  app.get(
-    `${basePath === "/" ? "" : basePath}/health`,
-    (_req: Request, res: Response) => {
-      res.json({ status: "OK", timestamp: new Date().toISOString() });
-    },
-  );
+  applyBodyParsers(app);
+  registerHealthCheck(app, basePath);
 
   // Register SSR routes
   // Ensure base path is handled correctly if not root
-  const routePath = (p: string) => path.posix.join(basePath, p);
-
-  const staticRenderHandler = createStaticHandler<TContext>({
-    callbacks,
-  });
-  app.post(routePath("/"), staticRenderHandler);
-  app.post(routePath("/static"), staticRenderHandler);
-
-  if (streamCallbacks) {
-    const streamRenderHandler = createStreamHandler<TContext>({
-      callbacks,
-      streamCallbacks,
-    });
-
-    app.post(routePath("/stream"), streamRenderHandler);
-  }
+  registerSsrRoutes(app, basePath, callbacks, streamCallbacks);
 
   // Generic error handler
-  app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-    // Delegate to Express default error handler if headers are sent
-    if (res.headersSent) return next(err);
-    else handleGenericError<TContext>(err, res, undefined, callbacks);
-  });
+  registerErrorHandler(app, callbacks);
 
   // The user will call app.listen(port, () => { ... }) on the returned app instance
   return app;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers – kept local to avoid increasing public surface area
+// ---------------------------------------------------------------------------
+
+/** Adds JSON / URL-encoded body parsers with generous limits */
+function applyBodyParsers(app: Express) {
+  app.use(express.json({ limit: "50mb" }));
+  app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+}
+
+/** Health-check endpoint so load-balancers can probe the service */
+function registerHealthCheck(app: Express, basePath: string) {
+  app.get(
+    path.posix.join(basePath === "/" ? "" : basePath, "/health"),
+    (_req, res) => {
+      res.json({ status: "OK", timestamp: new Date().toISOString() });
+    },
+  );
+}
+
+/** Registers static + stream render routes depending on provided callbacks. */
+function registerSsrRoutes<TContext extends Record<string, any>>(
+  app: Express,
+  basePath: string,
+  callbacks: CreateSsrServerOptions<TContext>["callbacks"],
+  streamCallbacks?: CreateSsrServerOptions<TContext>["streamCallbacks"],
+) {
+  const route = (p: string) => path.posix.join(basePath, p);
+
+  const staticHandler = createStaticHandler<TContext>({ callbacks });
+  app.post(route("/"), staticHandler);
+  app.post(route("/static"), staticHandler);
+
+  if (streamCallbacks) {
+    const streamHandler = createStreamHandler<TContext>({
+      callbacks,
+      streamCallbacks,
+    });
+    app.post(route("/stream"), streamHandler);
+  }
+}
+
+/** Generic error handler wired as the last middleware. */
+function registerErrorHandler<TContext extends Record<string, any>>(
+  app: Express,
+  callbacks: CreateSsrServerOptions<TContext>["callbacks"],
+) {
+  // eslint-disable-next-line @typescript-eslint/no-misused-promises -- express signature
+  app.use((err: Error, _req: Request, res: Response, next: NextFunction) => {
+    if (res.headersSent) return next(err);
+    handleError<TContext>(err, res, undefined, callbacks);
+  });
 }
