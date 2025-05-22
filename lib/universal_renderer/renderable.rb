@@ -29,7 +29,7 @@ module UniversalRenderer
     #   or `nil` if the fetch fails or SSR is not configured.
     def fetch_ssr
       @ssr =
-        UniversalRenderer::Client::Base.fetch(
+        UniversalRenderer::Client::Base.call(
           request.original_url,
           @universal_renderer_props
         )

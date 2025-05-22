@@ -24,7 +24,7 @@ module UniversalRenderer
         #   a {UniversalRenderer::SSR::Response} struct when the request is successful
         #   (HTTP 2xx). Returns `nil` when the request fails or the SSR service is
         #   unreachable.
-        def fetch(url, props)
+        def call(url, props)
           ssr_url = UniversalRenderer.config.ssr_url
           return if ssr_url.blank?
 
