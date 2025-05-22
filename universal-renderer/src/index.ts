@@ -13,6 +13,7 @@ export { adaptMiddleware } from "@/middlewareAdapter";
 export async function createServer<
   TContext extends Record<string, any> = Record<string, any>,
 >({
+  hostname,
   port,
   middleware,
   ...options
@@ -47,6 +48,7 @@ export async function createServer<
   }
 
   const server = Bun.serve({
+    hostname,
     port,
     development: import.meta.env.MODE !== "production",
     routes,
@@ -71,7 +73,9 @@ export async function createServer<
     },
   });
 
-  console.log(`[SSR] Server running on http://localhost:${port}`);
+  console.log(
+    `[SSR] Server running on http://${server.hostname}:${server.port}`,
+  );
 
   return server;
 }
