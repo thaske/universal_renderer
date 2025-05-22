@@ -35,7 +35,7 @@ module UniversalRenderer
         )
     end
 
-    def use_ssr_streaming?
+    def ssr_streaming?
       self.class.try(:ssr_streaming_preference)
     end
 
@@ -43,7 +43,7 @@ module UniversalRenderer
       return super unless self.class.enable_ssr
       return super unless request.format.html?
 
-      if use_ssr_streaming?
+      if ssr_streaming?
         success = render_ssr_stream(*args, **kwargs)
         super unless success
       else

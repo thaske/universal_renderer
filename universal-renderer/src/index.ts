@@ -10,17 +10,14 @@ import type { CreateServerOptions } from "@/types/serverOptions";
  */
 export async function createServer<
   TContext extends Record<string, any> = Record<string, any>,
->({
-  port,
-  callbacks,
-  streamCallbacks,
-}: CreateServerOptions<TContext>): Promise<any> {
-  if (!callbacks.render) {
+>({ port, ...options }: CreateServerOptions<TContext>): Promise<any> {
+  if (!options.render) {
     throw new Error(
       "Either `callbacks.render` or `streamCallbacks` must be provided.",
     );
   }
 
+  const { streamCallbacks, ...callbacks } = options;
   const handler = createHandler<TContext>({ callbacks });
   const streamHandler = createStreamHandler<TContext>({
     callbacks,

@@ -20,16 +20,10 @@ module UniversalRenderer
         #   This should typically be the `request.original_url` from the controller.
         # @param props [Hash] A hash of props to be passed to the SSR service.
         #   These props will be available to the frontend components for rendering.
-        # @return [Hash, nil] The parsed JSON response from the SSR service with symbolized keys
-        #   if the request is successful (HTTP 2xx). The structure of the hash depends
-        #   on the SSR service implementation but typically includes keys like `:head`,
-        #   `:body_html`, and `:body_attrs`.
-        #   Returns `nil` if:
-        #   - The `ssr_url` is not configured.
-        #   - The request times out (open or read).
-        #   - The SSR service returns a non-successful HTTP status code.
-        #   - Any other `StandardError` occurs during the request.
-        #   In case of failures, an error message is logged to `Rails.logger`.
+        # @return [UniversalRenderer::SSR::Response, nil] The SSR payload wrapped in
+        #   a {UniversalRenderer::SSR::Response} struct when the request is successful
+        #   (HTTP 2xx). Returns `nil` when the request fails or the SSR service is
+        #   unreachable.
         def fetch(url, props)
           ssr_url = UniversalRenderer.config.ssr_url
           return if ssr_url.blank?
@@ -50,7 +44,16 @@ module UniversalRenderer
             response = http.request(request)
 
             if response.is_a?(Net::HTTPSuccess)
-              JSON.parse(response.body).deep_symbolize_keys
+              raw_data = JSON.parse(response.body).deep_symbolize_keys
+
+              # Map the keys we care about to the Struct. The Node service might
+              # send `:body_html` instead of `:body`; favour the latter if
+              # present but fall back gracefully.
+              UniversalRenderer::SSR::Response.new(
+                head: raw_data[:head],
+                body: raw_data[:body] || raw_data[:body_html],
+                body_attrs: raw_data[:body_attrs]
+              )
             else
               Rails.logger.error(
                 "SSR fetch request to #{ssr_url} failed: #{response.code} - #{response.message} (URL: #{url})"

@@ -34,9 +34,9 @@ function parseRequest(
     });
   }
 
-  if (!template.includes(SSR_MARKERS.META)) {
+  if (!template.includes(SSR_MARKERS.HEAD)) {
     console.warn(
-      `[SSR] HTML template is missing SSR_META marker (${SSR_MARKERS.META}). Meta content will not be injected.`,
+      `[SSR] HTML template is missing SSR_HEAD marker (${SSR_MARKERS.HEAD}). Head content will not be injected.`,
     );
   }
 
@@ -49,14 +49,14 @@ function splitTemplate(template: string): { head: string; tail: string } {
   return { head, tail };
 }
 
-/** Injects meta tags (if any) into the provided HTML head chunk. */
-async function injectMeta<TContext extends Record<string, any>>(
+/** Injects tags (if any) into the provided HTML head chunk. */
+async function injectHead<TContext extends Record<string, any>>(
   headChunk: string,
   streamCallbacks: StreamCallbacks<TContext>,
   context: TContext,
 ) {
-  const metaTags = await streamCallbacks.meta?.(context);
-  return metaTags ? headChunk.replace(SSR_MARKERS.META, metaTags) : headChunk;
+  const headTags = await streamCallbacks.head?.(context);
+  return headTags ? headChunk.replace(SSR_MARKERS.HEAD, headTags) : headChunk;
 }
 
 /**
@@ -89,12 +89,12 @@ function createErrorResponder<TContext extends Record<string, any>>(
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")}</template>`;
 
-    const headWithMeta = ctx
-      ? await injectMeta(templateParts.head, streamCallbacks, ctx)
+    const headWithTags = ctx
+      ? await injectHead(templateParts.head, streamCallbacks, ctx)
       : templateParts.head;
 
     try {
-      out.write(headWithMeta);
+      out.write(headWithTags);
       out.end(templateParts.tail.replace("</body>", `${errorHtml}\n</body>`));
     } catch {
       /* no-op – client likely disconnected */
@@ -166,7 +166,16 @@ export default function createStreamHandler<
 
         // 2. Begin React streaming – defer shell until ready.
         await new Promise<void>((resolveShell) => {
-          const reactNode = streamCallbacks.app(context!);
+          let reactNode;
+          if (streamCallbacks.app) {
+            reactNode = streamCallbacks.app(context!);
+          } else if (context && "app" in context) {
+            reactNode = context.app;
+          } else if (context && "jsx" in context) {
+            reactNode = context.jsx;
+          } else {
+            throw new Error("No app callback provided");
+          }
 
           const { pipe } = renderToPipeableStream(reactNode, {
             onShellReady: () => void handleShellReady(resolveShell),
@@ -176,12 +185,12 @@ export default function createStreamHandler<
 
           const handleShellReady = async (done: () => void) => {
             try {
-              const headWithMeta = await injectMeta(
+              const headWithTags = await injectHead(
                 templateParts.head,
                 streamCallbacks,
                 context!,
               );
-              outStream.write(headWithMeta);
+              outStream.write(headWithTags);
 
               const passThroughStream = new PassThrough();
               const transform = streamCallbacks.transform?.(context!);

@@ -92,10 +92,6 @@ end
   <%= sanitize_ssr @ssr[:styles] %>
   <%= sanitize_ssr @ssr[:root] %>
 </div>
-
-<script id="state" type="application/json">
-  <%= json_escape(@ssr[:state].to_json) %>
-</script>
 ```
 
 ## Setting Up the SSR Server

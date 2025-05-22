@@ -8,18 +8,12 @@ import type { Callbacks, StreamCallbacks } from "./callbacks";
  * Generics:
  *  - `TContext` – shape of the per-request context object produced by
  *    {@link Callbacks.setup}.
- *  - `TRenderOutput` – type of the JSON payload returned by
- *    {@link Callbacks.render} when *not* using streaming.
  */
 export interface CreateServerOptions<
   TContext extends Record<string, any> = Record<string, any>,
-  TRenderOutput extends Record<string, any> = Record<string, any>,
-> {
+> extends Callbacks<TContext> {
   /** TCP port the Express/Bun server should bind to. */
   port: number;
-
-  /** Mandatory set of lifecycle callbacks shared by both handlers. */
-  callbacks: Callbacks<TContext, TRenderOutput>;
 
   /**
    * Optional streaming-specific hooks. When omitted the server will only

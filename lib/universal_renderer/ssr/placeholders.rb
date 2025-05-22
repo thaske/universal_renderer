@@ -1,7 +1,7 @@
 module UniversalRenderer
   module SSR
     module Placeholders
-      META = "<!-- SSR_META -->".freeze
+      HEAD = "<!-- SSR_HEAD -->".freeze
       BODY = "<!-- SSR_BODY -->".freeze
     end
   end

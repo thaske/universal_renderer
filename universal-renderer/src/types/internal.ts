@@ -20,11 +20,11 @@ export interface Props {
  * present in the template string so the server knows where to inject dynamic
  * markup.
  *
- * - `META` – replaced with the result of
+ * - `HEAD` – replaced with the result of
  *   {@link StreamCallbacks.meta | streamCallbacks.meta} (if provided).
  * - `BODY` – replaced with the streamed React content.
  */
 export enum SSR_MARKERS {
-  META = "<!-- SSR_META -->",
+  HEAD = "<!-- SSR_HEAD -->",
   BODY = "<!-- SSR_BODY -->",
 }

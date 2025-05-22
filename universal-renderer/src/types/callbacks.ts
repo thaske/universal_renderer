@@ -5,21 +5,27 @@ import createHandler from "../handler";
 import createStreamHandler from "../streamHandler";
 
 /**
+ * The structure of the output from the `render` callback.
+ */
+export interface RenderOutput {
+  head: string;
+  body: string;
+}
+
+/**
  * Lifecycle hooks executed for every incoming render request – regardless of
  * whether the response is JSON (see {@link createHandler}) or an HTML stream
  * (see {@link createStreamHandler}).
  *
- * The generic parameters keep the API flexible:
+ * The generic parameter `TContext` keeps the API flexible:
  *  - `TContext` – the request–scoped object returned by {@link Callbacks.setup} and
  *    subsequently passed to every other callback.
- *  - `TRenderOutput` – the JSON-serialisable value returned by
- *    {@link Callbacks.render} when using the non-streaming handler.
+ * The `render` callback returns an object with `head` and `body` string properties
+ * when using the non-streaming handler (see {@link RenderOutput}).
  */
-
 // Core callbacks common to all rendering strategies.
 export interface Callbacks<
   TContext extends Record<string, any> = Record<string, any>,
-  TRenderOutput extends Record<string, any> = Record<string, any>,
 > {
   /**
    * Initialises the application for the given request.
@@ -38,13 +44,14 @@ export interface Callbacks<
 
   /**
    * Generates the final render result for non-streaming requests (e.g. JSON
-   * APIs or RPC endpoints).
+   * APIs or RPC endpoints). The result must conform to the {@link RenderOutput}
+   * interface.
    *
    * When using {@link createStreamHandler} this callback is ignored – the
    * streaming pipeline is driven by {@link StreamCallbacks.app}
    * instead.
    */
-  render: (context: TContext) => Promise<TRenderOutput> | TRenderOutput;
+  render: (context: TContext) => Promise<RenderOutput> | RenderOutput;
 
   /**
    * Per-request clean-up hook. Invoked exactly once, even if an earlier step
@@ -64,18 +71,19 @@ export interface StreamCallbacks<
   /**
    * Produces the React element tree that will be streamed to the client.
    *
-   * This is executed after {@link Callbacks.setup}; the resulting vDOM is
-   * passed to `react-dom/server`'s `renderToPipeableStream`.
+   * This is executed after {@link Callbacks.setup}. If not provided, the handler
+   * will look for `context.app` or `context.jsx` properties. The resulting React
+   * element is passed to `react-dom/server`'s `renderToPipeableStream`.
    */
-  app: (context: TContext) => React.ReactNode;
+  app?: (context: TContext) => React.ReactNode;
 
   /**
-   * Optional hook to inject additional `<meta>` tags into the HTML template.
+   * Optional hook to inject additional `<head>` tags into the HTML template.
    *
-   * The returned string replaces the `<!--SSR_META-->` marker (see
-   * {@link SSR_MARKERS.META}).
+   * The returned string replaces the `<!-- SSR_HEAD -->` marker (see
+   * {@link SSR_MARKERS.HEAD}).
    */
-  meta?: (context: TContext) => Promise<string> | string;
+  head?: (context: TContext) => Promise<string> | string;
 
   /**
    * Allows attaching a custom `stream.Transform` between React's output and
