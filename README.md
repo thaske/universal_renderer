@@ -16,6 +16,16 @@ UniversalRenderer helps you forward rendering requests to external SSR services,
 - **Automatic fallback** to client-side rendering if SSR fails
 - **View helpers** for easy integration into your layouts
 
+## Requirements
+
+> **Heads-up ⚠️** &nbsp;The JavaScript side of UniversalRenderer is **Bun-native**.
+>
+> • You **must** run the SSR server with **Bun ≥ 1.2**.
+>
+> • The exported helpers call Bun's built-in HTTP router and `Response` implementation; they **will not boot under Node, Deno, or Cloudflare Workers**.
+>
+> • The Ruby gem is runtime-agnostic and continues to work on every platform – only the SSR service requires Bun.
+
 ## Installation
 
 1. Add to your Gemfile:
