@@ -13,6 +13,9 @@ import type { Callbacks, StreamCallbacks } from "./callbacks";
 export interface CreateServerOptions<
   TContext extends Record<string, any> = Record<string, any>,
 > extends Callbacks<TContext> {
+  /** Hostname the Express/Bun server should bind to. */
+  hostname?: string;
+
   /** TCP port the Express/Bun server should bind to. */
   port: number;
 
