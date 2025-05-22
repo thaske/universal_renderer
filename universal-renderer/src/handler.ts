@@ -34,7 +34,6 @@ export default function createHandler<TContext extends Record<string, any>>({
         );
       }
 
-      // 1. Application setup
       context = await callbacks.setup(url, props);
 
       if (!context) {
@@ -47,7 +46,6 @@ export default function createHandler<TContext extends Record<string, any>>({
         );
       }
 
-      // 2. Ensure render callback
       if (!callbacks.render) {
         return Response.json(
           {
@@ -58,7 +56,6 @@ export default function createHandler<TContext extends Record<string, any>>({
         );
       }
 
-      // 3. Produce rendering output
       const renderResult = await callbacks.render(context);
       return Response.json(renderResult);
     } catch (error) {
