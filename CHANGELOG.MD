@@ -77,12 +77,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Ruby Gem
 
+#### Added
+
+- Introduced `UniversalRenderer::SSR::Response` value object to formalise the contract with the Node SSR service.
+- `Client::Base.fetch` now returns a typed `SSR::Response` instance.
+- `universal_renderer.rb` autoloads the new response object for application code.
+
 #### Changed
 
 - Renamed `Stream.stream` method to `Stream.call` for clearer intent
 - Improved method visibility by removing underscore prefixes from internal methods
 - Simplified error handling in streaming module
 - Streamlined response handling for cleaner fallback to standard rendering
+- Renamed SSR placeholder constant from `META` to `HEAD` for clearer semantics
+- Renamed `use_ssr_streaming?` to `ssr_streaming?` for more explicit naming
+- Error logging helpers in the streaming pipeline are now public and have descriptive names
+- Bumped gem version constant and `Gemfile.lock` to `0.4.1`.
 
 #### Fixed
 
@@ -108,6 +118,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Error responses are now signalled only via status codes; bodies kept empty for smaller payloads
 - Simplified error handling in stream handlers and improved graceful failure mode to allow Rails fallback
 - Streamlined response handling and error reporting
+- Cleaned up README SSR example by removing a redundant `<script id="state">` tag.
 
 #### Removed
 

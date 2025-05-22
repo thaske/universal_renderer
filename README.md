@@ -65,8 +65,9 @@ class ProductsController < ApplicationController
 
     fetch_ssr # or fetch on demand
 
-    # @ssr will now contain the SSR response, where the symbolized keys
-    # are the same keys returned by the SSR server response.
+    # @ssr will now contain a UniversalRenderer::SSR::Response which exposes
+    # `.head`, `.body` and optional `.body_attrs` values returned by the SSR
+    # service.
   end
 
   def default_render
@@ -80,17 +81,16 @@ end
 ```erb
 <%# "ssr/index" %>
 
-<%# Now you can use the instance variable @ssr in your layout. %>
-<%# We'll send it with keys :meta, :styles, :root, and :state below. %>
-<%# We can use the provided sanitize_ssr helper to sanitize our content %>
+<%# Inject SSR snippets using the provided helpers. When streaming is enabled
+     these render HTML placeholders (<!-- SSR_HEAD --> / <!-- SSR_BODY -->);
+     otherwise they output the sanitised HTML returned by the SSR service. %>
 
-<% content_for :meta do %>
-  <%= sanitize_ssr @ssr[:meta] %>
-<% end %>
+<head>
+  <%= ssr_head %>
+</head>
 
 <div id="root">
-  <%= sanitize_ssr @ssr[:styles] %>
-  <%= sanitize_ssr @ssr[:root] %>
+  <%= ssr_body %>
 </div>
 ```
 
@@ -115,7 +115,7 @@ To set up the SSR server for your Rails application:
      HelmetProvider,
      type HelmetDataContext,
    } from "@dr.pogodin/react-helmet";
-   import { dehydrate, QueryClient, QueryClientProvider } from "react-query";
+   import { QueryClient, QueryClientProvider } from "react-query";
    import { StaticRouter } from "react-router";
    import { ServerStyleSheet } from "styled-components";
 
@@ -129,7 +129,7 @@ To set up the SSR server for your Rails application:
      const sheet = new ServerStyleSheet();
      const queryClient = new QueryClient();
 
-     const { query_data } = props;
+     const { query_data = [] } = props;
      query_data.forEach(({ key, data }) => queryClient.setQueryData(key, data));
      const state = dehydrate(queryClient);
 
@@ -141,76 +141,71 @@ To set up the SSR server for your Rails application:
              <App />
            </StaticRouter>
          </QueryClientProvider>
+         <template id="state" data-state={JSON.stringify(state)} />
        </HelmetProvider>,
      );
 
-     return { jsx, helmetContext, sheet, state, queryClient };
+     return { jsx, helmetContext, sheet, queryClient };
    }
    ```
 
-3. Update your `application.tsx` to hydrate the SSR state:
+3. Update your `application.tsx` to hydrate on the client:
 
    ```tsx
    import { HelmetProvider } from "@dr.pogodin/react-helmet";
-   import { createRoot, hydrateRoot } from "react-dom/client";
-   import { Hydrate, QueryClient, QueryClientProvider } from "react-query";
+   import { hydrateRoot } from "react-dom/client";
    import { BrowserRouter } from "react-router";
+   import { QueryClient, QueryClientProvider } from "react-query";
 
    import App from "@/App";
    import Metadata from "@/components/Metadata";
 
    const queryClient = new QueryClient();
-   const stateElement = document.getElementById("state")!;
-   const state = JSON.parse(stateElement.textContent);
 
-   const app = (
+   hydrateRoot(
+     document.getElementById("root")!,
      <HelmetProvider>
        <Metadata url={window.location.href} />
        <QueryClientProvider client={queryClient}>
-         <Hydrate state={state}>
-           <BrowserRouter>
-             <App />
-           </BrowserRouter>
-         </Hydrate>
+         <BrowserRouter>
+           <App />
+         </BrowserRouter>
        </QueryClientProvider>
-     </HelmetProvider>
+     </HelmetProvider>,
    );
-
-   const rootElement = document.getElementById("root")!;
-   hydrateRoot(rootElement, app);
    ```
 
 4. Create an SSR entry point at `app/frontend/ssr/ssr.ts`:
 
    ```ts
    import { renderToString } from "react-dom/server.node";
-   import { createSsrServer } from "universal-renderer";
+   import { createServer } from "universal-renderer";
    import setup from "@/ssr/setup";
-   import {
-     createRenderStreamTransformer,
-     extractMeta,
-     getRequestLogger,
-     getStateElement,
-   } from "@/ssr/utils";
 
-   const app = await createSsrServer({
+   await createServer({
+     port: 3001,
      callbacks: {
        setup,
-       render: async ({ jsx, helmetContext, sheet, state }) => {
-         const root = renderToString(jsx);
-         const meta = extractMeta(helmetContext);
-         const styles = sheet.getStyleTags();
-         return { meta, root, styles, state };
+       render: ({ jsx, helmetContext, sheet }) => {
+         const body = renderToString(jsx);
+
+         // Combine Helmet + styled-components output into a single <head> snippet.
+         const head = [
+           helmetContext.helmet?.title?.toString(),
+           helmetContext.helmet?.meta?.toString(),
+           helmetContext.helmet?.link?.toString(),
+           sheet.getStyleTags(),
+         ]
+           .filter(Boolean)
+           .join("\n");
+
+         return { head, body };
        },
-       cleanup: async ({ sheet, queryClient }) => {
+       cleanup: ({ sheet, queryClient }) => {
          sheet?.seal();
          queryClient?.clear();
        },
      },
-   });
-
-   app.listen(3001, () => {
-     console.log(`[SSR] server started on http://localhost:3001`);
    });
    ```
 
