@@ -91,12 +91,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### NPM Package
 
+#### Added
+
+- Native Bun HTTP server support through the new `createServer` helper with zero external runtime dependencies
+- JSON rendering pipeline with `setup`, `render`, and `cleanup` lifecycle callbacks
+- Streaming-specific hooks (`onReady`, `onChunk`, `onFinish`) for fine-grained control over React SSR
+- Strongly-typed `ServerOptions` contract (`src/types/serverOptions.ts`) and internal `SSR_MARKERS` constants
+- Development typings for Bun via `@types/bun`
+
 #### Changed
 
-- Simplified error handling in stream handlers
-- Improved graceful failure mode to allow Rails to detect failures and fallback
-- Removed detailed error responses in favor of silent stream endings
+- Replaced Express with Bun — the package **no longer depends on `express`**; bundle size and cold-start time reduced
+- Stream handler completely rewritten for stricter type-safety, meta-tag injection, and hardened error handling
+- Build & watch scripts migrated to Bun; `engines` field removed; peer-dependencies updated
+- Consolidated all exports into the top-level entry file; removed framework-specific sub-paths
+- Error responses are now signalled only via status codes; bodies kept empty for smaller payloads
+- Simplified error handling in stream handlers and improved graceful failure mode to allow Rails fallback
 - Streamlined response handling and error reporting
+
+#### Removed
+
+- `express` and `@types/express` dependencies
+- Legacy files `staticHandler.ts`, `utils.ts`, and `types.ts`
+- Deprecated `configureExpressApp` helper (renamed to `middleware` in 0.4.0)
+
+#### Fixed
+
+- Unhandled promise rejections when clients disconnected mid-stream
+- Memory leak in the previous Express pipeline
 
 ## 0.4.0 - 2025-05-21
 
