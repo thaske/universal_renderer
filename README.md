@@ -155,21 +155,26 @@ To set up the SSR server for your Rails application:
    import { HelmetProvider } from "@dr.pogodin/react-helmet";
    import { hydrateRoot } from "react-dom/client";
    import { BrowserRouter } from "react-router";
-   import { QueryClient, QueryClientProvider } from "react-query";
-
+   import { Hydrate, QueryClient, QueryClientProvider } from "react-query";
    import App from "@/App";
    import Metadata from "@/components/Metadata";
 
    const queryClient = new QueryClient();
+
+   const stateEl = document.getElementById("state");
+   const state = JSON.parse(stateEl?.dataset.state ?? "{}");
+   stateEl?.remove();
 
    hydrateRoot(
      document.getElementById("root")!,
      <HelmetProvider>
        <Metadata url={window.location.href} />
        <QueryClientProvider client={queryClient}>
-         <BrowserRouter>
-           <App />
-         </BrowserRouter>
+         <Hydrate state={state}>
+           <BrowserRouter>
+             <App />
+           </BrowserRouter>
+         </Hydrate>
        </QueryClientProvider>
      </HelmetProvider>,
    );
@@ -178,33 +183,32 @@ To set up the SSR server for your Rails application:
 4. Create an SSR entry point at `app/frontend/ssr/ssr.ts`:
 
    ```ts
+   import { head, transform } from "@/ssr/utils";
    import { renderToString } from "react-dom/server.node";
    import { createServer } from "universal-renderer";
-   import setup from "@/ssr/setup";
+   import { createServer as createViteServer } from "vite";
+
+   const vite = await createViteServer({
+     server: { middlewareMode: true },
+     appType: "custom",
+   });
 
    await createServer({
      port: 3001,
-     callbacks: {
-       setup,
-       render: ({ jsx, helmetContext, sheet }) => {
-         const body = renderToString(jsx);
+     middleware: vite.middlewares,
 
-         // Combine Helmet + styled-components output into a single <head> snippet.
-         const head = [
-           helmetContext.helmet?.title?.toString(),
-           helmetContext.helmet?.meta?.toString(),
-           helmetContext.helmet?.link?.toString(),
-           sheet.getStyleTags(),
-         ]
-           .filter(Boolean)
-           .join("\n");
-
-         return { head, body };
-       },
-       cleanup: ({ sheet, queryClient }) => {
-         sheet?.seal();
-         queryClient?.clear();
-       },
+     setup: (await import("@/ssr/setup")).default,
+     render: ({ app, helmet, sheet }) => {
+       const root = renderToString(app);
+       const styles = sheet.getStyleTags();
+       return {
+         head: head({ helmet }),
+         body: `${root}\n${styles}`,
+       };
+     },
+     cleanup: ({ sheet, queryClient }) => {
+       sheet?.seal();
+       queryClient?.clear();
      },
    });
    ```
