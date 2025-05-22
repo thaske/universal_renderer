@@ -1,4 +1,4 @@
-import type { ConnectMiddleware } from "../viteMiddlewareAdapter";
+import type { ConnectMiddleware } from "../middlewareAdapter";
 import type { Callbacks, StreamCallbacks } from "./callbacks";
 
 /**

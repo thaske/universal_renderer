@@ -1,11 +1,8 @@
 import createHandler from "@/handler";
+import { adaptMiddleware, type ConnectMiddleware } from "@/middlewareAdapter";
 import createStreamHandler from "@/streamHandler";
 import type { CreateServerOptions } from "@/types/serverOptions";
-import {
-  adaptViteMiddleware,
-  type ConnectMiddleware,
-} from "@/viteMiddlewareAdapter";
-export { adaptViteMiddleware } from "@/viteMiddlewareAdapter";
+export { adaptMiddleware } from "@/middlewareAdapter";
 
 /**
  * Creates and configures an SSR server with Bun.
@@ -45,8 +42,8 @@ export async function createServer<
   };
 
   if (middleware) {
-    const viteHandler = adaptViteMiddleware(middleware as ConnectMiddleware);
-    routes["/*"] = { GET: viteHandler, HEAD: viteHandler };
+    const middlewareHandler = adaptMiddleware(middleware as ConnectMiddleware);
+    routes["/*"] = { GET: middlewareHandler, HEAD: middlewareHandler };
   }
 
   const server = Bun.serve({

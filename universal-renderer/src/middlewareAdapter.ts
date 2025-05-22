@@ -1,7 +1,7 @@
 import { PassThrough, Writable } from "node:stream";
 
 /**
- * Minimal IncomingMessage shim – enough for Vite's Connect stack.
+ * Minimal IncomingMessage shim – enough for Connect-compatible middleware.
  */
 class NodeRequestShim extends PassThrough {
   method: string;
@@ -119,23 +119,22 @@ export type ConnectMiddleware = (
 ) => void;
 
 /**
- * Adapts any Connect-compatible middleware (e.g. `vite.middlewares`) to a
- * handler signature understood by Bun's router. Useful when spinning up an
- * SSR server with `Bun.serve` while still leveraging Vite's dev middleware
+ * Adapts any Connect-compatible middleware to a handler signature understood by Bun's router.
+ * Useful when spinning up an SSR server with `Bun.serve` while still leveraging Vite's dev middleware
  * stack for HMR & static asset serving.
  *
  * Example usage:
  *
  * ```ts
- * import { adaptViteMiddleware } from "universal-renderer/viteMiddlewareAdapter";
+ * import { adaptMiddleware } from "universal-renderer/middlewareAdapter";
  *
  * const vite = await createViteServer({ ... });
- * const viteHandler = adaptViteMiddleware(vite.middlewares);
+ * const middlewareHandler = adaptMiddleware(vite.middlewares);
  *
- * Bun.serve({ routes: { "/*": viteHandler } });
+ * Bun.serve({ routes: { "/*": middlewareHandler } });
  * ```
  */
-export function adaptViteMiddleware(middleware: ConnectMiddleware) {
+export function adaptMiddleware(middleware: ConnectMiddleware) {
   return function bunHandler(req: Request): Promise<Response> {
     return new Promise<Response>((resolve, reject) => {
       const nodeReq = new NodeRequestShim(req);
@@ -144,7 +143,7 @@ export function adaptViteMiddleware(middleware: ConnectMiddleware) {
       // Connect-style `next` – if nobody handles the request we fall back to 404.
       const next = (err?: any) => {
         if (err) {
-          console.error("[Vite] middleware error", err);
+          console.error("[Middleware] error", err);
           resolve(new Response("Internal Server Error", { status: 500 }));
           return;
         }
@@ -154,7 +153,7 @@ export function adaptViteMiddleware(middleware: ConnectMiddleware) {
       try {
         middleware(nodeReq as any, nodeRes as any, next);
       } catch (error) {
-        console.error("[Vite] middleware threw synchronously", error);
+        console.error("[Middleware] threw synchronously", error);
         reject(error);
       }
     });
