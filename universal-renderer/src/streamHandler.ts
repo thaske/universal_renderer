@@ -1,57 +1,46 @@
-import type { Request, Response } from "express";
 import { PassThrough } from "node:stream";
 import { renderToPipeableStream } from "react-dom/server.node";
 
-import {
-  SSR_MARKERS,
-  type BaseCallbacks,
-  type RenderRequestProps,
-  type StreamSpecificCallbacks,
-} from "@/types";
-
-import { handleError } from "@/utils";
-
-// ---------------------------------------------------------------------------
-// Internal helpers – kept outside the request handler to keep the hot path
-// readable. None of these functions have side-effects besides writing to the
-// response they receive.
-// ---------------------------------------------------------------------------
+import { type Callbacks, type StreamCallbacks } from "@/types/callbacks";
+import { SSR_MARKERS, type Props } from "@/types/internal";
 
 type RequestBody = {
-  url: string;
-  props?: RenderRequestProps;
-  template: string;
+  url?: string;
+  props?: Props;
+  template?: string;
 };
 
 /**
  * Validates the incoming request body and extracts the required fields.
- * Any validation failure is written directly to the response.
- * Returns `undefined` if validation failed.
+ * Returns a Response (error) when validation fails so the caller can early-return.
  */
 function parseRequest(
-  req: Request,
-  res: Response,
-): { url: string; props: RenderRequestProps; template: string } | undefined {
-  const { url, props = {}, template = "" } = (req.body || {}) as RequestBody;
+  body: RequestBody,
+): { url: string; props: Props; template: string } | Response {
+  const { url, props = {}, template = "" } = body;
 
   if (!url) {
-    res.status(400).send("URL is missing in request body.");
-    return;
+    return Response.json(
+      { error: "URL is missing in request body." },
+      {
+        status: 400,
+      },
+    );
   }
 
   if (!template.includes(SSR_MARKERS.BODY)) {
-    res.status(400).send("HTML template is missing SSR_BODY marker.");
-    return;
+    return new Response("HTML template is missing SSR_BODY marker.", {
+      status: 400,
+    });
   }
 
   if (!template.includes(SSR_MARKERS.META)) {
-    // Missing meta marker is not fatal – log a warning and continue.
     console.warn(
       `[SSR] HTML template is missing SSR_META marker (${SSR_MARKERS.META}). Meta content will not be injected.`,
     );
   }
 
-  return { url, props, template };
+  return { url, props, template } as const;
 }
 
 /** Splits the HTML template into head/tail around the BODY marker. */
@@ -63,22 +52,22 @@ function splitTemplate(template: string): { head: string; tail: string } {
 /** Injects meta tags (if any) into the provided HTML head chunk. */
 async function injectMeta<TContext extends Record<string, any>>(
   headChunk: string,
-  streamCallbacks: StreamSpecificCallbacks<TContext>,
+  streamCallbacks: StreamCallbacks<TContext>,
   context: TContext,
 ) {
-  const metaTags = await streamCallbacks.getMetaTags?.(context);
+  const metaTags = await streamCallbacks.meta?.(context);
   return metaTags ? headChunk.replace(SSR_MARKERS.META, metaTags) : headChunk;
 }
 
 /**
- * Creates a single-use error responder bound to the given HTTP response.
- * The closure ensures we only ever try to send one error back to the client.
+ * Creates an error responder bound to the given output stream. Ensures we only
+ * ever write one error back to the client.
  */
 function createErrorResponder<TContext extends Record<string, any>>(
-  res: Response,
+  out: PassThrough,
   templateParts: { head: string; tail: string },
-  callbacks: BaseCallbacks<TContext>,
-  streamCallbacks: StreamSpecificCallbacks<TContext>,
+  callbacks: Callbacks<TContext>,
+  streamCallbacks: StreamCallbacks<TContext>,
   getContext: () => TContext | undefined,
 ) {
   let sent = false;
@@ -88,158 +77,157 @@ function createErrorResponder<TContext extends Record<string, any>>(
     sent = true;
 
     console.error(`[SSR] ${errorMessage}:`, error);
-    callbacks.error?.(error as Error, getContext(), errorMessage);
+    // Callbacks may optionally implement custom error handling helpers – keep
+    // the casts loose to preserve backwards-compat with existing typings.
+    (callbacks as any).error?.(error as Error, getContext?.(), errorMessage);
 
     const ctx = getContext();
 
     const errorHtml =
-      (await callbacks.getErrorContent?.(error, ctx)) ||
-      `<template class="ssr-error">Error during rendering: ${String(error)
+      (await (callbacks as any).getErrorContent?.(error, ctx)) ||
+      `<template data-ssr-error>Error during rendering: ${String(error)
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")}</template>`;
-
-    if (res.writableEnded) return; // Client already disconnected.
 
     const headWithMeta = ctx
       ? await injectMeta(templateParts.head, streamCallbacks, ctx)
       : templateParts.head;
 
-    res.write(headWithMeta);
-    res.end(templateParts.tail.replace("</body>", `${errorHtml}\n</body>`));
+    try {
+      out.write(headWithMeta);
+      out.end(templateParts.tail.replace("</body>", `${errorHtml}\n</body>`));
+    } catch {
+      /* no-op – client likely disconnected */
+    }
   };
 }
 
-// ---------------------------------------------------------------------------
-// Main handler factory
-// ---------------------------------------------------------------------------
-
 /**
- * Creates a stream handler for the SSR server.
+ * Creates a handler for streaming HTML rendering.
  *
- * @param callbacks - The callbacks for the stream handler, including framework-specific delegate.
- * @param streamCallbacks - Callbacks specific to the streaming rendering strategy.
- * @returns A function that handles streaming rendering requests.
+ * @param callbacks - The callbacks to use for the handler.
+ * @param streamCallbacks - Optional streaming-specific callbacks.
+ * @returns A handler function that can be used to render a streaming HTML response.
  */
-function createStreamHandler<TContext extends Record<string, any>>({
+export default function createStreamHandler<
+  TContext extends Record<string, any>,
+>({
   callbacks,
   streamCallbacks,
 }: {
-  callbacks: BaseCallbacks<TContext>;
-  streamCallbacks: StreamSpecificCallbacks<TContext>;
+  callbacks: Callbacks<TContext>;
+  streamCallbacks?: StreamCallbacks<TContext>;
 }) {
-  return async function streamHandler(
-    req: Request,
-    res: Response,
-  ): Promise<void> {
-    let context: TContext | undefined;
+  if (!streamCallbacks) {
+    throw new Error("streamCallbacks is required");
+  }
 
-    // ----------------------------------------------------------
-    // 1. Validate & parse request
-    // ----------------------------------------------------------
-    const parsed = parseRequest(req, res);
-    if (!parsed) return; // Response already sent.
+  return async function streamHandler(req: Request): Promise<Response> {
+    // 0. Attempt to parse JSON body – fall back to empty object on failure.
+    const body = (await req.json().catch(() => ({}))) as RequestBody;
+
+    const parsed = parseRequest(body);
+    if (parsed instanceof Response) return parsed; // Early-exit on validation error.
 
     const { url, props, template } = parsed;
     const templateParts = splitTemplate(template);
 
-    // Dedicated error responder for **this** request.
-    const writeErrorResponse = createErrorResponder(
-      res,
+    let context: TContext | undefined;
+
+    // We'll create the output stream upfront so we can immediately return the
+    // Response object - Bun will continue streaming chunks as we write them.
+    const outStream = new PassThrough();
+    const response = new Response(outStream as any, {
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+      },
+    });
+
+    // Dedicated error responder for *this* request.
+    const writeError = createErrorResponder(
+      outStream,
       templateParts,
       callbacks,
       streamCallbacks,
       () => context,
     );
 
-    try {
-      // --------------------------------------------------------
-      // 2. Application setup
-      // --------------------------------------------------------
-      context = await callbacks.setup(url, props);
+    (async () => {
+      try {
+        // 1. Application setup
+        context = await callbacks.setup(url, props);
+        if (!context) {
+          await writeError(
+            "Server setup error",
+            new Error("setup did not return a context"),
+          );
+          return;
+        }
 
-      if (!context) {
-        await writeErrorResponse(
-          "Server setup error",
-          new Error("setup did not return a context"),
-        );
-        return;
-      }
+        // 2. Begin React streaming – defer shell until ready.
+        await new Promise<void>((resolveShell) => {
+          const reactNode = streamCallbacks.app(context!);
 
-      // --------------------------------------------------------
-      // 3. React streaming
-      // --------------------------------------------------------
-      await new Promise<void>((resolve) => {
-        const reactNode = streamCallbacks.getReactNode(context!);
+          const { pipe } = renderToPipeableStream(reactNode, {
+            onShellReady: () => void handleShellReady(resolveShell),
+            onShellError: (err) => void writeError("React shell error", err),
+            onError: (err) => void writeError("React streaming error", err),
+          });
 
-        const { pipe } = renderToPipeableStream(reactNode, {
-          onShellReady: () => {
-            void handleShellReady(resolve);
-          },
-          onShellError: (err) => {
-            void writeErrorResponse("React shell error", err);
-          },
-          onError: (err) => {
-            void writeErrorResponse("React streaming error", err);
-          },
+          const handleShellReady = async (done: () => void) => {
+            try {
+              const headWithMeta = await injectMeta(
+                templateParts.head,
+                streamCallbacks,
+                context!,
+              );
+              outStream.write(headWithMeta);
+
+              const passThroughStream = new PassThrough();
+              const transform = streamCallbacks.transform?.(context!);
+
+              passThroughStream.on(
+                "error",
+                (err) => void writeError("Render stream error", err),
+              );
+
+              (transform
+                ? passThroughStream.pipe(transform)
+                : passThroughStream
+              ).pipe(outStream, { end: false });
+
+              pipe(passThroughStream);
+
+              passThroughStream.on("end", () => {
+                const handleEnd = async () => {
+                  try {
+                    await streamCallbacks.close?.(
+                      outStream as unknown as any,
+                      context!,
+                    );
+                  } finally {
+                    if (!outStream.writableEnded)
+                      outStream.end(templateParts.tail);
+                    done();
+                  }
+                };
+                void handleEnd();
+              });
+            } catch (err) {
+              await writeError("onShellReady error", err);
+              done();
+            }
+          };
         });
-
-        const handleShellReady = async (done: () => void) => {
-          try {
-            const headWithMeta = await injectMeta(
-              templateParts.head,
-              streamCallbacks,
-              context!,
-            );
-            res.write(headWithMeta);
-
-            const renderStream = new PassThrough();
-            const transform = streamCallbacks.createRenderStreamTransformer?.(
-              context!,
-            );
-
-            renderStream.on("error", (err) => {
-              void writeErrorResponse("Render stream error", err);
-            });
-
-            (transform ? renderStream.pipe(transform) : renderStream).pipe(
-              res,
-              { end: false },
-            );
-
-            pipe(renderStream);
-
-            renderStream.on("end", () => {
-              const handleEnd = async () => {
-                try {
-                  await streamCallbacks.onBeforeWriteClosingHtml?.(
-                    res,
-                    context!,
-                  );
-                } finally {
-                  if (!res.writableEnded) res.end(templateParts.tail);
-                  done();
-                }
-              };
-              void handleEnd();
-            });
-          } catch (err) {
-            await writeErrorResponse("onShellReady error", err);
-            done();
-          }
-        };
-      });
-    } catch (err) {
-      handleError(err, res, context, callbacks);
-    } finally {
-      if (context) {
-        try {
-          await streamCallbacks.onResponseEnd?.(res, context);
-        } finally {
+      } catch (err) {
+        await writeError("Unexpected server error", err as Error);
+      } finally {
+        if (context) {
           callbacks.cleanup(context);
         }
       }
-    }
+    })();
+
+    return response;
   };
 }
-
-export default createStreamHandler;
