@@ -101,7 +101,6 @@ jobs:
         run: |
           cd universal-renderer
           bun test --reporter=junit --reporter-outfile=../tmp/npm-test-results.xml
-          bun test --reporter=verbose
 
       - name: Upload NPM test results
         uses: actions/upload-artifact@v4
