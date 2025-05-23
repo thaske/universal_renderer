@@ -311,7 +311,7 @@ DEPENDENCIES
   faker (~> 3.2)
   prettier_print (~> 1.2)
   puma
-  rails (~> 7.1)
+  rails (>= 7.1, < 8.0)
   rspec-rails (~> 6.0)
   rubocop (~> 1.60)
   sqlite3
