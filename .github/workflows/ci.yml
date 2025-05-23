@@ -89,6 +89,9 @@ jobs:
           cd universal-renderer
           bun install
 
+      - name: Create tmp directory for test results
+        run: mkdir -p tmp
+
       - name: Build NPM package
         run: |
           cd universal-renderer
