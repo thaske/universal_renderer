@@ -100,7 +100,7 @@ jobs:
       - name: Run NPM unit tests
         run: |
           cd universal-renderer
-          bun test --reporter=junit > ../tmp/npm-test-results.xml
+          bun test --reporter=junit --reporter-outfile=../tmp/npm-test-results.xml
           bun test --reporter=verbose
 
       - name: Upload NPM test results
