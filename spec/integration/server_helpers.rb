@@ -147,9 +147,9 @@ module IntegrationHelpers
     # @param hostname [String] The hostname to bind to
     # @param port [Integer] The port to check
     def ensure_port_available!(hostname, port)
-      unless port_available?(hostname, port)
-        raise "Port #{port} is already in use on #{hostname}"
-      end
+      return if port_available?(hostname, port)
+
+      raise "Port #{port} is already in use on #{hostname}"
     end
   end
 end
