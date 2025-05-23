@@ -100,7 +100,7 @@ jobs:
       - name: Run NPM unit tests
         run: |
           cd universal-renderer
-          bun test --reporter=json > ../tmp/npm-test-results.json
+          bun test --reporter=junit > ../tmp/npm-test-results.xml
           bun test --reporter=verbose
 
       - name: Upload NPM test results
@@ -108,7 +108,7 @@ jobs:
         if: always()
         with:
           name: npm-test-results-bun-${{ matrix.bun }}
-          path: tmp/npm-test-results.json
+          path: tmp/npm-test-results.xml
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
