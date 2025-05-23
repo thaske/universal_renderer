@@ -13,3 +13,4 @@ repomix-output.md
 dist/
 
 *.gem
+.rspec_status

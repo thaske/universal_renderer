@@ -26,10 +26,6 @@ export async function createServer<
 
   const { streamCallbacks, ...callbacks } = options;
   const handler = createHandler<TContext>({ callbacks });
-  const streamHandler = createStreamHandler<TContext>({
-    callbacks,
-    streamCallbacks,
-  });
 
   const routes: Record<string, any> = {
     "/health": () =>
@@ -39,8 +35,16 @@ export async function createServer<
       }),
     "/": { POST: handler },
     "/static": { POST: handler },
-    "/stream": { POST: streamHandler },
   };
+
+  // Only create stream handler if streamCallbacks are provided
+  if (streamCallbacks) {
+    const streamHandler = createStreamHandler<TContext>({
+      callbacks,
+      streamCallbacks,
+    });
+    routes["/stream"] = { POST: streamHandler };
+  }
 
   if (middleware) {
     const middlewareHandler = adaptMiddleware(middleware as ConnectMiddleware);

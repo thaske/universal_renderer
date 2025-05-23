@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+
+echo "⚡ Running Universal Renderer Performance Tests..."
+echo ""
+
+# Check if benchmark dependencies exist
+if ! command -v ab &> /dev/null && ! command -v curl &> /dev/null; then
+    echo "❌ Performance testing requires 'ab' (Apache Bench) or 'curl'"
+    echo "   Install: brew install httpie (macOS) or apt-get install apache2-utils (Linux)"
+    exit 1
+fi
+
+# Create performance results directory
+mkdir -p tmp/performance
+
+echo "1️⃣ Running standard integration tests for baseline..."
+./bin/test:integration > tmp/performance/baseline.log 2>&1
+
+if [ $? -eq 0 ]; then
+    echo "✅ Baseline tests passed"
+else
+    echo "❌ Baseline tests failed - performance testing aborted"
+    exit 1
+fi
+
+echo ""
+echo "2️⃣ Running performance benchmarks..."
+
+# Run integration tests with performance focus
+bundle exec rspec spec/integration/http_contract_spec.rb \
+    --format json \
+    --out tmp/performance/performance-results.json \
+    --tag performance
+
+echo ""
+echo "3️⃣ Analyzing performance results..."
+
+# Extract timing information from the JSON results
+if [ -f "tmp/performance/performance-results.json" ]; then
+    echo "📊 Performance Summary:"
+    echo "   • Integration test results saved to tmp/performance/performance-results.json"
+    echo "   • See RSpec output above for detailed timing information"
+else
+    echo "⚠️  Performance results file not found"
+fi
+
+echo ""
+echo "🎯 Performance Targets:"
+echo "   • Individual request response time: < 500ms"
+echo "   • Concurrent requests (10): < 1000ms average"
+echo "   • Memory usage: < 100MB per server instance"
+echo ""
+echo "💡 To run more detailed performance analysis:"
+echo "   bin/test:integration  # Includes performance test scenarios"

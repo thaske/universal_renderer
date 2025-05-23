@@ -12,6 +12,7 @@ gem "sqlite3"
 # gem "debug", ">= 1.0.0"
 
 group :development do
+  gem "rails", "~> 7.1"
   gem "rspec-rails", "~> 6.0"
   gem "webmock", "~> 3.18"
 
@@ -22,4 +23,7 @@ group :development do
 end
 
 group :test do
+  gem "factory_bot_rails", "~> 6.2"
+  gem "faker", "~> 3.2"
+  gem "timecop", "~> 0.9"
 end

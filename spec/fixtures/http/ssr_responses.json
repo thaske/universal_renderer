@@ -1,0 +1,32 @@
+{
+  "valid_ssr_response": {
+    "head": "<meta name=\"test\" content=\"true\"><title>Test Page</title>",
+    "body": "<div class=\"app\"><h1>Test Content</h1><p>This is test content</p></div>",
+    "body_attrs": {
+      "class": "test-page",
+      "data-theme": "light"
+    }
+  },
+  "minimal_ssr_response": {
+    "head": "",
+    "body": "<div>Minimal content</div>"
+  },
+  "complex_ssr_response": {
+    "head": "<meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>Complex Page</title><link rel=\"stylesheet\" href=\"/assets/styles.css\">",
+    "body": "<div id=\"app\"><header><nav><ul><li><a href=\"/\">Home</a></li><li><a href=\"/about\">About</a></li></ul></nav></header><main><section><h1>Welcome</h1><p>This is a complex page with nested elements.</p><div class=\"content\"><article><h2>Article Title</h2><p>Article content goes here...</p></article></div></section></main><footer><p>&copy; 2024 Test App</p></footer></div>",
+    "body_attrs": {
+      "class": "complex-page",
+      "data-page-type": "landing",
+      "data-user-id": "123"
+    }
+  },
+  "error_response": {
+    "error": "Internal Server Error",
+    "message": "Something went wrong during rendering"
+  },
+  "validation_error_response": {
+    "error": "Validation Error",
+    "message": "URL is missing in request body",
+    "field": "url"
+  }
+}

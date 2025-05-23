@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+
+echo "👀 Starting test watch mode..."
+echo ""
+echo "This will run tests automatically when files change."
+echo "Press Ctrl+C to stop watching."
+echo ""
+
+# Default to Ruby tests, allow override
+TEST_TYPE=${1:-ruby}
+
+case $TEST_TYPE in
+  "ruby")
+    echo "🔍 Watching Ruby gem files..."
+    bundle exec guard
+    ;;
+  "npm")
+    echo "🔍 Watching NPM package files..."
+    cd universal-renderer
+    bun test --watch
+    ;;
+  "all")
+    echo "🔍 Watching all files (requires multiple terminals)..."
+    echo ""
+    echo "Run these commands in separate terminals:"
+    echo "  Terminal 1: bin/test:watch ruby"
+    echo "  Terminal 2: bin/test:watch npm"
+    ;;
+  *)
+    echo "❌ Unknown test type: $TEST_TYPE"
+    echo ""
+    echo "Usage: bin/test:watch [ruby|npm|all]"
+    echo ""
+    echo "Examples:"
+    echo "  bin/test:watch         # Watch Ruby tests (default)"
+    echo "  bin/test:watch ruby    # Watch Ruby tests"
+    echo "  bin/test:watch npm     # Watch NPM tests"
+    echo "  bin/test:watch all     # Instructions for watching all"
+    exit 1
+    ;;
+esac

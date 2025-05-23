@@ -43,8 +43,8 @@ class NodeRequestShim extends PassThrough {
 class NodeResponseShim extends Writable {
   private statusCodeInternal = 200;
   private headersInternal: Record<string, string | string[]> = {};
-  private readonly stream = new PassThrough();
-  private sent = false;
+  private chunks: Buffer[] = [];
+  private ended = false;
   private readonly resolveResponse: (res: Response) => void;
 
   constructor(resolve: (res: Response) => void) {
@@ -78,34 +78,42 @@ class NodeResponseShim extends Writable {
   }
 
   flushHeaders() {
-    // For the purpose of Bun `Response`, flushing headers just guarantees the
-    // response is created. Streaming continues transparently.
-    this.sendResponseIfNeeded();
+    // For compatibility - doesn't actually need to do anything
+    // since we create the Response at the end
   }
   /* Node `ServerResponse` compatibility – END */
 
-  // Internal: transform chunks written by Connect into Bun-readable stream.
+  // Internal: buffer chunks until end() is called
   _write(chunk: any, _enc: string, cb: (error?: Error | null) => void) {
-    this.sendResponseIfNeeded();
-    this.stream.write(chunk, _enc as any, cb);
+    if (this.ended) {
+      cb(new Error("write after end"));
+      return;
+    }
+    this.chunks.push(Buffer.from(chunk));
+    cb();
   }
 
   end(chunk?: any, enc?: any, cb?: any): this {
-    if (chunk) this.write(chunk, enc, () => {});
-    this.stream.end();
-    this.sendResponseIfNeeded();
-    if (typeof cb === "function") cb();
-    return this;
-  }
+    if (this.ended) {
+      if (typeof cb === "function") cb();
+      return this;
+    }
 
-  private sendResponseIfNeeded() {
-    if (this.sent) return;
-    this.sent = true;
-    const res = new Response(this.stream as any, {
+    this.ended = true;
+    if (chunk) {
+      this.chunks.push(Buffer.from(chunk));
+    }
+
+    // Create response with all buffered content
+    const body = Buffer.concat(this.chunks);
+    const res = new Response(body, {
       status: this.statusCodeInternal,
       headers: this.headersInternal as Record<string, string>,
     });
+
     this.resolveResponse(res);
+    if (typeof cb === "function") cb();
+    return this;
   }
 }
 

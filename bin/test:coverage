@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+
+echo "📊 Generating test coverage reports..."
+echo ""
+
+# Create coverage directory
+mkdir -p coverage
+
+echo "1️⃣ Running Ruby gem tests with coverage..."
+COVERAGE=true bundle exec rspec
+
+echo ""
+echo "2️⃣ Running NPM package tests with coverage..."
+cd universal-renderer
+bun test --coverage
+cd ..
+
+echo ""
+echo "📋 Coverage Summary:"
+echo ""
+
+# Ruby coverage (if SimpleCov is configured)
+if [ -f "coverage/index.html" ]; then
+  echo "✅ Ruby coverage report: coverage/index.html"
+else
+  echo "⚠️  Ruby coverage report not found (SimpleCov may not be configured)"
+fi
+
+# NPM coverage (if generated)
+if [ -f "universal-renderer/coverage/index.html" ]; then
+  echo "✅ NPM coverage report: universal-renderer/coverage/index.html"
+else
+  echo "⚠️  NPM coverage report not found (Vitest coverage may not be configured)"
+fi
+
+echo ""
+echo "💡 To view coverage reports in browser:"
+echo "   Ruby:  open coverage/index.html"
+echo "   NPM:   open universal-renderer/coverage/index.html"
+echo ""
+echo "📈 Coverage targets:"
+echo "   • Unit tests: 95%"
+echo "   • Overall: 85%"

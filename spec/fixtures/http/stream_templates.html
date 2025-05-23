@@ -1,0 +1,88 @@
+<!-- Basic Template -->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- SSR_HEAD -->
+  </head>
+  <body>
+    <div id="root">
+      <!-- SSR_BODY -->
+    </div>
+  </body>
+</html>
+
+<!-- Complex Template -->
+<!doctype html>
+<html lang="en" data-theme="default">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="index, follow" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/assets/styles.css" />
+    <!-- SSR_HEAD -->
+  </head>
+  <body class="app-body">
+    <div id="app-loading" class="loading-spinner" style="display: none">
+      <div class="spinner"></div>
+    </div>
+
+    <div id="root" class="app-root">
+      <!-- SSR_BODY -->
+    </div>
+
+    <script>
+      window.__APP_CONFIG__ = {
+        apiUrl: "/api",
+        environment: "test",
+      };
+    </script>
+    <script src="/assets/app.js" defer></script>
+  </body>
+</html>
+
+<!-- Minimal Template -->
+<!doctype html>
+<html>
+  <head>
+    <!-- SSR_HEAD -->
+  </head>
+  <body>
+    <!-- SSR_BODY -->
+  </body>
+</html>
+
+<!-- Template with Missing SSR_BODY (for error testing) -->
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <!-- SSR_HEAD -->
+  </head>
+  <body>
+    <div id="root">
+      <!-- This template is missing SSR_BODY marker -->
+    </div>
+  </body>
+</html>
+
+<!-- Template with Missing SSR_HEAD (for warning testing) -->
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <!-- This template is missing SSR_HEAD marker -->
+  </head>
+  <body>
+    <div id="root">
+      <!-- SSR_BODY -->
+    </div>
+  </body>
+</html>
