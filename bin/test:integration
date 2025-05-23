@@ -61,31 +61,17 @@ def main
 
   check_prerequisites
 
-  # Run Ruby gem unit tests first to ensure basic functionality
-  run_command(
-    "bundle exec rspec spec/units --format documentation",
-    "Running Ruby gem unit tests"
-  )
-
-  # Run NPM package unit tests
-  run_command(
-    "cd universal-renderer && bun test",
-    "Running NPM package unit tests"
-  )
-
-  # Run integration tests
+  # Only run integration tests - unit tests are handled by dedicated CI jobs
   run_command(
     "bundle exec rspec spec/integration --format documentation --color",
     "Running integration tests"
   )
 
-  colored_puts "\n🎉 All integration tests completed successfully!",
-               Colors::GREEN
-  colored_puts "\n📊 Test Summary:", Colors::BLUE
-  colored_puts "   • Ruby gem unit tests: ✅ Passed"
-  colored_puts "   • NPM package unit tests: ✅ Passed"
-  colored_puts "   • Integration tests: ✅ Passed"
+  colored_puts "\n🎉 Integration tests completed successfully!", Colors::GREEN
+  colored_puts "\n📊 Integration Test Summary:", Colors::BLUE
   colored_puts "   • HTTP contract validation: ✅ Passed"
+  colored_puts "   • Ruby gem ↔ NPM package communication: ✅ Passed"
+  colored_puts "   • Error scenario handling: ✅ Passed"
 end
 
 main if __FILE__ == $PROGRAM_NAME

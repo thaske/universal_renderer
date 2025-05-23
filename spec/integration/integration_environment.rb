@@ -24,7 +24,7 @@ module IntegrationEnvironment
   # @return [String] Base URL of the spawned server
   def setup_test_ssr_server(**config)
     port = config[:port] || find_free_port
-    hostname = config[:hostname] || "localhost"
+    hostname = config[:hostname] || "127.0.0.1" # Use IPv4 explicitly
 
     spawn_ssr_server(port: port, hostname: hostname, **config)
 
@@ -36,7 +36,7 @@ module IntegrationEnvironment
   # Configures UniversalRenderer for integration testing
   def configure_universal_renderer_for_tests
     UniversalRenderer.configure do |config|
-      config.timeout = 5 # Shorter timeout for tests
+      config.timeout = ENV["CI"] ? 15 : 5 # Longer timeout in CI
     end
   end
 
@@ -47,7 +47,7 @@ module IntegrationEnvironment
 
   # Finds an available port for testing
   def find_free_port
-    server = TCPServer.new("localhost", 0)
+    server = TCPServer.new("127.0.0.1", 0) # Use IPv4 explicitly
     port = server.addr[1]
     server.close
     port

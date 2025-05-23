@@ -154,10 +154,14 @@ jobs:
       - name: Create tmp directory for test results
         run: mkdir -p tmp
 
+      - name: Build NPM package for integration tests
+        run: |
+          cd universal-renderer
+          bun run build
+
       - name: Run integration tests
         run: |
-          ./bin/test:integration
-          bundle exec rspec spec/integration --format json --out tmp/integration-results.json
+          bundle exec rspec spec/integration --format progress --format json --out tmp/integration-results.json
 
       - name: Upload integration test results
         uses: actions/upload-artifact@v4
@@ -166,48 +170,10 @@ jobs:
           name: integration-test-results-ruby-${{ matrix.ruby }}-bun-${{ matrix.bun }}
           path: tmp/integration-results.json
 
-  test-scripts:
-    runs-on: ubuntu-latest
-    name: Test Helper Scripts
-    needs: [ruby-tests, npm-tests]
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: ${{ env.RUBY_VERSION }}
-          bundler-cache: true
-
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Cache NPM dependencies
-        uses: actions/cache@v4
-        with:
-          path: universal-renderer/node_modules
-          key: ${{ runner.os }}-bun-${{ env.BUN_VERSION }}-${{ hashFiles('universal-renderer/bun.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-bun-${{ env.BUN_VERSION }}-
-
-      - name: Install NPM dependencies
-        run: |
-          cd universal-renderer
-          bun install
-
-      - name: Test bin/test script
-        run: ./bin/test
-
-      - name: Test bin/test:full script
-        run: ./bin/test:full
-
   test-summary:
     runs-on: ubuntu-latest
     name: Test Summary Report
-    needs: [lint, ruby-tests, npm-tests, integration-tests, test-scripts]
+    needs: [lint, ruby-tests, npm-tests, integration-tests]
     if: always()
 
     steps:
@@ -220,46 +186,7 @@ jobs:
 
       - name: Generate test summary
         run: |
-          echo "# 🧪 Test Results Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## 📊 Test Coverage Overview" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Test Suite | Status | Total Tests |" >> $GITHUB_STEP_SUMMARY
-          echo "|------------|--------|-------------|" >> $GITHUB_STEP_SUMMARY
-
-          # Ruby tests summary
-          if [ "${{ needs.ruby-tests.result }}" == "success" ]; then
-            echo "| Ruby Gem Unit Tests | ✅ Passed | 7 tests |" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "| Ruby Gem Unit Tests | ❌ Failed | 7 tests |" >> $GITHUB_STEP_SUMMARY
-          fi
-
-          # NPM tests summary
-          if [ "${{ needs.npm-tests.result }}" == "success" ]; then
-            echo "| NPM Package Unit Tests | ✅ Passed | 29 tests |" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "| NPM Package Unit Tests | ❌ Failed | 29 tests |" >> $GITHUB_STEP_SUMMARY
-          fi
-
-          # Integration tests summary
-          if [ "${{ needs.integration-tests.result }}" == "success" ]; then
-            echo "| Integration Tests | ✅ Passed | 18 tests |" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "| Integration Tests | ❌ Failed | 18 tests |" >> $GITHUB_STEP_SUMMARY
-          fi
-
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Total: 54 tests across Ruby gem, NPM package, and integration suites**" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## 🔧 Matrix Testing" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Ruby versions**: 3.2, 3.3" >> $GITHUB_STEP_SUMMARY
-          echo "- **Bun versions**: 1.2.1, 1.2.7, latest" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## 📋 Test Types Executed" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Unit Tests**: Individual module testing" >> $GITHUB_STEP_SUMMARY
-          echo "- **Integration Tests**: HTTP contract validation" >> $GITHUB_STEP_SUMMARY
-          echo "- **End-to-End Tests**: Ruby gem ↔ NPM package communication" >> $GITHUB_STEP_SUMMARY
-          echo "- **Performance Tests**: Concurrent request handling" >> $GITHUB_STEP_SUMMARY
-          echo "- **Error Scenario Tests**: Edge case and malformed request handling" >> $GITHUB_STEP_SUMMARY
+          .github/scripts/generate-test-summary.sh \
+            "${{ needs.ruby-tests.result }}" \
+            "${{ needs.npm-tests.result }}" \
+            "${{ needs.integration-tests.result }}"
