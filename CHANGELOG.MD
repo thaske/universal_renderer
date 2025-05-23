@@ -5,73 +5,72 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-<!--
-
-## [0.1.0] - YYYY-MM-DD
+## 0.4.2 - 2025-05-23
 
 ### Ruby Gem
 
 #### Added
 
-- Initial release of Ruby Gem
-- Rails integration helpers
-- Template streaming support
-- Early-hints utilities
-- Generators
+- Comprehensive testing infrastructure with RSpec configuration and test helpers
+- Integration test framework for validating HTTP contracts between Ruby gem and NPM package
+- Test fixtures for SSR responses and HTML templates (`spec/fixtures/`)
+- Performance testing capabilities with benchmarking and analysis
+- Test coverage reporting with configurable targets (95% for unit tests, 85% overall)
+- Multiple test execution scripts:
+  - `bin/test` - Quick Ruby unit tests
+  - `bin/test:coverage` - Generate coverage reports for both Ruby and NPM
+  - `bin/test:full` - Complete test suite (Ruby + NPM)
+  - `bin/test:integration` - Integration tests for HTTP contracts
+  - `bin/test:performance` - Performance benchmarks and analysis
+  - `bin/test:report` - HTML and Markdown test reporting
+  - `bin/test:watch` - Automated test watching with file change detection
+- JSON schema validation for SSR requests and responses
+- Mock utilities and test server generation for integration testing
+- GitHub Actions CI workflow with matrix testing across Ruby 3.2/3.3 and Bun versions
 
 #### Changed
 
-- Improved performance of template rendering
-- Updated dependency requirements for Rails 7.x compatibility
+- Updated `ssr_head` and `ssr_body` methods to return placeholders directly
+- Simplified `ssr_streaming?` method implementation with controller delegation
+- Updated development dependencies including Rails 7.2.2.1 and enhanced RuboCop configuration
 
 #### Fixed
 
-- Fixed race condition in template streaming
-- Resolved memory leak in helper methods
-
-#### Deprecated
-
-- Legacy renderer API, use new streaming API instead
-- Old configuration format, see migration guide
-
-#### Removed
-
-- Support for Rails 5.x
-- Deprecated utility functions
+- Enhanced error handling and validation in streaming methods
+- Improved integration test reliability with better server management
 
 ### NPM Package
 
 #### Added
 
-- Initial release of NPM package
-- Vite dev server integration
-- Frontend framework adapters
-- JSON protocol implementation
+- **Hostname parameter**: `createServer` function now accepts an optional `hostname` parameter in `CreateServerOptions`
+- Server configuration now supports custom hostname binding (defaults to Bun's default if not specified)
+- Comprehensive test suite using Vitest with React Testing Library
+- Test dependencies: `@testing-library/jest-dom`, `@testing-library/react`, `jsdom`, `vitest`
+- Coverage reporting configuration for NPM package tests
+- Integration with Ruby gem testing framework for end-to-end validation
 
 #### Changed
 
-- Optimized bundle size with tree-shaking
-- Improved TypeScript type definitions
+- Server console logging now displays the actual resolved hostname and port
+- Simplified build scripts to focus on main entry point (`src/index.ts`)
+- Streamlined watch command for development
 
 #### Fixed
 
-- Fixed hot module reloading for Vue components
-- Resolved path resolution in Windows environments
+- Improved test stability and coverage reporting
 
-#### Deprecated
+### Documentation
 
-- Legacy API methods, see migration guide
-- Direct DOM manipulation utilities
+#### Added
 
-#### Removed
-
-- Support for Internet Explorer
-- Beta-only experimental features
-
-[Unreleased]: https://github.com/username/universal_renderer/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/username/universal_renderer/releases/tag/v0.1.0
-
--->
+- CI status badge in README indicating GitHub Actions workflow status
+- Comprehensive testing documentation (`spec/README.md`) covering:
+  - Test directory structure and organization
+  - Running tests for both Ruby and NPM components
+  - Testing guidelines and best practices
+  - Configuration details for RSpec and Vitest
+  - Continuous Integration information
 
 ## 0.4.1 - 2025-05-21
 
