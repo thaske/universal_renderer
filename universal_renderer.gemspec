@@ -12,7 +12,7 @@ Gem::Specification.new do |spec|
     "Provides helper methods and configuration to forward rendering requests " \
       "from a Rails app to an external SSR server and return the response."
   spec.license = "MIT"
-  spec.required_ruby_version = ">= 3.0.0"
+  spec.required_ruby_version = ">= 3.2.0"
 
   spec.metadata["allowed_push_host"] = "https://rubygems.org"
 
@@ -25,5 +25,6 @@ Gem::Specification.new do |spec|
     end
 
   spec.add_dependency "loofah", "~> 2.24"
-  spec.add_runtime_dependency "rails", "~> 7.1"
+  spec.add_dependency "rails", ">= 7.1", "< 8.0"
+spec.metadata['rubygems_mfa_required'] = 'true'
 end

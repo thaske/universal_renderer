@@ -6,13 +6,13 @@
     "paths": {
       "@/*": ["src/*"]
     },
-    "lib": ["ESNext"],
-    "module": "esnext",
-    "target": "esnext",
-    "moduleResolution": "Node",
+    "lib": ["ES2022", "DOM"],
+    "module": "ESNext",
+    "target": "ES2022",
+    "moduleResolution": "bundler",
     "moduleDetection": "force",
     "allowImportingTsExtensions": false,
-    "noEmit": false,
+    "noEmit": true,
     "composite": false,
     "declaration": true,
     "declarationMap": true,
@@ -23,16 +23,20 @@
     "jsx": "react-jsx",
     "allowSyntheticDefaultImports": true,
     "forceConsistentCasingInFileNames": true,
-    "verbatimModuleSyntax": true
+    "verbatimModuleSyntax": true,
+    "allowJs": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noUncheckedIndexedAccess": true
   },
   "include": ["src/**/*.ts"],
   "exclude": [
-    "dist",
-    "test",
     "**/*.test.ts",
-    "**/__mocks__/**",
-    "scripts",
-    "node_modules"
+    "**/*.test.tsx",
+    "**/test/**/*",
+    "node_modules",
+    "dist"
   ],
   "references": []
 }

@@ -1,0 +1,77 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "bundler/setup"
+
+# Colors for output
+class Colors
+  RED = "\e[31m"
+  GREEN = "\e[32m"
+  YELLOW = "\e[33m"
+  BLUE = "\e[34m"
+  RESET = "\e[0m"
+end
+
+def colored_puts(text, color = nil)
+  puts color ? "#{color}#{text}#{Colors::RESET}" : text
+end
+
+def run_command(cmd, description)
+  colored_puts "\n🔄 #{description}...", Colors::BLUE
+
+  success = system(cmd)
+
+  if success
+    colored_puts "✅ #{description} completed successfully", Colors::GREEN
+  else
+    colored_puts "❌ #{description} failed", Colors::RED
+    exit 1
+  end
+
+  success
+end
+
+def check_prerequisites
+  colored_puts "🔍 Checking prerequisites...", Colors::BLUE
+
+  # Check if Bun is installed
+  unless system("which bun > /dev/null 2>&1")
+    colored_puts "❌ Bun is not installed. Please install Bun first:",
+                 Colors::RED
+    colored_puts "   curl -fsSL https://bun.sh/install | bash", Colors::YELLOW
+    exit 1
+  end
+
+  # Check if universal-renderer NPM package is built
+  unless File.exist?("universal-renderer/dist/index.js")
+    colored_puts "❌ universal-renderer NPM package not built. Building now...",
+                 Colors::YELLOW
+    run_command(
+      "cd universal-renderer && bun run build",
+      "Building NPM package"
+    )
+  end
+
+  colored_puts "✅ Prerequisites checked", Colors::GREEN
+end
+
+def main
+  colored_puts "🚀 Universal Renderer - Integration Tests", Colors::BLUE
+  colored_puts "=" * 50
+
+  check_prerequisites
+
+  # Only run integration tests - unit tests are handled by dedicated CI jobs
+  run_command(
+    "bundle exec rspec spec/integration --format documentation --color",
+    "Running integration tests"
+  )
+
+  colored_puts "\n🎉 Integration tests completed successfully!", Colors::GREEN
+  colored_puts "\n📊 Integration Test Summary:", Colors::BLUE
+  colored_puts "   • HTTP contract validation: ✅ Passed"
+  colored_puts "   • Ruby gem ↔ NPM package communication: ✅ Passed"
+  colored_puts "   • Error scenario handling: ✅ Passed"
+end
+
+main if __FILE__ == $PROGRAM_NAME
