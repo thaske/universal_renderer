@@ -7,7 +7,7 @@ module UniversalRenderer
       #   @return [String] The HTML-safe string "<!-- SSR_HEAD -->".
       def ssr_head
         if ssr_streaming?
-          Placeholders::HEAD.html_safe
+          Placeholders::HEAD
         elsif @ssr && @ssr.head.present?
           sanitize_ssr(@ssr.head)
         else
@@ -21,7 +21,7 @@ module UniversalRenderer
       #   @return [String] The HTML-safe string "<!-- SSR_BODY -->".
       def ssr_body
         if ssr_streaming?
-          Placeholders::BODY.html_safe
+          Placeholders::BODY
         elsif @ssr && @ssr.body.present?
           sanitize_ssr(@ssr.body)
         else
@@ -49,9 +49,7 @@ module UniversalRenderer
       #   - If `ssr_streaming_preference` is `nil` (not set), streaming is disabled.
       #   @return [Boolean, nil] The value of `ssr_streaming_preference` (true, false, or nil).
       #     In conditional contexts, `nil` will behave as `false`.
-      def ssr_streaming?
-        controller.ssr_streaming?
-      end
+      delegate :ssr_streaming?, to: :controller
     end
   end
 end

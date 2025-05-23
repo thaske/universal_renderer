@@ -1,3 +1,11 @@
+require:
+  - rubocop-rspec
+  - rubocop-rspec_rails
+
+plugins:
+  - rubocop-factory_bot
+  - rubocop-rails
+
 Style/Documentation:
   Enabled: false
 
@@ -18,3 +26,35 @@ Style/IfUnlessModifier:
 
 AllCops:
   NewCops: enable
+
+Metrics/BlockLength:
+  AllowedMethods: ["describe", "context"]
+
+# RSpec-specific configuration
+RSpec/MultipleExpectations:
+  Max: 10
+
+RSpec/ExampleLength:
+  Max: 20
+
+RSpec/DescribeClass:
+  Enabled: false
+
+RSpec/FilePath:
+  Enabled: false
+
+RSpec/SpecFilePathFormat:
+  Enabled: false
+
+RSpec/BeforeAfterAll:
+  Enabled: false
+
+RSpec/MultipleDescribes:
+  Enabled: false
+
+RSpec/NamedSubject:
+  Enabled: false
+
+# Capybara cops causing errors - disable for now
+Capybara/RSpec/PredicateMatcher:
+  Enabled: false

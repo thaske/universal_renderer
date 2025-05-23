@@ -12,14 +12,23 @@ gem "sqlite3"
 # gem "debug", ">= 1.0.0"
 
 group :development do
+  gem "rails", ">= 7.1", "< 8.0"
   gem "rspec-rails", "~> 6.0"
   gem "webmock", "~> 3.18"
 
   gem "prettier_print", "~> 1.2"
+  gem "rubocop", "~> 1.60"
+  gem "rubocop-factory_bot", "~> 2.25"
+  gem "rubocop-rails", "~> 2.23"
+  gem "rubocop-rspec", "~> 2.26"
+  gem "rubocop-rspec_rails", "~> 2.28"
   gem "syntax_tree", "~> 6.2"
   gem "syntax_tree-haml", "~> 4.0"
   gem "syntax_tree-rbs", "~> 1.0"
 end
 
 group :test do
+  gem "factory_bot_rails", "~> 6.2"
+  gem "faker", "~> 3.2"
+  gem "timecop", "~> 0.9"
 end
