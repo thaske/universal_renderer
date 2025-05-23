@@ -39,12 +39,12 @@ module UniversalRenderer
       self.class.try(:ssr_streaming_preference)
     end
 
-    def render(*args, **kwargs)
+    def render(*, **)
       return super unless self.class.enable_ssr
       return super unless request.format.html?
 
       if ssr_streaming?
-        success = render_ssr_stream(*args, **kwargs)
+        success = render_ssr_stream(*, **)
         super unless success
       else
         fetch_ssr
@@ -54,8 +54,8 @@ module UniversalRenderer
 
     private
 
-    def render_ssr_stream(*args, **kwargs)
-      full_layout = render_to_string(*args, **kwargs)
+    def render_ssr_stream(*, **)
+      full_layout = render_to_string(*, **)
       current_props = @universal_renderer_props.dup
 
       streaming_succeeded =

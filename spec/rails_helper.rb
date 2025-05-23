@@ -51,7 +51,7 @@ end
 RSpec.configure do |config|
   # Rails-specific configuration can go here
   if defined?(Rails)
-    config.before(:each) do
+    config.before do
       # Reset any Rails state if needed
     end
   end

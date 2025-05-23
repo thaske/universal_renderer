@@ -3,7 +3,7 @@
 require "socket"
 require "timeout"
 require "fileutils"
-require "tmpdir"
+require_relative "test_server_generator"
 
 module IntegrationHelpers
   module ServerHelpers
@@ -26,10 +26,10 @@ module IntegrationHelpers
       ensure_port_available!(port)
 
       # Create a temporary directory for the test server
-      server_dir = create_test_server_directory
+      server_dir = TestServerGenerator.create_directory
 
       # Write the test server configuration
-      write_test_server_files(
+      TestServerGenerator.write_files(
         server_dir,
         port: port,
         hostname: hostname,
@@ -44,8 +44,8 @@ module IntegrationHelpers
           "run",
           "server.ts",
           chdir: server_dir,
-          out: config[:verbose] ? STDOUT : File::NULL,
-          err: config[:verbose] ? STDERR : File::NULL,
+          out: config[:verbose] ? $stdout : File::NULL,
+          err: config[:verbose] ? $stderr : File::NULL,
           pgroup: true
         )
 
@@ -73,9 +73,7 @@ module IntegrationHelpers
         end
 
         # Clean up temporary directory
-        if Dir.exist?(server_info[:directory])
-          FileUtils.rm_rf(server_info[:directory])
-        end
+        FileUtils.rm_rf(server_info[:directory])
       end
 
       @spawned_servers.clear
@@ -89,12 +87,10 @@ module IntegrationHelpers
     def wait_for_server(hostname, port, timeout: DEFAULT_TIMEOUT)
       Timeout.timeout(timeout) do
         loop do
-          begin
-            TCPSocket.new(hostname, port).close
-            break
-          rescue Errno::ECONNREFUSED, Errno::EHOSTUNREACH
-            sleep 0.1
-          end
+          TCPSocket.new(hostname, port).close
+          break
+        rescue Errno::ECONNREFUSED, Errno::EHOSTUNREACH
+          sleep 0.1
         end
       end
     rescue Timeout::Error
@@ -117,117 +113,6 @@ module IntegrationHelpers
     # @param port [Integer] The port to check
     def ensure_port_available!(port)
       raise "Port #{port} is already in use" unless port_available?(port)
-    end
-
-    private
-
-    # Creates a temporary directory for the test server
-    def create_test_server_directory
-      Dir.mktmpdir("ssr_test_server_")
-    end
-
-    # Writes the necessary files for a test SSR server
-    def write_test_server_files(server_dir, port:, hostname:, **config)
-      # Create package.json with correct path to universal-renderer
-      universal_renderer_path = File.join(project_root, "universal-renderer")
-
-      package_json = {
-        "name" => "ssr-test-server",
-        "version" => "1.0.0",
-        "type" => "module",
-        "dependencies" => {
-          "universal-renderer" => "file:#{universal_renderer_path}",
-          "react" => "^18.2.0",
-          "react-dom" => "^18.2.0"
-        }
-      }
-
-      File.write(
-        File.join(server_dir, "package.json"),
-        JSON.pretty_generate(package_json)
-      )
-
-      # Create the server.ts file
-      server_content =
-        generate_test_server_content(port: port, hostname: hostname, **config)
-      File.write(File.join(server_dir, "server.ts"), server_content)
-
-      # Install dependencies
-      install_dependencies(server_dir)
-    end
-
-    # Gets the project root directory
-    def project_root
-      @project_root ||= File.expand_path("../..", __dir__)
-    end
-
-    # Generates the TypeScript content for the test server
-    def generate_test_server_content(port:, hostname:, **config)
-      <<~TYPESCRIPT
-        import { createServer } from 'universal-renderer';
-        import React from 'react';
-
-        // Test callbacks for integration testing
-        const callbacks = {
-          setup: async (url: string, props: any) => {
-            return {
-              url,
-              props,
-              timestamp: new Date().toISOString()
-            };
-          },
-          render: async (context: any) => {
-            return {
-              head: '<meta name="test" content="true">',
-              body: '<div>Test Content</div>'
-            };
-          },
-          cleanup: async (context: any) => {
-            // cleanup
-          }
-        };
-
-        const streamCallbacks = {
-          app: (context: any) => React.createElement('div', null, 'Streaming Test Content'),
-          head: async (context: any) => '<meta name="stream-test" content="true">'
-        };
-
-        // Create and start the server
-        const server = await createServer({
-          hostname: '#{hostname}',
-          port: #{port},
-          ...callbacks,
-          streamCallbacks: streamCallbacks
-        });
-
-        console.log(`Test SSR server started on http://#{hostname}:#{port}`);
-
-        // Handle shutdown gracefully
-        process.on('SIGTERM', () => {
-          console.log('Shutting down test server...');
-          server.stop();
-          process.exit(0);
-        });
-      TYPESCRIPT
-    end
-
-    # Installs NPM dependencies in the server directory
-    def install_dependencies(server_dir)
-      # Capture both stdout and stderr for better error reporting
-      result =
-        system(
-          "bun",
-          "install",
-          chdir: server_dir,
-          out: File::NULL,
-          err: %i[child out]
-        )
-
-      unless result
-        # Try to get more detailed error information
-        error_output = `cd #{server_dir} && bun install 2>&1`
-        raise "Failed to install dependencies for test server in #{server_dir}. Error: #{error_output}"
-      end
     end
   end
 end

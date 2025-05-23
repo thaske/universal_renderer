@@ -18,6 +18,10 @@ group :development do
 
   gem "prettier_print", "~> 1.2"
   gem "rubocop", "~> 1.60"
+  gem "rubocop-factory_bot", "~> 2.25"
+  gem "rubocop-rails", "~> 2.23"
+  gem "rubocop-rspec", "~> 2.26"
+  gem "rubocop-rspec_rails", "~> 2.28"
   gem "syntax_tree", "~> 6.2"
   gem "syntax_tree-haml", "~> 4.0"
   gem "syntax_tree-rbs", "~> 1.0"
