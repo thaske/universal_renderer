@@ -26,7 +26,7 @@ import type { StreamHandlerOptions } from "@/types";
  * app.post('/stream', createStreamHandler({
  *   setup: async (url, props) => ({ url, props, store: createStore() }),
  *   streamCallbacks: {
- *     app: (context) => <App {...context} />,
+ *     node: (context) => context.app,
  *     head: async (context) => `<title>${context.title}</title>`
  *   },
  *   cleanup: (context) => context.store?.dispose()

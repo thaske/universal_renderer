@@ -64,12 +64,12 @@ const app = await createServer({
   setup: async (url, props) => ({ url, props }),
   render: async (context) => ({ body: "fallback" }), // Required but not used for streaming
   streamCallbacks: {
-    app: (context) => <App url={context.url} {...context.props} />,
+    node: (context) => context.app,
     head: async (context) => {
       // Generate dynamic head content
       return `<meta name="description" content="Page: ${context.url}">`;
-    }
-  }
+    },
+  },
 });
 ```
 
@@ -117,10 +117,9 @@ For streaming SSR, provide `streamCallbacks`:
 
 ```ts
 streamCallbacks: {
-  app: (context) => <YourReactApp />,
+  node: (context) => <YourReactApp />,
   head?: (context) => "<meta name='description' content='...' />",
-  transform?: (context) => someTransformStream,
-  close?: (stream, context) => { /* cleanup */ }
+  transform?: (context) => someTransformStream
 }
 ```
 
