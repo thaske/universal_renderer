@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createServer } from "./index";
+import createServer, { SSR_MARKERS } from "./index";
 
 describe("createServer", () => {
   it("should throw an error when no render callback is provided", async () => {
@@ -8,9 +8,7 @@ describe("createServer", () => {
         hostname: "localhost",
         port: 3001,
       } as any),
-    ).rejects.toThrow(
-      "Either `callbacks.render` or `streamCallbacks` must be provided.",
-    );
+    ).rejects.toThrow("render callback is required");
   });
 
   it("should accept valid render configuration", async () => {
@@ -27,13 +25,12 @@ describe("createServer", () => {
 
     const server = await createServer(serverConfig);
     expect(server).toBeDefined();
-    expect(server.hostname).toBe("localhost");
-    expect(server.port).toBe(3001);
+    expect(typeof server.listen).toBe("function");
   });
 
   it("should accept valid stream configuration", async () => {
     const mockStreamCallbacks = {
-      app: () => "Test Stream",
+      app: () => ({ type: "div", props: { children: "Test Stream" } }) as any,
     };
 
     const serverConfig = {
@@ -50,7 +47,21 @@ describe("createServer", () => {
 
     const server = await createServer(serverConfig);
     expect(server).toBeDefined();
-    expect(server.hostname).toBe("localhost");
-    expect(server.port).toBe(3002);
+    expect(typeof server.listen).toBe("function");
+  });
+});
+
+describe("SSR_MARKERS", () => {
+  it("should export all required marker constants", () => {
+    expect(SSR_MARKERS).toBeDefined();
+    expect(SSR_MARKERS.HEAD).toBe("<!-- SSR_HEAD -->");
+    expect(SSR_MARKERS.BODY).toBe("<!-- SSR_BODY -->");
+    expect(SSR_MARKERS.HEAD_TEMPLATE).toBe("{{SSR_HEAD}}");
+    expect(SSR_MARKERS.BODY_TEMPLATE).toBe("{{SSR_BODY}}");
+  });
+
+  it("should be a readonly object", () => {
+    // Verify the object is frozen (immutable)
+    expect(Object.isFrozen(SSR_MARKERS)).toBe(true);
   });
 });
