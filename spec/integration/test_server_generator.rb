@@ -78,7 +78,7 @@ module IntegrationHelpers
         };
 
         const streamCallbacks = {
-          app: (context: any) => React.createElement('div', null, 'Streaming Test Content'),
+          node: (context: any) => React.createElement('div', null, 'Streaming Test Content'),
           head: async (context: any) => '<meta name="stream-test" content="true">'
         };
 
