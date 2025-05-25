@@ -62,19 +62,21 @@ export function createStreamHandler<TContext extends Record<string, any>>(
       // Set up the rendering context
       context = await options.setup(url, props);
 
-      let reactElement;
-      if (streamCallbacks.app) {
-        reactElement = streamCallbacks.app(context!);
+      let reactNode;
+      if (streamCallbacks.node) {
+        reactNode = streamCallbacks.node(context!);
       } else if (context && "app" in context) {
-        reactElement = context.app;
+        reactNode = context.app;
       } else if (context && "jsx" in context) {
-        reactElement = context.jsx;
+        reactNode = context.jsx;
       } else {
         throw new Error("No app callback provided");
       }
 
-      const { pipe } = renderToPipeableStream(reactElement, {
+      const { pipe } = renderToPipeableStream(reactNode, {
         async onAllReady() {
+          res.setHeader("Content-Type", "text/html; charset=utf-8");
+
           const [head, tail] = template.split(SSR_MARKERS.BODY);
 
           const finalHead = await streamCallbacks.head?.(context!);
@@ -91,12 +93,8 @@ export function createStreamHandler<TContext extends Record<string, any>>(
 
           pipe(stream);
 
-          stream.on("end", async () => {
-            try {
-              await streamCallbacks.close?.(res, context!);
-            } finally {
-              res.end(tail);
-            }
+          stream.on("end", () => {
+            res.end(tail);
           });
 
           res.on("finish", () => {

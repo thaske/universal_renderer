@@ -1,4 +1,4 @@
-import type { ErrorRequestHandler, RequestHandler, Response } from "express";
+import type { ErrorRequestHandler, RequestHandler } from "express";
 import type { ReactNode } from "react";
 
 /**
@@ -38,6 +38,21 @@ export type BaseHandlerOptions<TContext extends Record<string, any>> = {
    * @param url - The URL being rendered
    * @param props - Additional props passed from the client
    * @returns Context object that will be passed to render and cleanup functions
+   *
+   * @example
+   * ```typescript
+   * setup: (url, props) => {
+   *     const pathname = new URL(url).pathname;
+   *
+   *     const app = sheet.collectStyles(
+   *       <StaticRouter location={pathname}>
+   *         <App />
+   *       </StaticRouter>
+   *     );
+   *
+   *     return { app };
+   *   }
+   * ```
    */
   setup: (
     url: string,
@@ -82,16 +97,31 @@ export type StreamHandlerOptions<TContext extends Record<string, any>> =
      */
     streamCallbacks: {
       /**
-       * Returns the React element to be streamed.
-       * @param context - The context object from setup()
-       * @returns React element to stream
+       * Function to extract the React component/element to be streamed.
+       * This is the primary way to specify what React content should be rendered.
+       * If not provided, the handler will fall back to looking for `context.app` or `context.jsx` properties.
+       *
+       * @param context - The context object returned by the setup function
+       * @returns The React node (component, element, or JSX) to be passed to React's streaming renderer
+       *
+       * @example
+       * ```typescript
+       * node: (context) => context.app
+       * ```
        */
-      app?: (context: TContext) => ReactNode;
+      node?: (context: TContext) => ReactNode;
 
       /**
        * Optional function to generate head content for streaming.
        * @param context - The context object from setup()
        * @returns HTML string for the head section
+       *
+       * @example
+       * ```typescript
+       * head: (context) => {
+       *   return `<meta name="description" content="...">`;
+       * }
+       * ```
        */
       head?: (context: TContext) => Promise<string> | string;
 
@@ -99,15 +129,15 @@ export type StreamHandlerOptions<TContext extends Record<string, any>> =
        * Optional transform stream for processing the rendered output.
        * @param context - The context object from setup()
        * @returns Transform stream to process the output
+       *
+       * @example
+       * ```typescript
+       * transform: (context) => {
+       *   return new TransformStream();
+       * }
+       * ```
        */
       transform?: (context: TContext) => NodeJS.ReadWriteStream;
-
-      /**
-       * Optional callback called when streaming is complete.
-       * @param stream - The response stream
-       * @param context - The context object from setup()
-       */
-      close?: (res: Response, context: TContext) => Promise<void> | void;
     };
   };
 
