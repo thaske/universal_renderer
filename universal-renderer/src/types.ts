@@ -1,4 +1,4 @@
-import type { ErrorRequestHandler, RequestHandler } from "express";
+import type { ErrorRequestHandler, RequestHandler, Response } from "express";
 import type { ReactNode } from "react";
 
 /**
@@ -49,6 +49,12 @@ export type BaseHandlerOptions<TContext extends Record<string, any>> = {
    * @param context - The context object returned by the setup function
    */
   cleanup?: (context: TContext) => void;
+
+  /**
+   * Optional error handler to be applied to the server.
+   * This error handler will be applied after the built-in middleware but before the error handler.
+   */
+  error?: ErrorRequestHandler;
 };
 
 /**
@@ -101,7 +107,7 @@ export type StreamHandlerOptions<TContext extends Record<string, any>> =
        * @param stream - The response stream
        * @param context - The context object from setup()
        */
-      close?: (stream: unknown, context: TContext) => Promise<void> | void;
+      close?: (res: Response, context: TContext) => Promise<void> | void;
     };
   };
 
@@ -132,10 +138,4 @@ export type ServerOptions<
    * ```
    */
   middleware?: RequestHandler;
-
-  /**
-   * Optional error handler to be applied to the server.
-   * This error handler will be applied after the built-in middleware but before the error handler.
-   */
-  errorHandler?: ErrorRequestHandler;
 };

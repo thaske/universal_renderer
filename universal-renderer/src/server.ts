@@ -86,8 +86,8 @@ export async function createServer<
   }
 
   // Error handler
-  if (options.errorHandler) {
-    app.use(options.errorHandler);
+  if (options.error) {
+    app.use(options.error);
   } else {
     app.use(createErrorHandler());
   }

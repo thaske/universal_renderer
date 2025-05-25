@@ -4,7 +4,6 @@ import { renderToPipeableStream } from "react-dom/server.node";
 
 import { SSR_MARKERS } from "@/constants";
 import type { StreamHandlerOptions } from "@/types";
-import type { ReactNode } from "react";
 
 /**
  * Creates a streaming Server-Side Rendering route handler for React 18+ streaming SSR.
@@ -43,7 +42,7 @@ export function createStreamHandler<TContext extends Record<string, any>>(
 
   const streamCallbacks = options.streamCallbacks;
 
-  return async (req, res) => {
+  return async (req, res, next) => {
     let context: TContext | undefined;
 
     try {
@@ -63,7 +62,7 @@ export function createStreamHandler<TContext extends Record<string, any>>(
       // Set up the rendering context
       context = await options.setup(url, props);
 
-      let reactElement: ReactNode | undefined;
+      let reactElement;
       if (streamCallbacks.app) {
         reactElement = streamCallbacks.app(context!);
       } else if (context && "app" in context) {
@@ -74,28 +73,16 @@ export function createStreamHandler<TContext extends Record<string, any>>(
         throw new Error("No app callback provided");
       }
 
-      res.setHeader("Content-Type", "text/html; charset=utf-8");
-
-      // Split the template at the body marker to get head and tail parts
-      const [headPart, tailPart] = template.split(SSR_MARKERS.BODY);
-
-      // Inject head tags if available
-      let finalHead = headPart;
-      if (streamCallbacks.head) {
-        const headTags = await streamCallbacks.head(context);
-        if (headTags) {
-          finalHead = headPart.replace(SSR_MARKERS.HEAD, headTags);
-        }
-      }
-
-      // Send the head part immediately
-      res.write(finalHead);
-
       const { pipe } = renderToPipeableStream(reactElement, {
-        onShellReady() {
+        async onAllReady() {
+          const [head, tail] = template.split(SSR_MARKERS.BODY);
+
+          const finalHead = await streamCallbacks.head?.(context!);
+          if (finalHead) res.write(head.replace(SSR_MARKERS.HEAD, finalHead));
+          else res.write(head);
+
           const stream = new PassThrough();
           const transform = streamCallbacks.transform?.(context!);
-
           if (transform) {
             stream.pipe(transform).pipe(res, { end: false });
           } else {
@@ -108,24 +95,43 @@ export function createStreamHandler<TContext extends Record<string, any>>(
             try {
               await streamCallbacks.close?.(res, context!);
             } finally {
-              res.end(tailPart);
+              res.end(tail);
             }
+          });
+
+          res.on("finish", () => {
+            if (context && options.cleanup) options.cleanup(context);
           });
         },
         onShellError(error) {
-          console.error("[SSR] Shell error:", error);
-          res.status(500).send("Error during rendering");
+          console.error("[SSR] Shell error");
+
+          if (options.error) {
+            options.error(error, req, res, next);
+          } else {
+            console.error(error);
+            res.status(500).send("Error during rendering");
+          }
         },
         onError(error) {
-          console.error("[SSR] Stream error:", error);
+          console.error("[SSR] Stream error");
+
+          if (options.error) {
+            options.error(error, req, res, next);
+          } else {
+            console.error(error);
+            res.status(500).send("Error during rendering");
+          }
         },
       });
     } catch (error) {
-      console.error("[SSR] Stream setup error:", error);
-      res.status(500).send("Internal Server Error");
-    } finally {
-      if (context && options.cleanup) {
-        options.cleanup(context);
+      console.error("[SSR] Stream setup error");
+
+      if (options.error) {
+        options.error(error, req, res, next);
+      } else {
+        console.error(error);
+        res.status(500).send("Internal Server Error");
       }
     }
   };
