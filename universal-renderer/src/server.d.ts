@@ -122,7 +122,7 @@ export type ServerOptions<TContext = any> = {
 
     /**
      * Optional function to generate head content for streaming.
-     * This content will be injected into the {{SSR_HEAD}} template marker.
+     * This content will be injected into the <!-- SSR_HEAD --> marker.
      *
      * @param context - The context object from setup()
      * @returns HTML string for the head section

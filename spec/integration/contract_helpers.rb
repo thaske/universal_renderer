@@ -73,9 +73,14 @@ module IntegrationHelpers
       http.open_timeout = 5
       http.read_timeout = 10
 
-      request = Net::HTTP::Post.new(uri.request_uri)
-      request["Content-Type"] = "application/json"
-      request.body = request_body.to_json if request_body
+      # Use GET for health endpoint, POST for others
+      if endpoint == "/health"
+        request = Net::HTTP::Get.new(uri.request_uri)
+      else
+        request = Net::HTTP::Post.new(uri.request_uri)
+        request["Content-Type"] = "application/json"
+        request.body = request_body.to_json if request_body
+      end
 
       http.request(request)
     end

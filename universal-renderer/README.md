@@ -99,11 +99,9 @@ import { SSR_MARKERS } from "universal-renderer";
 // Available markers:
 SSR_MARKERS.HEAD; // "<!-- SSR_HEAD -->"
 SSR_MARKERS.BODY; // "<!-- SSR_BODY -->"
-SSR_MARKERS.HEAD_TEMPLATE; // "{{SSR_HEAD}}"
-SSR_MARKERS.BODY_TEMPLATE; // "{{SSR_BODY}}"
 ```
 
-These markers are used by the Rails gem to inject SSR content into your templates. The `<!-- -->` versions are used in static HTML, while the `{{ }}` versions are used in streaming templates.
+These markers are used by the Rails gem to inject SSR content into your templates.
 
 ### Options
 

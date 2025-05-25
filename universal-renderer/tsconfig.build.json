@@ -1,13 +1,6 @@
 {
   "extends": "./tsconfig.json",
-  "include": [
-    "src/index.ts",
-    "src/handler.ts",
-    "src/middlewareAdapter.ts",
-    "src/streamHandler.ts",
-    "src/types/**/*.ts",
-    "src/react-dom.d.ts"
-  ],
+  "include": ["src/**/*.ts", "src/**/*.d.ts"],
   "exclude": [
     "**/*.test.ts",
     "**/*.test.tsx",

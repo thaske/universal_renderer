@@ -56,8 +56,6 @@ describe("SSR_MARKERS", () => {
     expect(SSR_MARKERS).toBeDefined();
     expect(SSR_MARKERS.HEAD).toBe("<!-- SSR_HEAD -->");
     expect(SSR_MARKERS.BODY).toBe("<!-- SSR_BODY -->");
-    expect(SSR_MARKERS.HEAD_TEMPLATE).toBe("{{SSR_HEAD}}");
-    expect(SSR_MARKERS.BODY_TEMPLATE).toBe("{{SSR_BODY}}");
   });
 
   it("should be a readonly object", () => {

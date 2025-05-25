@@ -34,8 +34,8 @@ module IntegrationHelpers
         "type" => "module",
         "dependencies" => {
           "universal-renderer" => "file:#{universal_renderer_path}",
-          "react" => "^18.2.0",
-          "react-dom" => "^18.2.0"
+          "react" => "^19.1.0",
+          "react-dom" => "^19.1.0"
         }
       }
 
@@ -83,19 +83,21 @@ module IntegrationHelpers
         };
 
         // Create and start the server
-        const server = await createServer({
+        const app = await createServer({
           hostname: '#{hostname}',
           port: #{port},
           ...callbacks,
           streamCallbacks: streamCallbacks
         });
 
-        console.log(`Test SSR server started on http://#{hostname}:#{port}`);
+        const server = app.listen(#{port}, '#{hostname}', () => {
+          console.log(`Test SSR server started on http://#{hostname}:#{port}`);
+        });
 
         // Handle shutdown gracefully
         process.on('SIGTERM', () => {
           console.log('Shutting down test server...');
-          server.stop();
+          server.close();
           process.exit(0);
         });
       TYPESCRIPT

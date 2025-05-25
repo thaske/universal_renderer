@@ -3,8 +3,7 @@ description:
 globs:
 alwaysApply: true
 ---
-
-# Project Snapshot
+Project Snapshot
 
 Universal Renderer ships **two decoupled artifacts**:
 
