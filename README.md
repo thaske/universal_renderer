@@ -12,21 +12,11 @@ UniversalRenderer helps you forward rendering requests to external SSR services,
 
 ## Features
 
-- **Static and streaming SSR** support
+- **Streaming SSR** support
 - **Configurable SSR server endpoint** and timeouts
 - **Simple API** for passing data between Rails and your SSR service
 - **Automatic fallback** to client-side rendering if SSR fails
 - **View helpers** for easy integration into your layouts
-
-## Requirements
-
-> **Heads-up ⚠️** &nbsp;The JavaScript side of UniversalRenderer is **Bun-native**.
->
-> • You **must** run the SSR server with **Bun ≥ 1.2**.
->
-> • The exported helpers call Bun's built-in HTTP router and `Response` implementation; they **will not boot under Node, Deno, or Cloudflare Workers**.
->
-> • The Ruby gem is runtime-agnostic and continues to work on every platform – only the SSR service requires Bun.
 
 ## Installation
 
@@ -93,13 +83,13 @@ end
 ```erb
 <%# "ssr/index" %>
 
-<%# Inject SSR snippets using the provided helpers. When streaming is enabled
-     these render HTML placeholders (<!-- SSR_HEAD --> / <!-- SSR_BODY -->);
-     otherwise they output the sanitised HTML returned by the SSR service. %>
+<%# Inject SSR snippets using the provided helpers %>
+<%# When streaming is enabled these render HTML placeholders %>
+<%# Otherwise they output the sanitised HTML returned by the SSR service %>
 
-<head>
+<%= content_for :head do %>
   <%= ssr_head %>
-</head>
+<% end %>
 
 <div id="root">
   <%= ssr_body %>
@@ -145,7 +135,7 @@ To set up the SSR server for your Rails application:
      query_data.forEach(({ key, data }) => queryClient.setQueryData(key, data));
      const state = dehydrate(queryClient);
 
-     const jsx = sheet.collectStyles(
+     const app = sheet.collectStyles(
        <HelmetProvider context={helmetContext}>
          <Metadata url={url} />
          <QueryClientProvider client={queryClient}>
@@ -157,7 +147,7 @@ To set up the SSR server for your Rails application:
        </HelmetProvider>,
      );
 
-     return { jsx, helmetContext, sheet, queryClient };
+     return { app, helmetContext, sheet, queryClient };
    }
    ```
 
@@ -198,18 +188,10 @@ To set up the SSR server for your Rails application:
    import { head, transform } from "@/ssr/utils";
    import { renderToString } from "react-dom/server.node";
    import { createServer } from "universal-renderer";
-   import { createServer as createViteServer } from "vite";
 
-   const vite = await createViteServer({
-     server: { middlewareMode: true },
-     appType: "custom",
-   });
-
-   await createServer({
-     port: 3001,
-     middleware: vite.middlewares,
-
+   const app = await createServer({
      setup: (await import("@/ssr/setup")).default,
+
      render: ({ app, helmet, sheet }) => {
        const root = renderToString(app);
        const styles = sheet.getStyleTags();
@@ -218,11 +200,14 @@ To set up the SSR server for your Rails application:
          body: `${root}\n${styles}`,
        };
      },
+
      cleanup: ({ sheet, queryClient }) => {
        sheet?.seal();
        queryClient?.clear();
      },
    });
+
+   app.listen(3001);
    ```
 
 5. Build the SSR bundle:

@@ -10,7 +10,7 @@ alwaysApply: false
 * Path: `scratch/<short-task-name>.md` (Derive `<short-task-name>` from the feature/bug branch name or a concise task label.)
 * If the file already exists, open it instead of creating a new one.
 
-## 2. Write an initial plan **before** touching production code
+## 2. Write an initial plan before touching code
 
 Inside the planning file add these sections in order:
 
@@ -29,4 +29,4 @@ Do not modify any source files until this plan is present.
 ## 4. Finish up
 
 * When every box is ticked, add a **Done** section summarizing testing/validation and linking to relevant commits/PRs.
-* Leave the file for posterity; do **not** delete it.
+* Leave the file for posterity; do not delete it.
