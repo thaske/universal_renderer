@@ -1,32 +1,5 @@
-import type { RenderOutput } from "@/server";
+import type { SSRHandlerOptions } from "@/types";
 import type { RequestHandler } from "express";
-
-/**
- * Configuration options for the SSR handler.
- * @template TContext - The type of context object used throughout the rendering pipeline
- */
-export type SSRHandlerOptions<TContext = any> = {
-  /**
-   * Setup function called before rendering to prepare the context.
-   * @param url - The URL being rendered
-   * @param props - Additional props passed from the client
-   * @returns Context object that will be passed to render and cleanup functions
-   */
-  setup: (url: string, props: any) => Promise<TContext> | TContext;
-
-  /**
-   * Main render function that produces the SSR output.
-   * @param context - The context object returned by the setup function
-   * @returns The rendered output containing head, body, and optional body attributes
-   */
-  render: (context: TContext) => Promise<RenderOutput> | RenderOutput;
-
-  /**
-   * Optional cleanup function called after rendering is complete.
-   * @param context - The context object returned by the setup function
-   */
-  cleanup?: (context: TContext) => void;
-};
 
 /**
  * Creates a Server-Side Rendering route handler for JSON-based SSR.
@@ -56,7 +29,7 @@ export type SSRHandlerOptions<TContext = any> = {
  * }));
  * ```
  */
-export function createSSRHandler<TContext = any>(
+export function createSSRHandler<TContext extends Record<string, any>>(
   options: SSRHandlerOptions<TContext>,
 ): RequestHandler {
   if (!options.render) {

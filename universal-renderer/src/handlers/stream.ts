@@ -3,59 +3,8 @@ import { PassThrough } from "node:stream";
 import { renderToPipeableStream } from "react-dom/server.node";
 
 import { SSR_MARKERS } from "@/constants";
-
-/**
- * Configuration options for the streaming SSR handler.
- * @template TContext - The type of context object used throughout the rendering pipeline
- */
-export type StreamHandlerOptions<TContext = any> = {
-  /**
-   * Setup function called before rendering to prepare the context.
-   * @param url - The URL being rendered
-   * @param props - Additional props passed from the client
-   * @returns Context object that will be passed to streamCallbacks and cleanup
-   */
-  setup: (url: string, props: any) => Promise<TContext> | TContext;
-
-  /**
-   * Optional cleanup function called after streaming is complete.
-   * @param context - The context object returned by the setup function
-   */
-  cleanup?: (context: TContext) => void;
-
-  /**
-   * Streaming callbacks for React 18+ streaming SSR.
-   */
-  streamCallbacks: {
-    /**
-     * Returns the React element to be streamed.
-     * @param context - The context object from setup()
-     * @returns React element to stream
-     */
-    app: (context: TContext) => React.ReactElement;
-
-    /**
-     * Optional function to generate head content for streaming.
-     * @param context - The context object from setup()
-     * @returns HTML string for the head section
-     */
-    head?: (context: TContext) => Promise<string> | string;
-
-    /**
-     * Optional transform stream for processing the rendered output.
-     * @param context - The context object from setup()
-     * @returns Transform stream to process the output
-     */
-    transform?: (context: TContext) => NodeJS.ReadWriteStream;
-
-    /**
-     * Optional callback called when streaming is complete.
-     * @param stream - The response stream
-     * @param context - The context object from setup()
-     */
-    close?: (stream: any, context: TContext) => Promise<void> | void;
-  };
-};
+import type { StreamHandlerOptions } from "@/types";
+import type { ReactNode } from "react";
 
 /**
  * Creates a streaming Server-Side Rendering route handler for React 18+ streaming SSR.
@@ -85,7 +34,7 @@ export type StreamHandlerOptions<TContext = any> = {
  * }));
  * ```
  */
-export function createStreamHandler<TContext = any>(
+export function createStreamHandler<TContext extends Record<string, any>>(
   options: StreamHandlerOptions<TContext>,
 ): RequestHandler {
   if (!options.streamCallbacks) {
@@ -113,7 +62,17 @@ export function createStreamHandler<TContext = any>(
 
       // Set up the rendering context
       context = await options.setup(url, props);
-      const reactElement = streamCallbacks.app(context);
+
+      let reactElement: ReactNode | undefined;
+      if (streamCallbacks.app) {
+        reactElement = streamCallbacks.app(context!);
+      } else if (context && "app" in context) {
+        reactElement = context.app;
+      } else if (context && "jsx" in context) {
+        reactElement = context.jsx;
+      } else {
+        throw new Error("No app callback provided");
+      }
 
       res.setHeader("Content-Type", "text/html; charset=utf-8");
 

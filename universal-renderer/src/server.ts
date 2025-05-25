@@ -6,8 +6,8 @@ import {
   createSSRHandler,
   createStreamHandler,
 } from "@/handlers";
-import type { ServerOptions } from "@/server.d";
-export type { RenderOutput, ServerOptions } from "@/server.d";
+import type { ServerOptions } from "@/types";
+export type { RenderOutput, ServerOptions } from "@/types";
 
 /**
  * Creates an Express server configured for Server-Side Rendering (SSR).
@@ -46,9 +46,9 @@ export type { RenderOutput, ServerOptions } from "@/server.d";
  * app.post('/render', createSSRHandler(options));
  * ```
  */
-export async function createServer<TContext = any>(
-  options: ServerOptions<TContext>,
-): Promise<express.Application> {
+export async function createServer<
+  TContext extends Record<string, any> = Record<string, any>,
+>(options: ServerOptions<TContext>): Promise<express.Application> {
   if (!options.render) {
     throw new Error("render callback is required");
   }
@@ -86,7 +86,11 @@ export async function createServer<TContext = any>(
   }
 
   // Error handler
-  app.use(createErrorHandler());
+  if (options.errorHandler) {
+    app.use(options.errorHandler);
+  } else {
+    app.use(createErrorHandler());
+  }
 
   return app;
 }

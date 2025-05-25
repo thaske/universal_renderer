@@ -3,7 +3,12 @@ export {
   createHealthHandler,
   createSSRHandler,
   createStreamHandler,
-  type SSRHandlerOptions,
-  type StreamHandlerOptions,
 } from "./handlers";
 export { createServer, createServer as default } from "./server";
+export type {
+  BaseHandlerOptions,
+  RenderOutput,
+  ServerOptions,
+  SSRHandlerOptions,
+  StreamHandlerOptions,
+} from "./types";
