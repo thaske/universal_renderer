@@ -2,16 +2,19 @@
 
 SSR micro-server that pairs with the `universal_renderer` Ruby gem.
 
-• **Bun-only** – requires Bun ≥ 1.2.
+• **Express-based** – lightweight and familiar Node.js server.
 • **Framework-agnostic** – just start a server and hand it JSX/HTML.
+• **Simple API** – minimal configuration, maximum flexibility.
 
 ## Installation
 
 ```bash
-bun add universal-renderer
+npm install universal-renderer
 ```
 
 ## Example
+
+### Basic Setup
 
 ```ts
 // ssr.ts
@@ -19,10 +22,54 @@ import { createServer } from "universal-renderer";
 import { renderToString } from "react-dom/server.node";
 import App from "./App";
 
-await createServer({
+const app = await createServer({
   port: 3001,
-  setup: (await import("./setup")).default,
-  render: ({ app }) => ({ body: renderToString(app) }),
+  setup: async (url, props) => {
+    // Set up your app context - routing, state, etc.
+    return {
+      jsx: <App {...props} />,
+      url,
+      props
+    };
+  },
+  render: async (context) => {
+    // Render your React app to HTML
+    const html = renderToString(context.jsx);
+
+    return {
+      head: '<meta name="description" content="SSR App">',
+      body: html,
+      bodyAttrs: 'class="ssr-rendered"'
+    };
+  },
+  cleanup: (context) => {
+    // Clean up any resources if needed
+    console.log(`Rendered ${context.url}`);
+  }
+});
+
+app.listen(3001, () => {
+  console.log("SSR server running on http://localhost:3001");
+});
+```
+
+### With Streaming (React 18+)
+
+```ts
+import { createServer } from "universal-renderer";
+import { renderToPipeableStream } from "react-dom/server.node";
+
+const app = await createServer({
+  port: 3001,
+  setup: async (url, props) => ({ url, props }),
+  render: async (context) => ({ body: "fallback" }), // Required but not used for streaming
+  streamCallbacks: {
+    node: (context) => context.app,
+    head: async (context) => {
+      // Generate dynamic head content
+      return `<meta name="description" content="Page: ${context.url}">`;
+    },
+  },
 });
 ```
 
@@ -30,8 +77,9 @@ Point the gem at `http://localhost:3001` and you're done.
 
 ## API
 
-`createServer(options)` spins up a Bun router.
-Each request arrives as `{ url, props }` JSON and must respond with:
+### `createServer(options)`
+
+Creates an Express application configured for SSR. Each request arrives as `{ url, props }` JSON and must respond with:
 
 ```ts
 export type RenderOutput = {
@@ -41,12 +89,38 @@ export type RenderOutput = {
 };
 ```
 
-`options`:
+### SSR Markers
 
-- `setup(url, props)` → `{ jsx, ...ctx }` &mdash; prepare the app.
-- `render({ app, ...ctx })` → `RenderOutput` &mdash; stringify markup.
-- `cleanup(ctx)` (optional) &mdash; dispose per-request resources.
+The library exports marker constants for template placeholders:
 
-Need streaming or Vite middleware? Check `src/index.ts`.
+```ts
+import { SSR_MARKERS } from "universal-renderer";
+
+// Available markers:
+SSR_MARKERS.HEAD; // "<!-- SSR_HEAD -->"
+SSR_MARKERS.BODY; // "<!-- SSR_BODY -->"
+```
+
+These markers are used by the Rails gem to inject SSR content into your templates.
+
+### Options
+
+- `setup(url, props)` → `context` &mdash; prepare your app context.
+- `render(context)` → `RenderOutput` &mdash; stringify markup.
+- `cleanup(context)` (optional) &mdash; dispose per-request resources.
+- `streamCallbacks` (optional) &mdash; for streaming SSR support.
+- `middleware` (optional) &mdash; Express middleware for static assets, etc.
+
+### Streaming (Optional)
+
+For streaming SSR, provide `streamCallbacks`:
+
+```ts
+streamCallbacks: {
+  node: (context) => <YourReactApp />,
+  head?: (context) => "<meta name='description' content='...' />",
+  transform?: (context) => someTransformStream
+}
+```
 
 For a full Rails + React walk-through, see the root repo README.
