@@ -74,8 +74,8 @@ export function createStreamHandler<TContext extends Record<string, any>>(
       }
 
       const { pipe } = renderToPipeableStream(reactNode, {
-        async onAllReady() {
-          res.setHeader("Content-Type", "text/html; charset=utf-8");
+        async onShellReady() {
+          res.setHeader("content-type", "text/html");
 
           const [head, tail] = template.split(SSR_MARKERS.BODY);
 
