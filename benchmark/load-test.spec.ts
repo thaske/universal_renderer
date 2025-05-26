@@ -56,7 +56,7 @@ async function launchServer(variant: ServerVariant): Promise<ChildProcess> {
     serverProcess.stderr?.on("data", (data) => {
       const errorOutput = data.toString();
       stderrOutput += errorOutput;
-      console.error(`Server ${variant.server} stderr: ${errorOutput}`);
+      // console.error(`Server ${variant.server} stderr: ${errorOutput}`);
     });
 
     serverProcess.on("error", (err) => {
