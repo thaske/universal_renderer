@@ -8,7 +8,7 @@ import {
 } from "./handlers";
 import type { ExpressServerOptions } from "./types";
 
-export type { RenderOutput } from "../core/types";
+export type { RenderOutput } from "../types";
 export type { ExpressServerOptions };
 
 /**

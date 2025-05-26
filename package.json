@@ -1,4 +1,9 @@
 {
+  "scripts": {
+    "benchmark": "playwright test benchmark/load-test.spec.ts",
+    "analyze": "bun run benchmark/analyze-results.ts",
+    "serve": "bunx serve"
+  },
   "dependencies": {
     "@prettier/plugin-ruby": "^4.0.4",
     "prettier": "^3.5.3"

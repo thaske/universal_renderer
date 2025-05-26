@@ -1,4 +1,4 @@
-import type { ResponseUtils } from "../types";
+import type { ResponseUtils } from "../../types";
 
 /**
  * Creates a framework-agnostic error handler.
@@ -9,7 +9,7 @@ import type { ResponseUtils } from "../types";
  *
  * @example
  * ```typescript
- * import { createErrorHandler } from 'universal-renderer/core';
+ * import { createErrorHandler } from 'universal-renderer/bun';
  *
  * const errorHandler = createErrorHandler();
  * // Use with any framework to handle errors

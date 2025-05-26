@@ -1,4 +1,4 @@
-export { SSR_MARKERS } from "../core/constants";
+export { SSR_MARKERS } from "../constants";
 export {
   createErrorHandler,
   createHealthHandler,
@@ -8,8 +8,8 @@ export {
 export { createServer, createServer as default } from "./server";
 export type {
   HonoBaseHandlerOptions,
-  HonoSSRHandlerOptions,
   HonoServerOptions,
+  HonoSSRHandlerOptions,
   HonoStreamHandlerOptions,
 } from "./types";
 
@@ -19,4 +19,4 @@ export type {
   RenderOutput,
   SSRHandlerOptions,
   StreamHandlerOptions,
-} from "../core/types";
+} from "../types";

@@ -1,28 +1,23 @@
-import type {
-  ErrorRequestHandler,
-  NextFunction,
-  Request,
-  Response,
-} from "express";
+import type { Response } from "express";
 
 /**
- * Creates an error handler for Express servers.
+ * Creates a framework-agnostic error handler.
  *
  * Returns a JSON response with the error message and stack trace.
  *
- * @returns Express error handler for errors
+ * @returns Framework-agnostic error handler function
  *
  * @example
  * ```typescript
- * import express from 'express';
  * import { createErrorHandler } from 'universal-renderer/express';
  *
- * const app = express();
- * app.use(createErrorHandler());
+ * const errorHandler = createErrorHandler();
+ * // Use with any framework to handle errors
  * ```
  */
-export function createErrorHandler(): ErrorRequestHandler {
-  return (err: Error, req: Request, res: Response, next: NextFunction) => {
+export function createErrorHandler() {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (err: Error, res: Response) => {
     console.error("[SSR] Unhandled error:", err);
     const isDev = process.env.NODE_ENV !== "production";
     res.status(500).json({

@@ -1,29 +1,30 @@
-import type { ErrorHandler } from "hono";
+import type { Context } from "hono";
 
 /**
- * Creates an error handler for Hono servers.
+ * Creates a framework-agnostic error handler.
  *
  * Returns a JSON response with the error message and stack trace.
  *
- * @returns Hono error handler for errors
+ * @returns Framework-agnostic error handler function
  *
  * @example
  * ```typescript
- * import { Hono } from 'hono';
  * import { createErrorHandler } from 'universal-renderer/hono';
  *
- * const app = new Hono();
- * app.onError(createErrorHandler());
+ * const errorHandler = createErrorHandler();
+ * // Use with any framework to handle errors
  * ```
  */
-export function createErrorHandler(): ErrorHandler {
-  return (err, c) => {
+export function createErrorHandler() {
+  return (err: Error, c: Context) => {
     console.error("[SSR] Unhandled error:", err);
     const isDev = process.env.NODE_ENV !== "production";
-    c.status(500);
-    return c.json({
-      error: isDev ? err.message : "Internal Server Error",
-      ...(isDev && { stack: err.stack }),
-    });
+    return c.json(
+      {
+        error: isDev ? err.message : "Internal Server Error",
+        ...(isDev && { stack: err.stack }),
+      },
+      500,
+    );
   };
 }

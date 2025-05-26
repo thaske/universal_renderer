@@ -20,7 +20,7 @@ interface BenchmarkMetrics {
 interface ServerVariant {
   ssr: boolean;
   stream: boolean;
-  server: "express" | "hono";
+  server: "express" | "hono" | "bun" | "fastify";
   port: number;
 }
 
@@ -241,6 +241,12 @@ test.describe("Page Load Benchmark", () => {
     { ssr: true, stream: false, server: "hono" },
     { ssr: true, stream: true, server: "hono" },
     { ssr: false, stream: false, server: "hono" },
+    { ssr: true, stream: false, server: "bun" },
+    { ssr: true, stream: true, server: "bun" },
+    { ssr: false, stream: false, server: "bun" },
+    { ssr: true, stream: false, server: "fastify" },
+    { ssr: true, stream: true, server: "fastify" },
+    { ssr: false, stream: false, server: "fastify" },
   ];
 
   for (const baseVariant of variants) {

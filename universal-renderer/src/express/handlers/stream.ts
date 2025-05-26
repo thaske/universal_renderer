@@ -2,7 +2,7 @@ import type { RequestHandler } from "express";
 import { PassThrough } from "node:stream";
 import { renderToPipeableStream } from "react-dom/server.node";
 
-import { SSR_MARKERS } from "../../core/constants";
+import { SSR_MARKERS } from "@/constants";
 import type { ExpressStreamHandlerOptions } from "../types";
 
 /**

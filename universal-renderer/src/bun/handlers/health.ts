@@ -1,4 +1,4 @@
-import type { Request, Response } from "express";
+import type { RequestInfo, ResponseUtils } from "../../types";
 
 /**
  * Creates a framework-agnostic health check handler.
@@ -10,14 +10,14 @@ import type { Request, Response } from "express";
  *
  * @example
  * ```typescript
- * import { createHealthHandler } from 'universal-renderer/express';
+ * import { createHealthHandler } from 'universal-renderer/bun';
  *
  * const healthHandler = createHealthHandler();
  * // Use with any framework (Express, Hono, etc.)
  * ```
  */
 export function createHealthHandler() {
-  return (req: Request, res: Response) => {
+  return (req: RequestInfo, res: ResponseUtils) => {
     res.json({
       status: "OK",
       timestamp: new Date().toISOString(),

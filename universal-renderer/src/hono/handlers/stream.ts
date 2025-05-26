@@ -1,8 +1,9 @@
 import type { Handler } from "hono";
 import { PassThrough } from "node:stream";
 import { renderToPipeableStream } from "react-dom/server.node";
+import { Writable } from "stream";
 
-import { SSR_MARKERS } from "../../core/constants";
+import { SSR_MARKERS } from "@/constants";
 import type { HonoStreamHandlerOptions } from "../types";
 
 /**
@@ -14,23 +15,6 @@ import type { HonoStreamHandlerOptions } from "../types";
  * @template TContext - The type of context object used throughout the rendering pipeline
  * @param options - Configuration options for streaming SSR
  * @returns Hono route handler for streaming SSR requests
- *
- * @example
- * ```typescript
- * import { Hono } from 'hono';
- * import { createStreamHandler } from 'universal-renderer/hono';
- *
- * const app = new Hono();
- *
- * app.post('/stream', createStreamHandler({
- *   setup: async (url, props) => ({ url, props, store: createStore() }),
- *   streamCallbacks: {
- *     node: (context) => context.app,
- *     head: async (context) => `<title>${context.title}</title>`
- *   },
- *   cleanup: (context) => context.store?.dispose()
- * }));
- * ```
  */
 export function createStreamHandler<TContext extends Record<string, any>>(
   options: HonoStreamHandlerOptions<TContext>,
@@ -70,76 +54,103 @@ export function createStreamHandler<TContext extends Record<string, any>>(
       } else if (context && "jsx" in context) {
         reactNode = context.jsx;
       } else {
-        throw new Error("No app callback provided");
+        throw new Error("No app callback or context.app/context.jsx provided");
       }
 
-      return new Response(
-        new ReadableStream({
-          start(controller) {
-            const { pipe } = renderToPipeableStream(reactNode, {
-              async onShellReady() {
-                const [head, tail] = template.split(SSR_MARKERS.BODY);
+      const stream = new PassThrough();
+      const encoder = new TextEncoder();
 
-                const finalHead = await streamCallbacks.head?.(context!);
-                if (finalHead) {
-                  controller.enqueue(
-                    new TextEncoder().encode(
-                      head.replace(SSR_MARKERS.HEAD, finalHead),
-                    ),
-                  );
-                } else {
-                  controller.enqueue(new TextEncoder().encode(head));
-                }
+      const { pipe, abort } = renderToPipeableStream(reactNode, {
+        onShellReady: async () => {
+          const [head, tail] = template.split(SSR_MARKERS.BODY);
+          let finalHead = head;
+          if (streamCallbacks.head) {
+            const headContent = await streamCallbacks.head(context!);
+            if (headContent) {
+              finalHead = head.replace(SSR_MARKERS.HEAD, headContent);
+            }
+          }
+          // Immediately send the head
+          controller.enqueue(encoder.encode(finalHead));
 
-                const stream = new PassThrough();
-                const transform = streamCallbacks.transform?.(context!);
-
-                if (transform) {
-                  stream.pipe(transform);
-                  transform.on("data", (chunk) => {
-                    controller.enqueue(new TextEncoder().encode(chunk));
-                  });
-                  transform.on("end", () => {
-                    controller.enqueue(new TextEncoder().encode(tail));
-                    controller.close();
-                    if (context && options.cleanup) options.cleanup(context);
-                  });
-                } else {
-                  stream.on("data", (chunk) => {
-                    controller.enqueue(new TextEncoder().encode(chunk));
-                  });
-                  stream.on("end", () => {
-                    controller.enqueue(new TextEncoder().encode(tail));
-                    controller.close();
-                    if (context && options.cleanup) options.cleanup(context);
-                  });
-                }
-
-                pipe(stream);
-              },
-              onShellError(error) {
-                console.error("[SSR] Shell error");
-                console.error(error);
-                controller.error(error);
-                if (context && options.cleanup) options.cleanup(context);
-              },
-              onError(error) {
-                console.error("[SSR] Stream error");
-                console.error(error);
-                // Don't call controller.error here as the stream might still be recoverable
-              },
-            });
-          },
-        }),
-        {
-          headers: {
-            "content-type": "text/html",
-          },
+          const transform = streamCallbacks.transform?.(context!);
+          if (transform) {
+            stream.pipe(transform).pipe(
+              new Writable({
+                write(chunk, _encoding, callback) {
+                  controller.enqueue(encoder.encode(chunk.toString()));
+                  callback();
+                },
+                final(callback) {
+                  controller.enqueue(encoder.encode(tail));
+                  controller.close();
+                  if (context && options.cleanup) options.cleanup(context!);
+                  callback();
+                },
+              }),
+            );
+          } else {
+            stream.pipe(
+              new Writable({
+                write(chunk, _encoding, callback) {
+                  controller.enqueue(encoder.encode(chunk.toString()));
+                  callback();
+                },
+                final(callback) {
+                  controller.enqueue(encoder.encode(tail));
+                  controller.close();
+                  if (context && options.cleanup) options.cleanup(context!);
+                  callback();
+                },
+              }),
+            );
+          }
+          pipe(stream);
         },
-      );
+        onShellError: (error: any) => {
+          console.error("[SSR] Shell error");
+          console.error(error);
+          controller.error(error);
+          if (context && options.cleanup) options.cleanup(context!);
+        },
+        onError: (error: any) => {
+          console.error("[SSR] Stream error");
+          console.error(error);
+          // Don't call controller.error here as the stream might still be recoverable
+          // However, we should ensure cleanup still happens if the stream is aborted.
+          if (context && options.cleanup) {
+            // Check if the stream was aborted, then cleanup.
+            // This is a simplified check; in a real-world scenario, you might need a more robust way
+            // to determine if the error is fatal and requires cleanup.
+            if (error && error.message && error.message.includes("aborted")) {
+              options.cleanup(context);
+            }
+          }
+        },
+      });
+
+      let controller: ReadableStreamDefaultController<Uint8Array>;
+      const readableStream = new ReadableStream({
+        start(ctrl) {
+          controller = ctrl;
+        },
+        cancel() {
+          abort();
+          if (context && options.cleanup) options.cleanup(context!);
+        },
+      });
+
+      return new Response(readableStream, {
+        headers: {
+          "Content-Type": "text/html",
+          "X-Content-Type-Options": "nosniff",
+          "Transfer-Encoding": "chunked",
+        },
+      });
     } catch (error) {
       console.error("[SSR] Stream setup error");
       console.error(error);
+      if (context && options.cleanup) options.cleanup(context);
       c.status(500);
       return c.text("Internal Server Error");
     }

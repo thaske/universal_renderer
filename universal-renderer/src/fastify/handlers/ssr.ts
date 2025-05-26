@@ -1,24 +1,23 @@
-import type { Request, Response } from "express";
+import type { FastifyReply, FastifyRequest } from "fastify";
 import type { RenderOutput, SSRHandlerOptions } from "../../types";
 
 /**
- * Creates a Server-Side Rendering route handler for Express.
+ * Creates a Server-Side Rendering route handler for Fastify.
  *
  * This handler expects POST requests with `{ url: string, props?: any }` and
  * returns JSON responses with `{ head?: string, body: string, bodyAttrs?: string }`.
  *
  * @template TContext - The type of context object used throughout the rendering pipeline
  * @param options - Configuration options for SSR
- * @returns Express route handler for SSR requests
+ * @returns Fastify route handler for SSR requests
  *
  * @example
- * ```typescript
- * import express from 'express';
- * import { createSSRHandler } from 'universal-renderer/express';
+ * \`\`\`typescript
+ * import fastify from 'fastify';
+ * import { createSSRHandler } from 'universal-renderer/fastify';
  * import { renderToString } from 'react-dom/server';
  *
- * const app = express();
- * app.use(express.json()); // Ensure body-parser is used for JSON
+ * const app = fastify();
  *
  * app.post('/render', createSSRHandler({
  *   setup: async (url, props) => ({ url, props, store: createStore() }),
@@ -27,7 +26,7 @@ import type { RenderOutput, SSRHandlerOptions } from "../../types";
  *   }),
  *   cleanup: (context) => context.store?.dispose()
  * }));
- * ```
+ * \`\`\`
  */
 export function createSSRHandler<TContext extends Record<string, any>>(
   options: SSRHandlerOptions<TContext>,
@@ -39,23 +38,37 @@ export function createSSRHandler<TContext extends Record<string, any>>(
     throw new Error("setup callback is required");
   }
 
-  return async (req: Request, res: Response) => {
+  return async (request: FastifyRequest, reply: FastifyReply) => {
     let context: TContext | undefined;
 
     try {
-      const { url, props = {} } = req.body;
+      // Fastify already parses the body, so we can access it directly.
+      // Ensure the body is an object and contains the url property.
+      if (
+        typeof request.body !== "object" ||
+        request.body === null ||
+        !("url" in request.body)
+      ) {
+        reply
+          .status(400)
+          .send({ error: "URL string is required in request body" });
+        return;
+      }
 
-      if (!url || typeof url !== "string") {
-        return res.status(400).json({ error: "URL string is required" });
+      const { url, props = {} } = request.body as { url: string; props?: any };
+
+      if (typeof url !== "string") {
+        reply.status(400).send({ error: "URL string is required" });
+        return;
       }
 
       context = await options.setup(url, props);
       const result: RenderOutput = await options.render(context);
 
-      res.json(result);
+      reply.send(result);
     } catch (error) {
-      console.error("[SSR] Express Render error:", error);
-      res.status(500).json({ error: "Internal Server Error" });
+      console.error("[SSR] Fastify Render error:", error);
+      reply.status(500).send({ error: "Internal Server Error" });
     } finally {
       if (context && options.cleanup) {
         await options.cleanup(context);

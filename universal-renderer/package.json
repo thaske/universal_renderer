@@ -11,8 +11,8 @@
   },
   "bugs": "https://github.com/thaske/universal_renderer/issues",
   "scripts": {
-    "build": "tsdown src/index.ts src/express/index.ts src/hono/index.ts --format esm,cjs --dts",
-    "watch": "tsdown src/index.ts src/express/index.ts src/hono/index.ts --format esm,cjs --dts --watch",
+    "build": "tsdown",
+    "watch": "tsdown --watch",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"
@@ -35,6 +35,16 @@
       "import": "./dist/hono/index.mjs",
       "require": "./dist/hono/index.js",
       "types": "./dist/hono/index.d.mts"
+    },
+    "./bun": {
+      "import": "./dist/bun/index.mjs",
+      "require": "./dist/bun/index.js",
+      "types": "./dist/bun/index.d.mts"
+    },
+    "./fastify": {
+      "import": "./dist/fastify/index.mjs",
+      "require": "./dist/fastify/index.js",
+      "types": "./dist/fastify/index.d.mts"
     }
   },
   "files": [
@@ -50,6 +60,7 @@
     "hono": "^4.0.0"
   },
   "devDependencies": {
+    "@types/bun": "^1.1.6",
     "@testing-library/jest-dom": "^6.4.0",
     "@testing-library/react": "^15.0.0",
     "@types/express": "^4.17.0",
@@ -66,6 +77,7 @@
   "keywords": [
     "express",
     "hono",
+    "bun",
     "react",
     "server-side-rendering",
     "ssr",
@@ -73,5 +85,8 @@
   ],
   "publishConfig": {
     "access": "public"
+  },
+  "dependencies": {
+    "fastify": "^5.3.3"
   }
 }

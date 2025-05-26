@@ -13,6 +13,7 @@ npm install universal-renderer
 # Also install your preferred web framework:
 npm install express   # For Express.js
 npm install hono      # For Hono
+npm install bun       # For Bun (usually Bun is the runtime, ensure @types/bun for TS)
 ```
 
 ## Examples
@@ -89,6 +90,55 @@ const app = await createServer({
 // Bun.serve({ fetch: app.fetch }); // for Bun
 ```
 
+### Bun Setup
+
+```ts
+// ssr-bun.ts
+import { createServer } from "universal-renderer/bun";
+import { renderToString } from "react-dom/server"; // Or your preferred renderer
+import App from "./App"; // Your main application component
+
+async function startServer() {
+  const serverConfig = await createServer({
+    port: 3000, // Or your desired port
+    setup: async (url, props) => {
+      // Set up your app context - routing, state, etc.
+      // This context is passed to render and cleanup
+      return {
+        jsx: <App {...props} url={url} />, // Example: pass url and props to your App
+        url,
+        props,
+        // Example: initialize a store or other request-specific resources
+        // store: createMyStore(),
+      };
+    },
+    render: async (context) => {
+      // Render your React (or other framework) app to HTML
+      const html = renderToString(context.jsx);
+
+      return {
+        // Optional: HTML content for the <head>
+        head: '<meta name="description" content="My Bun SSR App">',
+        // Required: The main rendered HTML body content
+        body: html,
+        // Optional: Attributes for the <body> tag
+        bodyAttrs: 'class="bun-ssr-rendered"'
+      };
+    },
+    cleanup: (context) => {
+      // Clean up any resources if needed (e.g., close store connections)
+      console.log(`Rendered ${context.url} with Bun`);
+      // context.store?.dispose();
+    }
+  });
+
+  Bun.serve(serverConfig);
+  console.log(`Bun SSR server running on http://localhost:${serverConfig.port}`);
+}
+
+startServer();
+```
+
 ### With Streaming (React 18+)
 
 ```ts
@@ -115,11 +165,13 @@ Universal Renderer supports multiple web frameworks through subpath imports:
 
 - **Express.js**: `import { createServer } from "universal-renderer/express"`
 - **Hono**: `import { createServer } from "universal-renderer/hono"`
+- **Bun**: `import { createServer } from "universal-renderer/bun"`
 
-Both frameworks provide the same API surface, allowing you to switch between them without changing your SSR logic. Choose based on your deployment target:
+All frameworks provide a similar API surface, allowing you to switch between them with minimal changes to your SSR logic. Choose based on your deployment target:
 
 - **Express.js**: Traditional Node.js environments
-- **Hono**: Edge environments (Cloudflare Workers, Bun, Deno)
+- **Hono**: Edge environments (Cloudflare Workers, Deno, Bun with Hono adapter)
+- **Bun**: Native Bun environments using `Bun.serve`
 
 ## API
 

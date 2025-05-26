@@ -3,7 +3,7 @@ import type {
   BaseHandlerOptions,
   SSRHandlerOptions as CoreSSRHandlerOptions,
   StreamHandlerOptions as CoreStreamHandlerOptions,
-} from "../core/types";
+} from "../types";
 
 /**
  * Hono-specific base configuration for handlers.

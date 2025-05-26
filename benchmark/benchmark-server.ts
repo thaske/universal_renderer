@@ -1,6 +1,10 @@
 #!/usr/bin/env bun
+import type { BunServerOptions } from "universal-renderer/bun";
+import { createServer as createBunServer } from "universal-renderer/bun";
 import type { ExpressServerOptions } from "universal-renderer/express";
 import { createServer as createExpressServer } from "universal-renderer/express";
+import type { FastifyServerOptions } from "universal-renderer/fastify";
+import { createServer as createFastifyServer } from "universal-renderer/fastify";
 import type { HonoServerOptions } from "universal-renderer/hono";
 import { createServer as createHonoServer } from "universal-renderer/hono";
 import yargs from "yargs";
@@ -19,7 +23,7 @@ const argv = yargs(hideBin(process.argv))
     description: "Enable Streaming",
   })
   .option("server", {
-    choices: ["express", "hono"],
+    choices: ["express", "hono", "bun", "fastify"],
     default: "express",
     description: "Server implementation to use",
   })
@@ -87,6 +91,23 @@ async function main() {
     console.log(`Hono server running on http://localhost:${port}`);
     // @ts-ignore Bun types might not be fully recognized here but this is standard Hono w/ Bun
     Bun.serve({ fetch: app.fetch, port });
+  } else if (serverImpl === "bun") {
+    const options: BunServerOptions<any> = {
+      ...commonOptions,
+      ...(stream && { streamCallbacks }),
+      port,
+    };
+    const server = await createBunServer(options);
+    Bun.serve(server);
+    console.log(`Bun server running on http://localhost:${port}`);
+  } else if (serverImpl === "fastify") {
+    const options: FastifyServerOptions<any> = {
+      ...commonOptions,
+      ...(stream && { streamCallbacks }),
+    };
+    const app = await createFastifyServer(options);
+    await app.listen({ port });
+    console.log(`Fastify server running on http://localhost:${port}`);
   }
 }
 

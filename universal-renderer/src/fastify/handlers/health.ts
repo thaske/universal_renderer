@@ -1,7 +1,7 @@
-import type { RequestInfo, ResponseUtils } from "../types";
+import type { FastifyReply, FastifyRequest } from "fastify";
 
 /**
- * Creates a framework-agnostic health check handler.
+ * Creates a framework-agnostic health check handler for Fastify.
  *
  * Returns a simple JSON response indicating the server is running.
  * Useful for load balancers, monitoring systems, and deployment health checks.
@@ -9,16 +9,16 @@ import type { RequestInfo, ResponseUtils } from "../types";
  * @returns Framework-agnostic handler for health checks
  *
  * @example
- * ```typescript
- * import { createHealthHandler } from 'universal-renderer/core';
+ * \`\`\`typescript
+ * import { createHealthHandler } from 'universal-renderer/fastify';
  *
  * const healthHandler = createHealthHandler();
- * // Use with any framework (Express, Hono, etc.)
- * ```
+ * // Use with Fastify
+ * \`\`\`
  */
 export function createHealthHandler() {
-  return (req: RequestInfo, res: ResponseUtils) => {
-    res.json({
+  return async (request: FastifyRequest, reply: FastifyReply) => {
+    reply.send({
       status: "OK",
       timestamp: new Date().toISOString(),
     });
