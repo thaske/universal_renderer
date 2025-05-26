@@ -1,8 +1,6 @@
-import type { ReactNode } from "react";
-// @ts-ignore - Bun uses edge runtime, type declarations might be missing for server.edge
-// import { renderToReadableStream } from "react-dom/server.edge"; // Switch to node version
 import { PassThrough, Writable } from "node:stream";
-import { renderToPipeableStream } from "react-dom/server.node"; // Use node version for onShellReady
+import type { ReactNode } from "react";
+import { renderToPipeableStream } from "react-dom/server.node";
 
 import { SSR_MARKERS } from "@/constants";
 import type {
@@ -33,7 +31,6 @@ export function createStreamHandler<TContext extends Record<string, any>>(
   const errorHandler: BunErrorHandler =
     customErrorHandler ||
     ((error: Error, _request: Request) => {
-      // Default error handling logic adapted for Bun: returns a Response
       console.error("[SSR] Unhandled stream error:", error);
       const isDev = process.env.NODE_ENV !== "production";
       return new Response(
@@ -106,7 +103,6 @@ export function createStreamHandler<TContext extends Record<string, any>>(
         );
       }
 
-      // Use a Promise to handle the asynchronous nature of renderToPipeableStream
       return new Promise<Response>((resolve, reject) => {
         try {
           let controller: ReadableStreamDefaultController<Uint8Array>;
@@ -116,12 +112,9 @@ export function createStreamHandler<TContext extends Record<string, any>>(
             },
             cancel(reason) {
               console.warn("[SSR] Bun web ReadableStream cancelled:", reason);
-              // If the stream is cancelled, we might need to abort React's stream
-              // This depends on whether abort() is already called in onShellError or onError
             },
           });
 
-          // Bridge Node.js Writable to Web ReadableStream controller
           const nodeWritableBridge = new Writable({
             write(chunk, encoding, callback) {
               if (controller) {
@@ -131,7 +124,6 @@ export function createStreamHandler<TContext extends Record<string, any>>(
                   } else if (chunk instanceof Uint8Array) {
                     controller.enqueue(chunk);
                   } else {
-                    // Handle other chunk types if necessary, or throw error
                     console.warn(
                       "[SSR] Bun unhandled chunk type for stream bridge:",
                       typeof chunk,
@@ -173,13 +165,12 @@ export function createStreamHandler<TContext extends Record<string, any>>(
           const { pipe, abort } = renderToPipeableStream(reactNode, {
             onShellReady: async () => {
               headersSent = true;
-              // Immediately resolve with the response, headers will be sent, then stream will flow.
               resolve(
                 new Response(webReadableStream, {
                   status: 200,
                   headers: {
                     "Content-Type": "text/html; charset=utf-8",
-                    "Transfer-Encoding": "chunked", // Bun supports this
+                    "Transfer-Encoding": "chunked",
                   },
                 }),
               );
@@ -191,16 +182,12 @@ export function createStreamHandler<TContext extends Record<string, any>>(
                 ? await streamCallbacks.head(context!)
                 : "";
 
-              // Write the initial part of the template to our bridge stream
               nodeWritableBridge.write(
                 templateStart.replace(SSR_MARKERS.HEAD, headContent),
               );
 
               const transformStream = streamCallbacks.transform?.(context!);
               if (transformStream) {
-                // Create an intermediate PassThrough to connect React's pipe to the transform stream,
-                // and then the transform stream to our nodeWritableBridge.
-                // React's pipe() method writes to a Writable.
                 const intermediateRelay = new PassThrough();
                 intermediateRelay
                   .pipe(transformStream)
@@ -209,65 +196,31 @@ export function createStreamHandler<TContext extends Record<string, any>>(
               } else {
                 pipe(nodeWritableBridge);
               }
-
-              // Handling the end of the stream / templateEnd is crucial.
-              // When the React stream piped to nodeWritableBridge ends, nodeWritableBridge.final() is called,
-              // which closes the webReadableStream controller.
-              // If templateEnd needs to be written, it must happen *before* controller.close().
-              // This typically means it should be part of what's piped from React,
-              // or if React's output doesn't include it, we need a way to append it.
-              // For now, we assume React's stream contains everything up to where templateEnd would be, OR
-              // templateEnd is not critical for the initial render/hydration strategy.
-              // If templateEnd MUST be appended, we'd need a more complex setup,
-              // perhaps by not directly piping to res or by using another PassThrough
-              // after React's output but before nodeWritableBridge.end() is called.
-
-              // Cleanup is associated with the original request lifecycle now,
-              // rather than passthrough stream 'end'.
             },
             onShellError: async (err: any) => {
               console.error("[SSR] Bun Shell Error:", err);
               if (!headersSent) {
-                // Headers not sent, try to send an error response
-                // Abort React's stream first
                 abort();
-                // We'll try to resolve the main promise with an error response.
-                // The webReadableStream might not have been used yet.
                 resolve(
                   errorHandler(new Error("Shell rendering error"), request),
                 );
               } else {
-                // Headers sent, too late for a new response. Abort the stream.
-                // The client will likely see an incomplete page.
                 nodeWritableBridge.destroy(
                   err instanceof Error ? err : new Error(String(err)),
                 );
-                abort(); // Ensure React stream is aborted
+                abort();
               }
               if (cleanup && context) {
-                await cleanup(context); // Perform cleanup regardless of header status
+                await cleanup(context);
               }
             },
             onError: (error: unknown, errorInfo: unknown) => {
               console.error("[SSR] Bun Stream Error:", error, errorInfo);
-              // This error is often a non-fatal error during streaming.
-              // It might occur after the shell is ready and headers are sent.
-              // We could try to signal an error on the stream if it's still active.
               if (!nodeWritableBridge.destroyed && controller) {
-                // controller.error(error instanceof Error ? error : new Error(String(error)));
-                // Calling controller.error() might be too abrupt if the client can handle partial content.
-                // For now, primarily log. If the stream needs to be forcibly closed, consider abort() or nodeWritableBridge.destroy().
               }
-              // Cleanup might be called here IF the error is deemed fatal for this request context
-              // if (cleanup && context && !nodeWritableBridge.writableEnded) {
-              // await cleanup(context);
-              // }
             },
           });
 
-          // Listen for the finish event on the nodeWritableBridge to perform cleanup
-          // This ensures cleanup happens after all data from React has been processed
-          // and the stream to the client has been closed by controller.close() in bridge.final().
           nodeWritableBridge.on("finish", async () => {
             if (cleanup && context) {
               try {
@@ -283,35 +236,25 @@ export function createStreamHandler<TContext extends Record<string, any>>(
 
           nodeWritableBridge.on("error", async (err) => {
             console.error("[SSR] Bun nodeWritableBridge error:", err);
-            // This could be an error during writing to the bridge or from React's pipe.
-            // If headers haven't been sent, we might still be able to send an error response.
             if (!headersSent) {
-              abort(); // Abort React stream
+              abort();
               resolve(errorHandler(err, request));
             } else {
-              // Headers sent, stream might be broken. Ensure React stream is aborted.
               if (!nodeWritableBridge.destroyed) {
                 nodeWritableBridge.destroy(err);
               }
               abort();
             }
-            // Perform cleanup if not already done
-            // Be careful with multiple cleanup calls, ideally it's idempotent or guarded.
             if (cleanup && context) {
-              // Consider a flag to prevent multiple cleanups if onShellError also calls it.
-              // For now, let's assume cleanup can handle being called again or is quick.
               await cleanup(context);
             }
           });
         } catch (e: any) {
-          // Catch synchronous errors during setup of renderToPipeableStream
           const errorToHandle = e instanceof Error ? e : new Error(String(e));
-          // Resolve the main promise with the error Response
           resolve(errorHandler(errorToHandle, request));
         }
       });
     } catch (err: any) {
-      // Catch errors from request body parsing or initial setup
       if (cleanup && context) {
         try {
           await cleanup(context);

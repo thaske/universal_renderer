@@ -1,4 +1,4 @@
-import { Server } from "bun";
+import Bun, { type Server } from "bun";
 import { afterAll, describe, expect, it } from "vitest";
 import { createServer } from "./index"; // Adjust if exports are different
 import type { BunServerOptions } from "./types";
@@ -16,7 +16,7 @@ describe("Bun createServer", () => {
   });
 
   it("should throw an error when no render callback is provided", async () => {
-    await expect(createServer({})).rejects.toThrow(
+    await expect(createServer({} as any)).rejects.toThrow(
       "render callback is required",
     );
   });
@@ -42,12 +42,14 @@ describe("Bun createServer", () => {
     // Start the server
     serverInstance = Bun.serve(server);
     expect(serverInstance).toBeDefined();
-    expect(serverInstance.port).toBe(TEST_PORT);
+    if (serverInstance) {
+      expect(serverInstance.port).toBe(TEST_PORT);
+    }
 
     // Test health endpoint
     const healthRes = await fetch(`http://localhost:${TEST_PORT}/health`);
     expect(healthRes.status).toBe(200);
-    const healthJson = await healthRes.json();
+    const healthJson = (await healthRes.json()) as { status: string };
     expect(healthJson.status).toBe("OK");
 
     // Test SSR endpoint
@@ -57,7 +59,7 @@ describe("Bun createServer", () => {
       body: JSON.stringify({ url: "/test", props: { message: "Hello Bun" } }),
     });
     expect(ssrRes.status).toBe(200);
-    const ssrJson = await ssrRes.json();
+    const ssrJson = (await ssrRes.json()) as { head: string; body: string };
     expect(ssrJson.head).toBe("<title>Test Bun context</title>");
     expect(ssrJson.body).toBe("<div>Test Bun SSR</div>");
 
@@ -92,7 +94,9 @@ describe("Bun createServer", () => {
 
     serverInstance = Bun.serve(server); // Reassign for cleanup
     expect(serverInstance).toBeDefined();
-    expect(serverInstance.port).toBe(TEST_PORT + 1);
+    if (serverInstance) {
+      expect(serverInstance.port).toBe(TEST_PORT + 1);
+    }
 
     // Test stream endpoint
     const streamRes = await fetch(`http://localhost:${TEST_PORT + 1}/stream`, {

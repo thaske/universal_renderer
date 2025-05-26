@@ -1,19 +1,11 @@
 import type { ResponseUtils } from "../../types";
 
 /**
- * Creates a framework-agnostic error handler.
+ * Creates an error handler.
  *
  * Returns a JSON response with the error message and stack trace.
  *
- * @returns Framework-agnostic error handler function
- *
- * @example
- * ```typescript
- * import { createErrorHandler } from 'universal-renderer/bun';
- *
- * const errorHandler = createErrorHandler();
- * // Use with any framework to handle errors
- * ```
+ * @returns Error handler function
  */
 export function createErrorHandler() {
   return (err: Error, res: ResponseUtils) => {
