@@ -46,7 +46,7 @@ export async function createWebSocketServer<
   >();
 
   function generateRequestId(): string {
-    return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
   }
 
   function handleMessage(
@@ -281,7 +281,10 @@ export async function createWebSocketServer<
         }
       },
       message(ws, message) {
-        handleMessage(ws, message);
+        handleMessage(
+          ws as ServerWebSocket<WebSocketConnection<TContext>>,
+          message,
+        );
       },
       close(ws, code, message) {
         const connection = ws.data as WebSocketConnection<TContext>;
