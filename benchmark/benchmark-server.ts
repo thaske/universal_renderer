@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import React from "react";
 import type { BunServerOptions } from "universal-renderer/bun";
 import { createServer as createBunServer } from "universal-renderer/bun";
 import type { ExpressServerOptions } from "universal-renderer/express";
@@ -65,9 +66,12 @@ async function main() {
   let streamCallbacks;
   if (stream) {
     streamCallbacks = {
-      // Using a simple string for Node stream for now, actual React component streaming would be more complex
       node: (context: any) =>
-        `<div>Streaming content for ${context.url}</div>` as any,
+        React.createElement(
+          "div",
+          null,
+          `Streaming content for ${context.url}`,
+        ),
       head: async (context: any) =>
         `<meta name="stream-test" content="true" data-url="${context.url}">`,
     };
