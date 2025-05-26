@@ -5,15 +5,15 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     globals: true,
-    setupFiles: ["./test/setup.ts"],
-    include: ["test/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}"],
-    exclude: ["node_modules", "dist", "src"],
+    setupFiles: ["./src/test/setup.ts"],
+    include: ["src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}"],
+    exclude: ["node_modules", "dist"],
     coverage: {
       reporter: ["text", "json", "html"],
       include: ["src/**/*.{js,ts,jsx,tsx}"],
       exclude: [
-        "test/**/*.{test,spec}.{js,ts,jsx,tsx}",
-        "test/**/*",
+        "src/**/*.{test,spec}.{js,ts,jsx,tsx}",
+        "src/test/**/*",
         "src/**/*.d.ts",
       ],
       thresholds: {

@@ -8,7 +8,7 @@ import type {
   WebSocketMessage,
   WebSocketServerOptions,
   WebSocketStreamWriter,
-} from "../../src/ws/websocket-types";
+} from "./websocket-types";
 
 describe("WebSocket Types", () => {
   describe("WebSocketMessage", () => {

@@ -1,12 +1,12 @@
 import express from "express";
 
-import type { ServerOptions } from "@/types";
 import {
   createErrorHandler,
   createHealthHandler,
   createSSRHandler,
   createStreamHandler,
-} from "./handlers";
+} from "@/handlers";
+import type { ServerOptions } from "@/types";
 export type { RenderOutput, ServerOptions } from "@/types";
 
 /**

@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
-
-import { SSR_MARKERS } from "../src/constants";
-import createServer from "../src/express";
+import createServer, { SSR_MARKERS } from "./index";
 
 describe("createServer", () => {
   it("should throw an error when no render callback is provided", async () => {

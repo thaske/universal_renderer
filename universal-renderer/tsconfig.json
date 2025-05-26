@@ -30,13 +30,7 @@
     "isolatedModules": true,
     "noUncheckedIndexedAccess": true
   },
-  "include": [
-    "src/**/*.ts",
-    "test/index.test.ts",
-    "test/ws/websocket-types.test.ts",
-    "test/ws/websocket-server.test.ts",
-    "test/express/server.test.ts"
-  ],
+  "include": ["src/**/*.ts"],
   "exclude": [
     "**/*.test.ts",
     "**/*.test.tsx",
