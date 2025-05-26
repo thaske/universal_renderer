@@ -1,9 +1,10 @@
-import uWS from "uWebSockets.js";
 import type {
   WebSocketConnection,
   WebSocketMessage,
   WebSocketServerOptions,
 } from "./websocket-types";
+
+const uWS = require("uWebSockets.js");
 
 /**
  * WebSocket instance with connection data for uWebSockets
