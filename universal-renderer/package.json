@@ -11,8 +11,8 @@
   },
   "bugs": "https://github.com/thaske/universal_renderer/issues",
   "scripts": {
-    "build": "tsdown src/index.ts --format esm",
-    "watch": "tsdown src/index.ts --format esm --watch",
+    "build": "tsdown src/index.ts src/ws/index.ts src/express/index.ts --format esm",
+    "watch": "tsdown src/index.ts src/ws/index.ts src/express/index.ts --format esm --watch",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"

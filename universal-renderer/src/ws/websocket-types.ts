@@ -1,4 +1,4 @@
-import type { RenderOutput } from "./types";
+import type { RenderOutput } from "../types";
 
 /**
  * WebSocket message structure for communication between Ruby gem and NPM package

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createServer } from "./server";
+import { createServer } from "../../src/express/server";
 
 describe("createServer", () => {
   it("should create an Express application", async () => {

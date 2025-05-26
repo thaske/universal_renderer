@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { WebSocketMessage } from "./websocket-types";
+import type { WebSocketMessage } from "../../src/ws/websocket-types";
 
 // Mock uWebSockets.js
 const mockListenSocket = { id: "mock-listen-socket" };
@@ -29,7 +29,7 @@ vi.mock("uWebSockets.js", () => ({
 }));
 
 // Import after mocking
-const { createWebSocketServer } = await import("./websocket-server");
+const { createWebSocketServer } = await import("../../src/ws/websocket-server");
 
 describe("WebSocket Server (uWebSockets)", () => {
   let server: any;
