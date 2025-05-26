@@ -24,6 +24,11 @@ module UniversalRenderer
       #   (HTTP 2xx). Returns `nil` when the request fails or the SSR service is
       #   unreachable.
       def self.call(url, props)
+        # Use WebSocket client if configured
+        if UniversalRenderer.config.use_websockets
+          return UniversalRenderer::Client::WebSocket.call(url, props)
+        end
+
         ssr_url = UniversalRenderer.config.ssr_url
         return if ssr_url.blank?
 

@@ -21,6 +21,18 @@ module UniversalRenderer
       def self.call(url, props, template, response)
         config = UniversalRenderer.config
 
+        # Use WebSocket client if configured
+        if config.use_websockets
+          return(
+            UniversalRenderer::Client::WebSocket.stream(
+              url,
+              props,
+              template,
+              response
+            )
+          )
+        end
+
         unless Setup.ensure_ssr_server_url_configured?(config)
           Rails.logger.warn(
             "Stream: SSR URL (config.ssr_url) is not configured. Falling back."

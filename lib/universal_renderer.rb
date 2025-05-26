@@ -8,6 +8,7 @@ require "universal_renderer/ssr/response"
 
 require "universal_renderer/client/base"
 require "universal_renderer/client/stream"
+require "universal_renderer/client/websocket"
 
 require "universal_renderer/ssr/helpers"
 require "universal_renderer/ssr/placeholders"
