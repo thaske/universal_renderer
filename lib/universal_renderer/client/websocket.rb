@@ -65,6 +65,9 @@ module UniversalRenderer
           wait_for_connection
           @connected = true
           true
+        rescue ConnectionError
+          # Re-raise connection errors for timeout scenarios
+          raise
         rescue StandardError => e
           Rails.logger.error("WebSocket connection failed: #{e.message}")
           false
@@ -165,6 +168,15 @@ module UniversalRenderer
 
         # Convert HTTP URL to WebSocket URL
         uri = URI.parse(ssr_url)
+
+        # Check if the URI has the required components
+        if uri.host.nil? || uri.scheme.nil?
+          Rails.logger.error(
+            "Invalid SSR URL for WebSocket: missing scheme or host"
+          )
+          return nil
+        end
+
         scheme = uri.scheme == "https" ? "wss" : "ws"
         "#{scheme}://#{uri.host}:#{uri.port}#{uri.path}"
       rescue URI::InvalidURIError => e
