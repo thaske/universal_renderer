@@ -2,7 +2,7 @@
 
 SSR micro-server that pairs with the `universal_renderer` Ruby gem.
 
-• **Express-based** – lightweight and familiar Node.js server.
+• **Multi-framework** – Express.js and Hono support out of the box.
 • **Framework-agnostic** – just start a server and hand it JSX/HTML.
 • **Simple API** – minimal configuration, maximum flexibility.
 
@@ -10,20 +10,22 @@ SSR micro-server that pairs with the `universal_renderer` Ruby gem.
 
 ```bash
 npm install universal-renderer
+# Also install your preferred web framework:
+npm install express   # For Express.js
+npm install hono      # For Hono
 ```
 
-## Example
+## Examples
 
-### Basic Setup
+### Express.js Setup
 
 ```ts
-// ssr.ts
-import { createServer } from "universal-renderer";
+// ssr-express.ts
+import { createServer } from "universal-renderer/express";
 import { renderToString } from "react-dom/server.node";
 import App from "./App";
 
 const app = await createServer({
-  port: 3001,
   setup: async (url, props) => {
     // Set up your app context - routing, state, etc.
     return {
@@ -53,14 +55,46 @@ app.listen(3001, () => {
 });
 ```
 
+### Hono Setup
+
+```ts
+// ssr-hono.ts
+import { createServer } from "universal-renderer/hono";
+import { renderToString } from "react-dom/server.node";
+import App from "./App";
+
+const app = await createServer({
+  setup: async (url, props) => {
+    return {
+      jsx: <App {...props} />,
+      url,
+      props
+    };
+  },
+  render: async (context) => {
+    const html = renderToString(context.jsx);
+    return {
+      head: '<meta name="description" content="SSR App">',
+      body: html,
+      bodyAttrs: 'class="ssr-rendered"'
+    };
+  },
+  cleanup: (context) => {
+    console.log(`Rendered ${context.url}`);
+  }
+});
+
+// Hono usage varies by runtime:
+// export default app; // for Cloudflare Workers
+// Bun.serve({ fetch: app.fetch }); // for Bun
+```
+
 ### With Streaming (React 18+)
 
 ```ts
-import { createServer } from "universal-renderer";
-import { renderToPipeableStream } from "react-dom/server.node";
+import { createServer } from "universal-renderer/express"; // or /hono
 
 const app = await createServer({
-  port: 3001,
   setup: async (url, props) => ({ url, props }),
   render: async (context) => ({ body: "fallback" }), // Required but not used for streaming
   streamCallbacks: {
@@ -75,11 +109,23 @@ const app = await createServer({
 
 Point the gem at `http://localhost:3001` and you're done.
 
+## Framework Support
+
+Universal Renderer supports multiple web frameworks through subpath imports:
+
+- **Express.js**: `import { createServer } from "universal-renderer/express"`
+- **Hono**: `import { createServer } from "universal-renderer/hono"`
+
+Both frameworks provide the same API surface, allowing you to switch between them without changing your SSR logic. Choose based on your deployment target:
+
+- **Express.js**: Traditional Node.js environments
+- **Hono**: Edge environments (Cloudflare Workers, Bun, Deno)
+
 ## API
 
 ### `createServer(options)`
 
-Creates an Express application configured for SSR. Each request arrives as `{ url, props }` JSON and must respond with:
+Creates a web application configured for SSR. Each request arrives as `{ url, props }` JSON and must respond with:
 
 ```ts
 export type RenderOutput = {
@@ -109,7 +155,7 @@ These markers are used by the Rails gem to inject SSR content into your template
 - `render(context)` → `RenderOutput` &mdash; stringify markup.
 - `cleanup(context)` (optional) &mdash; dispose per-request resources.
 - `streamCallbacks` (optional) &mdash; for streaming SSR support.
-- `middleware` (optional) &mdash; Express middleware for static assets, etc.
+- `middleware` (optional) &mdash; Framework-specific middleware for static assets, etc.
 
 ### Streaming (Optional)
 

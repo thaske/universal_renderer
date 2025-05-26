@@ -1,14 +1,13 @@
-export { SSR_MARKERS } from "./constants";
-export {
-  createHealthHandler,
-  createSSRHandler,
-  createStreamHandler,
-} from "./handlers";
-export { createServer, createServer as default } from "./server";
+// Export shared constants and types
+export { SSR_MARKERS } from "./core/constants";
 export type {
   BaseHandlerOptions,
   RenderOutput,
-  ServerOptions,
   SSRHandlerOptions,
   StreamHandlerOptions,
-} from "./types";
+} from "./core/types";
+export { createServer } from "./server";
+
+// Note: Framework-specific exports are available at subpaths:
+// - 'universal-renderer/express' for Express.js integration
+// - 'universal-renderer/hono' for Hono integration
