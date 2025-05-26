@@ -1,20 +1,12 @@
 import type { Request, Response } from "express";
 
 /**
- * Creates a framework-agnostic health check handler.
+ * Creates a health check handler.
  *
  * Returns a simple JSON response indicating the server is running.
  * Useful for load balancers, monitoring systems, and deployment health checks.
  *
- * @returns Framework-agnostic handler for health checks
- *
- * @example
- * ```typescript
- * import { createHealthHandler } from 'universal-renderer/express';
- *
- * const healthHandler = createHealthHandler();
- * // Use with any framework (Express, Hono, etc.)
- * ```
+ * @returns Health check handler
  */
 export function createHealthHandler() {
   return (req: Request, res: Response) => {

@@ -69,7 +69,6 @@ export async function createServer<
     setup: options.setup,
     render: options.render,
     cleanup: options.cleanup,
-    error: options.error,
   });
   app.post(["/", "/static"], ssrHandler);
 
@@ -88,6 +87,16 @@ export async function createServer<
   if (options.middleware) {
     app.use(options.middleware);
   }
+
+  // Handle 404 - Not Found
+  app.use((req, res, next) => {
+    // Check if headers have already been sent, which means a response was already initiated.
+    // If so, delegate to the next error handler.
+    if (res.headersSent) {
+      return next();
+    }
+    res.status(404).json({ error: "Not Found" });
+  });
 
   // Error handler
   if (options.error) {

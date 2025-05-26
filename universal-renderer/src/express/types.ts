@@ -1,4 +1,10 @@
-import type { ErrorRequestHandler, RequestHandler } from "express";
+import type {
+  ErrorRequestHandler,
+  NextFunction,
+  Request,
+  RequestHandler,
+  Response,
+} from "express";
 import type {
   BaseHandlerOptions,
   SSRHandlerOptions as CoreSSRHandlerOptions,
@@ -17,6 +23,22 @@ export type ExpressBaseHandlerOptions<TContext extends Record<string, any>> =
      */
     error?: ErrorRequestHandler;
   };
+
+/**
+ * Defines the shape of an Express error handling function, compatible with Express's
+ * error handling middleware signature.
+ *
+ * @param err - The error object.
+ * @param req - The Express request object.
+ * @param res - The Express response object.
+ * @param next - The next middleware function in the stack.
+ */
+export type ExpressErrorHandler = (
+  err: Error,
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => void;
 
 /**
  * Express-specific configuration options for the SSR handler.

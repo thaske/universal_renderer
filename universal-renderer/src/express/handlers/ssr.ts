@@ -9,25 +9,7 @@ import type { RenderOutput, SSRHandlerOptions } from "../../types";
  *
  * @template TContext - The type of context object used throughout the rendering pipeline
  * @param options - Configuration options for SSR
- * @returns Express route handler for SSR requests
- *
- * @example
- * ```typescript
- * import express from 'express';
- * import { createSSRHandler } from 'universal-renderer/express';
- * import { renderToString } from 'react-dom/server';
- *
- * const app = express();
- * app.use(express.json()); // Ensure body-parser is used for JSON
- *
- * app.post('/render', createSSRHandler({
- *   setup: async (url, props) => ({ url, props, store: createStore() }),
- *   render: async (context) => ({
- *     body: renderToString(<App {...context} />)
- *   }),
- *   cleanup: (context) => context.store?.dispose()
- * }));
- * ```
+ * @returns SSR handler
  */
 export function createSSRHandler<TContext extends Record<string, any>>(
   options: SSRHandlerOptions<TContext>,
@@ -55,7 +37,7 @@ export function createSSRHandler<TContext extends Record<string, any>>(
       res.json(result);
     } catch (error) {
       console.error("[SSR] Express Render error:", error);
-      res.status(500).json({ error: "Internal Server Error" });
+      throw error;
     } finally {
       if (context && options.cleanup) {
         await options.cleanup(context);
