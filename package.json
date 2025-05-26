@@ -5,5 +5,11 @@
   },
   "workspaces": [
     "universal-renderer"
-  ]
+  ],
+  "devDependencies": {
+    "@playwright/test": "^1.52.0",
+    "@types/yargs": "^17.0.33",
+    "get-port": "^7.1.0",
+    "yargs": "^17.7.2"
+  }
 }
