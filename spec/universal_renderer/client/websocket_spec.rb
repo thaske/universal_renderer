@@ -1,18 +1,15 @@
 # frozen_string_literal: true
 
 require "rails_helper"
-require "websocket-client-simple"
-require "concurrent"
 
 RSpec.describe UniversalRenderer::Client::WebSocket do
   let(:test_url) { "http://example.com/test" }
   let(:test_props) { { user: "testuser", id: 123 } }
   let(:mock_ws) do
-    double("WebSocket::Client::Simple").tap do |ws|
+    double("Faye::WebSocket::Client").tap do |ws|
       allow(ws).to receive(:send)
       allow(ws).to receive(:close)
       allow(ws).to receive(:on)
-      allow(ws).to receive(:ready_state).and_return(1)
     end
   end
   let(:mock_response) { double("ActionDispatch::Response") }
@@ -28,9 +25,13 @@ RSpec.describe UniversalRenderer::Client::WebSocket do
     allow(Rails.logger).to receive(:error)
     allow(Rails.logger).to receive(:info)
 
-    # Mock WebSocket constants
-    stub_const("::WebSocket::Client::Simple::OPEN", 1)
-    stub_const("::WebSocket::Client::Simple::CONNECTING", 0)
+    # Clean up connection pool before each test
+    described_class.cleanup_pool
+  end
+
+  after do
+    # Clean up connection pool after each test
+    described_class.cleanup_pool
   end
 
   describe ".call" do
@@ -45,9 +46,9 @@ RSpec.describe UniversalRenderer::Client::WebSocket do
       end
 
       before do
-        allow(described_class).to receive(:new).and_return(client)
-        allow(client).to receive(:connect).and_return(true)
-        allow(client).to receive(:disconnect)
+        allow(described_class).to receive(:get_or_create_client).and_return(
+          client
+        )
         allow(client).to receive(:ssr_request).and_return(
           UniversalRenderer::SSR::Response.new(
             head: ssr_response_data[:head],
@@ -57,12 +58,11 @@ RSpec.describe UniversalRenderer::Client::WebSocket do
         )
       end
 
-      it "creates a client, connects, makes request, and disconnects" do
+      it "gets a client and makes request" do
         result = described_class.call(test_url, test_props)
 
-        expect(client).to have_received(:connect)
+        expect(described_class).to have_received(:get_or_create_client)
         expect(client).to have_received(:ssr_request).with(test_url, test_props)
-        expect(client).to have_received(:disconnect)
         expect(result).to be_a(UniversalRenderer::SSR::Response)
         expect(result.head).to eq(ssr_response_data[:head])
         expect(result.body).to eq(ssr_response_data[:body])
@@ -71,20 +71,12 @@ RSpec.describe UniversalRenderer::Client::WebSocket do
     end
 
     context "when connection fails" do
-      let(:client) { described_class.new }
-
       before do
-        allow(described_class).to receive(:new).and_return(client)
-        allow(client).to receive(:connect).and_return(false)
-        allow(client).to receive(:disconnect)
-        allow(client).to receive(:ssr_request).and_return(nil)
+        allow(described_class).to receive(:get_or_create_client).and_return(nil)
       end
 
-      it "still attempts to disconnect" do
+      it "returns nil when no client available" do
         result = described_class.call(test_url, test_props)
-
-        expect(client).to have_received(:connect)
-        expect(client).to have_received(:disconnect)
         expect(result).to be_nil
       end
     end
@@ -95,24 +87,23 @@ RSpec.describe UniversalRenderer::Client::WebSocket do
     let(:template) { "<html><body>{{content}}</body></html>" }
 
     before do
-      allow(described_class).to receive(:new).and_return(client)
-      allow(client).to receive(:connect).and_return(true)
-      allow(client).to receive(:disconnect)
+      allow(described_class).to receive(:get_or_create_client).and_return(
+        client
+      )
       allow(client).to receive(:stream_request).and_return(true)
     end
 
-    it "creates a client, connects, makes stream request, and disconnects" do
+    it "gets a client and makes stream request" do
       result =
         described_class.stream(test_url, test_props, template, mock_response)
 
-      expect(client).to have_received(:connect)
+      expect(described_class).to have_received(:get_or_create_client)
       expect(client).to have_received(:stream_request).with(
         test_url,
         test_props,
         template,
         mock_response
       )
-      expect(client).to have_received(:disconnect)
       expect(result).to be true
     end
   end
@@ -121,11 +112,14 @@ RSpec.describe UniversalRenderer::Client::WebSocket do
     let(:client) { described_class.new }
 
     context "when already connected" do
-      before { client.instance_variable_set(:@connected, true) }
+      before do
+        client.instance_variable_set(:@connected, true)
+        client.instance_variable_set(:@ws, mock_ws)
+      end
 
-      it "returns early without attempting connection" do
-        expect(::WebSocket::Client::Simple).not_to receive(:connect)
-        expect(client.connect).to be_nil
+      it "returns true without attempting connection" do
+        expect(Faye::WebSocket::Client).not_to receive(:new)
+        expect(client.connect).to be true
       end
     end
 
@@ -141,19 +135,16 @@ RSpec.describe UniversalRenderer::Client::WebSocket do
 
     context "when connection succeeds" do
       before do
-        allow(::WebSocket::Client::Simple).to receive(:connect).and_return(
-          mock_ws
-        )
-        allow(mock_ws).to receive(:ready_state).and_return(1) # OPEN state
-        allow(mock_ws).to receive(:on)
+        allow(Faye::WebSocket::Client).to receive(:new).and_return(mock_ws)
         allow(client).to receive(:setup_event_handlers)
         allow(client).to receive(:wait_for_connection)
+        allow(EventMachine).to receive(:reactor_running?).and_return(true)
       end
 
       it "establishes connection and returns true" do
         result = client.connect
 
-        expect(::WebSocket::Client::Simple).to have_received(:connect).with(
+        expect(Faye::WebSocket::Client).to have_received(:new).with(
           "ws://localhost:3000"
         )
         expect(client).to have_received(:setup_event_handlers)
@@ -163,9 +154,10 @@ RSpec.describe UniversalRenderer::Client::WebSocket do
 
     context "when connection fails" do
       before do
-        allow(::WebSocket::Client::Simple).to receive(:connect).and_raise(
+        allow(Faye::WebSocket::Client).to receive(:new).and_raise(
           StandardError.new("Connection failed")
         )
+        allow(EventMachine).to receive(:reactor_running?).and_return(true)
       end
 
       it "logs error and returns false" do
@@ -180,21 +172,17 @@ RSpec.describe UniversalRenderer::Client::WebSocket do
 
     context "when connection times out" do
       before do
-        allow(::WebSocket::Client::Simple).to receive(:connect).and_return(
-          mock_ws
-        )
-        allow(mock_ws).to receive(:ready_state).and_return(0) # CONNECTING state
-        allow(mock_ws).to receive(:on)
+        allow(Faye::WebSocket::Client).to receive(:new).and_return(mock_ws)
         allow(client).to receive(:setup_event_handlers)
         allow(client).to receive(:wait_for_connection).and_raise(
           UniversalRenderer::Client::WebSocket::ConnectionError
         )
+        allow(EventMachine).to receive(:reactor_running?).and_return(true)
       end
 
-      it "raises ConnectionError" do
-        expect { client.connect }.to raise_error(
-          UniversalRenderer::Client::WebSocket::ConnectionError
-        )
+      it "returns false on timeout" do
+        result = client.connect
+        expect(result).to be false
       end
     end
   end
@@ -253,7 +241,11 @@ RSpec.describe UniversalRenderer::Client::WebSocket do
     end
 
     context "when request succeeds" do
-      let(:future) { Concurrent::Promises.fulfilled_future(response_data) }
+      let(:future) do
+        double("SimpleFuture").tap do |f|
+          allow(f).to receive(:value).and_return(response_data)
+        end
+      end
 
       before do
         allow(client).to receive(:send_request_with_timeout).and_return(future)
@@ -283,12 +275,13 @@ RSpec.describe UniversalRenderer::Client::WebSocket do
 
     context "when request times out" do
       let(:future) do
-        Concurrent::Promises.rejected_future(Concurrent::TimeoutError.new)
+        double("SimpleFuture").tap do |f|
+          allow(f).to receive(:value).and_raise(Timeout::Error)
+        end
       end
 
       before do
         allow(client).to receive(:send_request_with_timeout).and_return(future)
-        allow(future).to receive(:value!).and_raise(Concurrent::TimeoutError)
       end
 
       it "logs timeout error and returns nil" do
@@ -303,16 +296,15 @@ RSpec.describe UniversalRenderer::Client::WebSocket do
 
     context "when request fails" do
       let(:future) do
-        Concurrent::Promises.rejected_future(
-          StandardError.new("Request failed")
-        )
+        double("SimpleFuture").tap do |f|
+          allow(f).to receive(:value).and_raise(
+            StandardError.new("Request failed")
+          )
+        end
       end
 
       before do
         allow(client).to receive(:send_request_with_timeout).and_return(future)
-        allow(future).to receive(:value!).and_raise(
-          StandardError.new("Request failed")
-        )
       end
 
       it "logs error and returns nil" do
@@ -413,7 +405,11 @@ RSpec.describe UniversalRenderer::Client::WebSocket do
     end
 
     context "when health check succeeds" do
-      let(:future) { Concurrent::Promises.fulfilled_future({ status: "ok" }) }
+      let(:future) do
+        double("SimpleFuture").tap do |f|
+          allow(f).to receive(:value).and_return({ status: "ok" })
+        end
+      end
 
       before do
         allow(client).to receive(:send_request_with_timeout).and_return(future)
@@ -427,16 +423,15 @@ RSpec.describe UniversalRenderer::Client::WebSocket do
 
     context "when health check fails" do
       let(:future) do
-        Concurrent::Promises.rejected_future(
-          StandardError.new("Health check failed")
-        )
+        double("SimpleFuture").tap do |f|
+          allow(f).to receive(:value).and_raise(
+            StandardError.new("Health check failed")
+          )
+        end
       end
 
       before do
         allow(client).to receive(:send_request_with_timeout).and_return(future)
-        allow(future).to receive(:value!).and_raise(
-          StandardError.new("Health check failed")
-        )
       end
 
       it "returns false" do
@@ -583,6 +578,25 @@ RSpec.describe UniversalRenderer::Client::WebSocket do
         expect(id2).to match(/^req_\d+_\d+\.\d+$/)
         expect(id1).not_to eq(id2)
       end
+    end
+  end
+
+  describe "SimpleFuture" do
+    let(:future) { described_class::SimpleFuture.new }
+
+    it "resolves with a value" do
+      future.resolve("test_value")
+      expect(future.value).to eq("test_value")
+    end
+
+    it "rejects with an error" do
+      error = StandardError.new("test error")
+      future.reject(error)
+      expect { future.value }.to raise_error(StandardError, "test error")
+    end
+
+    it "times out when waiting too long" do
+      expect { future.value(0.1) }.to raise_error(Timeout::Error)
     end
   end
 end

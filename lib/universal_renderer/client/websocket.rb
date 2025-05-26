@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-require "websocket-client-simple"
+require "faye/websocket"
+require "eventmachine"
 require "json"
-require "concurrent"
 
 module UniversalRenderer
   module Client
@@ -14,18 +14,25 @@ module UniversalRenderer
       class TimeoutError < StandardError
       end
 
+      # Thread-safe connection pool for managing WebSocket connections
+      @@connection_pool = {}
+      @@pool_mutex = Mutex.new
+      @@em_thread = nil
+
       # Performs an SSR request over WebSocket connection
       #
       # @param url [String] The URL of the page to render on the SSR server
       # @param props [Hash] A hash of props to be passed to the SSR service
       # @return [UniversalRenderer::SSR::Response, nil] The SSR payload or nil on failure
       def self.call(url, props)
-        client = new
+        client = get_or_create_client
+        return nil unless client
+
         begin
-          client.connect
           client.ssr_request(url, props)
-        ensure
-          client.disconnect
+        rescue StandardError => e
+          Rails.logger.error("WebSocket SSR request failed: #{e.message}")
+          nil
         end
       end
 
@@ -37,53 +44,98 @@ module UniversalRenderer
       # @param response [ActionDispatch::Response] The Rails response object to stream to
       # @return [Boolean] True if streaming was initiated, false otherwise
       def self.stream(url, props, template, response)
-        client = new
+        client = get_or_create_client
+        return false unless client
+
         begin
-          client.connect
           client.stream_request(url, props, template, response)
-        ensure
-          client.disconnect
+        rescue StandardError => e
+          Rails.logger.error("WebSocket stream request failed: #{e.message}")
+          false
+        end
+      end
+
+      # Get or create a thread-safe WebSocket client
+      def self.get_or_create_client
+        thread_id = Thread.current.object_id
+
+        @@pool_mutex.synchronize do
+          client = @@connection_pool[thread_id]
+
+          # Create new client if none exists or if existing client is disconnected
+          if client.nil? || !client.connected?
+            # Remove the old client if it exists but is disconnected
+            @@connection_pool.delete(thread_id) if client && !client.connected?
+
+            client = new
+            if client.connect
+              @@connection_pool[thread_id] = client
+            else
+              return nil
+            end
+          end
+
+          client
+        end
+      end
+
+      # Clean up connection pool
+      def self.cleanup_pool
+        @@pool_mutex.synchronize do
+          @@connection_pool.each_value(&:disconnect)
+          @@connection_pool.clear
         end
       end
 
       def initialize
         @ws = nil
         @connected = false
-        @pending_requests = Concurrent::Hash.new
-        @request_counter = Concurrent::AtomicFixnum.new(0)
+        @pending_requests = {}
+        @request_counter = 0
+        @connection_mutex = Mutex.new
+      end
+
+      def connected?
+        @connected && !@ws.nil?
       end
 
       def connect
-        return if @connected
+        @connection_mutex.synchronize do
+          return true if connected?
 
-        ws_url = build_websocket_url
-        return false if ws_url.nil?
+          ws_url = build_websocket_url
+          return false if ws_url.nil?
 
-        begin
-          @ws = ::WebSocket::Client::Simple.connect(ws_url)
-          setup_event_handlers
-          wait_for_connection
-          @connected = true
-          true
-        rescue ConnectionError
-          # Re-raise connection errors for timeout scenarios
-          raise
-        rescue StandardError => e
-          Rails.logger.error("WebSocket connection failed: #{e.message}")
-          false
+          begin
+            # Ensure EventMachine is running
+            ensure_eventmachine_running
+
+            @ws = Faye::WebSocket::Client.new(ws_url)
+            setup_event_handlers
+
+            # Wait for connection to be established
+            wait_for_connection
+            true
+          rescue StandardError => e
+            Rails.logger.error("WebSocket connection failed: #{e.message}")
+            @connected = false
+            false
+          end
         end
       end
 
       def disconnect
-        return unless @connected
+        @connection_mutex.synchronize do
+          return unless @connected
 
-        @ws&.close
-        @ws = nil
-        @connected = false
+          @ws&.close
+          @ws = nil
+          @connected = false
+        end
       end
 
       def ssr_request(url, props)
-        return nil unless @connected
+        return nil unless connected?
 
         request_id = generate_request_id
         message = {
@@ -95,31 +147,31 @@ module UniversalRenderer
           }
         }
 
-        future = send_request_with_timeout(message, request_id)
-
         begin
-          result = future.value!(UniversalRenderer.config.timeout)
+          future = send_request_with_timeout(message, request_id)
+          result = future.value(UniversalRenderer.config.timeout)
 
-          if result.is_a?(Hash) && result[:head] || result[:body]
+          if result.is_a?(Hash) && (result[:head] || result[:body])
             UniversalRenderer::SSR::Response.new(
               head: result[:head],
               body: result[:body] || result[:body_html],
-              body_attrs: result[:body_attrs]
+              body_attrs: result[:body_attrs] || result[:bodyAttrs]
             )
           else
             nil
           end
-        rescue Concurrent::TimeoutError
+        rescue Timeout::Error
           Rails.logger.error("WebSocket SSR request timed out for URL: #{url}")
           nil
         rescue StandardError => e
           Rails.logger.error("WebSocket SSR request failed: #{e.message}")
+          @connected = false
           nil
         end
       end
 
       def stream_request(url, props, template, response)
-        return false unless @connected
+        return false unless connected?
 
         request_id = generate_request_id
         message = {
@@ -145,7 +197,7 @@ module UniversalRenderer
       end
 
       def health_check
-        return false unless @connected
+        return false unless connected?
 
         request_id = generate_request_id
         message = { id: request_id, type: "health_check", payload: {} }
@@ -153,7 +205,7 @@ module UniversalRenderer
         future = send_request_with_timeout(message, request_id)
 
         begin
-          result = future.value!(5) # 5 second timeout for health checks
+          result = future.value(5) # 5 second timeout for health checks
           result.is_a?(Hash) && result[:status] == "ok"
         rescue StandardError
           false
@@ -185,17 +237,22 @@ module UniversalRenderer
       end
 
       def setup_event_handlers
-        @ws.on :message do |msg|
-          handle_message(msg.data)
+        @ws.on :open do |event|
+          @connected = true
         end
 
-        @ws.on :error do |e|
-          Rails.logger.error("WebSocket error: #{e.message}")
+        @ws.on :message do |event|
+          handle_message(event.data)
         end
 
-        @ws.on :close do |e|
+        @ws.on :error do |event|
+          Rails.logger.error("WebSocket error: #{event.message}")
+          @connected = false
+        end
+
+        @ws.on :close do |event|
           Rails.logger.info(
-            "WebSocket connection closed: #{e.code} - #{e.reason}"
+            "WebSocket connection closed: #{event.code} #{event.reason}"
           )
           @connected = false
         end
@@ -257,20 +314,22 @@ module UniversalRenderer
       end
 
       def send_request_with_timeout(message, request_id)
-        future =
-          Concurrent::Promises.future do
-            promise = Concurrent::Promises.resolvable_future
-            @pending_requests[request_id] = {
-              type: :request,
-              promise: promise,
-              future: nil
-            }
+        # Create a simple future-like object using Thread and Queue
+        future = SimpleFuture.new
 
-            @ws.send(message.to_json)
-            promise.value!
-          end
+        # Set up the pending request
+        @pending_requests[request_id] = { type: :request, future: future }
 
-        @pending_requests[request_id][:future] = future
+        begin
+          # Send the message
+          @ws.send(message.to_json)
+        rescue StandardError => e
+          # Clean up the pending request if send fails
+          @pending_requests.delete(request_id)
+          @connected = false
+          raise ConnectionError, "Failed to send message: #{e.message}"
+        end
+
         future
       end
 
@@ -279,26 +338,91 @@ module UniversalRenderer
         return unless request_data && request_data[:type] == :request
 
         if result.is_a?(StandardError)
-          request_data[:promise].reject(result)
+          request_data[:future].reject(result)
         else
-          request_data[:promise].fulfill(result)
+          request_data[:future].resolve(result)
         end
       end
 
       def generate_request_id
-        "req_#{@request_counter.increment}_#{Time.now.to_f}"
+        @request_counter += 1
+        "req_#{@request_counter}_#{Time.now.to_f}"
+      end
+
+      def ensure_eventmachine_running
+        return if EM.reactor_running?
+
+        # Start EventMachine in a separate thread if not already running
+        @@em_thread ||=
+          Thread.new do
+            EM.run do
+              # Keep the reactor alive
+              EM.add_periodic_timer(1) {} # Dummy timer to keep EM running
+            end
+          end
+
+        # Wait for EventMachine to start
+        timeout = Time.now + 2
+        sleep(0.1) while Time.now < timeout && !EM.reactor_running?
+
+        unless EM.reactor_running?
+          raise ConnectionError, "Failed to start EventMachine reactor"
+        end
       end
 
       def wait_for_connection
         # Wait up to 5 seconds for connection to be established
         timeout = Time.now + 5
-        while Time.now < timeout &&
-                @ws.ready_state != ::WebSocket::Client::Simple::OPEN
-          sleep(0.01)
+        sleep(0.1) while Time.now < timeout && !@connected
+
+        unless @connected
+          raise ConnectionError,
+                "Failed to establish WebSocket connection within timeout"
+        end
+      end
+
+      # Simple future implementation to replace Concurrent::Promises
+      class SimpleFuture
+        def initialize
+          @mutex = Mutex.new
+          @condition = ConditionVariable.new
+          @resolved = false
+          @value = nil
+          @error = nil
         end
 
-        unless @ws.ready_state == ::WebSocket::Client::Simple::OPEN
-          raise ConnectionError, "Failed to establish WebSocket connection"
+        def resolve(value)
+          @mutex.synchronize do
+            return if @resolved
+            @value = value
+            @resolved = true
+            @condition.broadcast
+          end
+        end
+
+        def reject(error)
+          @mutex.synchronize do
+            return if @resolved
+            @error = error
+            @resolved = true
+            @condition.broadcast
+          end
+        end
+
+        def value(timeout = nil)
+          @mutex.synchronize do
+            unless @resolved
+              if timeout
+                @condition.wait(@mutex, timeout)
+                raise Timeout::Error, "Request timed out" unless @resolved
+              else
+                @condition.wait(@mutex)
+              end
+            end
+
+            raise @error if @error
+            @value
+          end
         end
       end
     end

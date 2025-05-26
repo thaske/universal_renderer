@@ -1,4 +1,4 @@
-import type { ServerWebSocket } from "bun";
+import uWS from "uWebSockets.js";
 import type {
   WebSocketConnection,
   WebSocketMessage,
@@ -6,7 +6,17 @@ import type {
 } from "./websocket-types";
 
 /**
- * Creates a WebSocket server for Server-Side Rendering using Bun's native WebSocket API.
+ * WebSocket instance with connection data for uWebSockets
+ */
+interface UWSWebSocket {
+  send: (message: string, isBinary?: boolean, compress?: boolean) => boolean;
+  close: () => void;
+  getRemoteAddressAsText: () => ArrayBuffer;
+  connectionData?: WebSocketConnection<any>;
+}
+
+/**
+ * Creates a WebSocket server for Server-Side Rendering using uWebSockets.
  *
  * This replaces the Express-based HTTP server with a high-performance WebSocket server
  * that maintains the same rendering capabilities while enabling real-time bidirectional
@@ -14,7 +24,7 @@ import type {
  *
  * @template TContext - The type of context object used throughout the rendering pipeline
  * @param options - Configuration options for the WebSocket SSR server
- * @returns Promise that resolves to a Bun server instance
+ * @returns Promise that resolves to a uWebSockets server instance
  *
  * @example
  * ```typescript
@@ -36,12 +46,13 @@ export async function createWebSocketServer<
   }
 
   const connections = new Map<string, WebSocketConnection<TContext>>();
+  const wsConnections = new Map<string, UWSWebSocket>();
   const pendingRequests = new Map<
     string,
     {
       resolve: (value: any) => void;
       reject: (error: Error) => void;
-      timeout: Timer;
+      timeout: NodeJS.Timeout;
     }
   >();
 
@@ -49,13 +60,12 @@ export async function createWebSocketServer<
     return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
   }
 
-  function handleMessage(
-    ws: ServerWebSocket<WebSocketConnection<TContext>>,
-    message: string | Buffer,
-  ) {
+  function handleMessage(ws: UWSWebSocket, message: string | Buffer) {
     try {
-      const data: WebSocketMessage = JSON.parse(message.toString());
-      const connection = ws.data;
+      const data: WebSocketMessage = JSON.parse(
+        Buffer.from(message).toString(),
+      );
+      const connection = ws.connectionData;
 
       switch (data.type) {
         case "ssr_request":
@@ -88,10 +98,7 @@ export async function createWebSocketServer<
     }
   }
 
-  async function handleSSRRequest(
-    ws: ServerWebSocket<WebSocketConnection<TContext>>,
-    data: WebSocketMessage,
-  ) {
+  async function handleSSRRequest(ws: UWSWebSocket, data: WebSocketMessage) {
     let context: TContext | undefined;
 
     try {
@@ -139,10 +146,7 @@ export async function createWebSocketServer<
     }
   }
 
-  async function handleStreamRequest(
-    ws: ServerWebSocket<WebSocketConnection<TContext>>,
-    data: WebSocketMessage,
-  ) {
+  async function handleStreamRequest(ws: UWSWebSocket, data: WebSocketMessage) {
     let context: TContext | undefined;
 
     try {
@@ -226,10 +230,7 @@ export async function createWebSocketServer<
     }
   }
 
-  function handleHealthCheck(
-    ws: ServerWebSocket<WebSocketConnection<TContext>>,
-    data: WebSocketMessage,
-  ) {
+  function handleHealthCheck(ws: UWSWebSocket, data: WebSocketMessage) {
     ws.send(
       JSON.stringify({
         id: data.id,
@@ -253,74 +254,128 @@ export async function createWebSocketServer<
     }
   }
 
-  const server = Bun.serve({
-    port: options.port || 3000,
-    fetch(req, server) {
-      // Upgrade all requests to WebSocket connections
-      const success = server.upgrade(req, {
-        data: {
-          id: generateRequestId(),
-          connectedAt: Date.now(),
-        } as WebSocketConnection<TContext>,
-      });
+  const app = uWS.App({
+    // SSL configuration can be added here if needed
+    // key_file_name: "path/to/key.pem",
+    // cert_file_name: "path/to/cert.pem",
+  });
 
-      if (success) {
-        return undefined; // Connection upgraded successfully
-      }
+  app.ws("/*", {
+    // WebSocket configuration options
+    compression: uWS.SHARED_COMPRESSOR,
+    maxBackpressure: 64 * 1024, // 64KB
+    maxPayloadLength: 16 * 1024 * 1024, // 16MB
+    idleTimeout: 120, // 2 minutes
+    sendPingsAutomatically: true,
 
-      return new Response("WebSocket upgrade failed", { status: 400 });
+    upgrade: (res: any, req: any, context: any) => {
+      const connectionId = generateRequestId();
+
+      // Upgrade the connection to WebSocket
+      res.upgrade(
+        { connectionId }, // userData
+        req.getHeader("sec-websocket-key"),
+        req.getHeader("sec-websocket-protocol"),
+        req.getHeader("sec-websocket-extensions"),
+        context,
+      );
     },
-    websocket: {
-      open(ws) {
-        const connection = ws.data as WebSocketConnection<TContext>;
-        connections.set(connection.id, connection);
-        console.log(`WebSocket connection opened: ${connection.id}`);
 
-        if (options.onConnection) {
-          options.onConnection(connection);
-        }
-      },
-      message(ws, message) {
-        handleMessage(
-          ws as ServerWebSocket<WebSocketConnection<TContext>>,
-          message,
-        );
-      },
-      close(ws, code, message) {
-        const connection = ws.data as WebSocketConnection<TContext>;
+    open: (ws: any) => {
+      const connectionId = ws.connectionId || generateRequestId();
+      const connection: WebSocketConnection<TContext> = {
+        id: connectionId,
+        connectedAt: Date.now(),
+      };
+
+      // Store connection data
+      ws.connectionData = connection;
+      connections.set(connectionId, connection);
+      wsConnections.set(connectionId, ws as UWSWebSocket);
+
+      console.log(`WebSocket connection opened: ${connectionId}`);
+
+      if (options.onConnection) {
+        options.onConnection(connection);
+      }
+    },
+
+    message: (ws: any, message: any, isBinary: any) => {
+      handleMessage(ws as UWSWebSocket, message);
+    },
+
+    close: (ws: any, code: any, message: any) => {
+      const connection = (ws as UWSWebSocket).connectionData;
+      if (connection) {
         connections.delete(connection.id);
+        wsConnections.delete(connection.id);
         console.log(`WebSocket connection closed: ${connection.id} (${code})`);
 
         if (options.onDisconnection) {
-          options.onDisconnection(connection, code, message);
+          options.onDisconnection(
+            connection,
+            code,
+            Buffer.from(message).toString(),
+          );
         }
-      },
-      // Note: Bun's WebSocket API doesn't include an error handler in the websocket options
-      // Error handling is done through try-catch blocks in message handlers
-      // Configure WebSocket settings for optimal performance
-      maxPayloadLength: 16 * 1024 * 1024, // 16MB
-      idleTimeout: 120, // 2 minutes
-      backpressureLimit: 1024 * 1024, // 1MB
-      closeOnBackpressureLimit: false,
-      sendPings: true,
+      }
     },
   });
 
-  console.log(`WebSocket SSR server listening on port ${server.port}`);
+  // Handle regular HTTP requests (optional)
+  app.get("/*", (res: any, req: any) => {
+    res
+      .writeStatus("426 Upgrade Required")
+      .writeHeader("Content-Type", "text/plain")
+      .end("This server only accepts WebSocket connections");
+  });
 
-  return {
-    server,
-    connections,
-    broadcast: (message: WebSocketMessage) => {
-      const messageStr = JSON.stringify(message);
-      connections.forEach((connection, id) => {
-        // Note: We'd need to store the actual WebSocket reference to send messages
-        // This is a simplified version - in practice, we'd need to maintain
-        // a mapping of connection IDs to WebSocket instances
-      });
-    },
-    close: () => {
-      server.stop();
-    },
-  };
+  const port = options.port || 3000;
+  let listenSocket: any = null;
+
+  return new Promise((resolve, reject) => {
+    app.listen(port, (token: any) => {
+      if (token) {
+        listenSocket = token;
+        console.log(`WebSocket SSR server listening on port ${port}`);
+        resolve({
+          app,
+          connections,
+          broadcast: (message: WebSocketMessage) => {
+            const messageStr = JSON.stringify(message);
+            wsConnections.forEach((ws, id) => {
+              try {
+                ws.send(messageStr);
+              } catch (error) {
+                console.error(`Failed to send message to ${id}:`, error);
+                // Clean up dead connections
+                wsConnections.delete(id);
+                connections.delete(id);
+              }
+            });
+          },
+          close: () => {
+            // Close all WebSocket connections first
+            wsConnections.forEach((ws) => {
+              try {
+                ws.close();
+              } catch (error) {
+                console.error("Error closing WebSocket connection:", error);
+              }
+            });
+            wsConnections.clear();
+            connections.clear();
+
+            // Close the listen socket using uWebSockets API
+            if (listenSocket) {
+              uWS.us_listen_socket_close(listenSocket);
+              listenSocket = null;
+            }
+          },
+        });
+      } else {
+        reject(new Error(`Failed to listen on port ${port}`));
+      }
+    });
+  });
 }

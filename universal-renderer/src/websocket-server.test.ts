@@ -1,40 +1,77 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { WebSocketMessage } from "./websocket-types";
 
-// Mock Bun for testing in Node.js environment
-const mockServer = {
-  port: 3001,
-  stop: vi.fn(),
-};
-
+// Mock uWebSockets.js
+const mockListenSocket = { id: "mock-listen-socket" };
 const mockWebSocket = {
-  send: vi.fn(),
+  send: vi.fn().mockReturnValue(true),
   close: vi.fn(),
-  data: { id: "test-connection", connectedAt: Date.now() },
+  getRemoteAddressAsText: vi.fn().mockReturnValue(new ArrayBuffer(4)),
+  connectionData: undefined as any,
+  connectionId: "test-connection-id",
 };
 
-const mockBun = {
-  serve: vi.fn().mockReturnValue(mockServer),
+const mockApp = {
+  ws: vi.fn(),
+  get: vi.fn(),
+  listen: vi.fn(),
 };
 
-// Mock Bun globally
-(global as any).Bun = mockBun;
+const mockUWS = {
+  App: vi.fn().mockReturnValue(mockApp),
+  SHARED_COMPRESSOR: 1,
+  us_listen_socket_close: vi.fn(),
+};
 
-// Import after mocking Bun
+// Mock the uWebSockets module
+vi.mock("uWebSockets.js", () => ({
+  default: mockUWS,
+}));
+
+// Import after mocking
 const { createWebSocketServer } = await import("./websocket-server");
 
-describe("WebSocket Server", () => {
+describe("WebSocket Server (uWebSockets)", () => {
   let server: any;
-  let mockWebSocketHandlers: any;
+  let wsHandlers: any;
+  let httpHandlers: any;
+  let createdServers: any[] = [];
 
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Capture WebSocket handlers when Bun.serve is called
-    mockBun.serve.mockImplementation((config) => {
-      mockWebSocketHandlers = config.websocket;
-      return mockServer;
+    // Reset mock WebSocket state
+    mockWebSocket.connectionData = undefined;
+    mockWebSocket.send.mockClear();
+    mockWebSocket.close.mockClear();
+
+    // Capture handlers when ws() is called
+    mockApp.ws.mockImplementation((pattern: string, handlers: any) => {
+      wsHandlers = handlers;
+      return mockApp;
     });
+
+    // Capture handlers when get() is called
+    mockApp.get.mockImplementation((pattern: string, handler: any) => {
+      httpHandlers = handler;
+      return mockApp;
+    });
+
+    // Mock successful listen
+    mockApp.listen.mockImplementation((port: number, callback: any) => {
+      setTimeout(() => callback(mockListenSocket), 0);
+      return mockApp;
+    });
+  });
+
+  afterEach(async () => {
+    // Clean up any created servers
+    for (const srv of createdServers) {
+      if (srv && srv.close) {
+        srv.close();
+      }
+    }
+    createdServers = [];
   });
 
   describe("Server Creation", () => {
@@ -48,22 +85,38 @@ describe("WebSocket Server", () => {
         port: 3001,
       });
 
+      createdServers.push(server);
+
       expect(server).toBeDefined();
-      expect(server.server).toBeDefined();
+      expect(server.app).toBeDefined();
       expect(server.connections).toBeDefined();
       expect(server.broadcast).toBeTypeOf("function");
       expect(server.close).toBeTypeOf("function");
-      expect(mockBun.serve).toHaveBeenCalledWith(
+
+      // Verify uWebSockets App was created
+      expect(mockUWS.App).toHaveBeenCalledWith({});
+
+      // Verify WebSocket route was configured
+      expect(mockApp.ws).toHaveBeenCalledWith(
+        "/*",
         expect.objectContaining({
-          port: 3001,
-          fetch: expect.any(Function),
-          websocket: expect.objectContaining({
-            open: expect.any(Function),
-            message: expect.any(Function),
-            close: expect.any(Function),
-          }),
+          compression: mockUWS.SHARED_COMPRESSOR,
+          maxBackpressure: 64 * 1024,
+          maxPayloadLength: 16 * 1024 * 1024,
+          idleTimeout: 120,
+          sendPingsAutomatically: true,
+          upgrade: expect.any(Function),
+          open: expect.any(Function),
+          message: expect.any(Function),
+          close: expect.any(Function),
         }),
       );
+
+      // Verify HTTP fallback route was configured
+      expect(mockApp.get).toHaveBeenCalledWith("/*", expect.any(Function));
+
+      // Verify server listened on correct port
+      expect(mockApp.listen).toHaveBeenCalledWith(3001, expect.any(Function));
     });
 
     it("should throw error when render callback is missing", async () => {
@@ -76,15 +129,26 @@ describe("WebSocket Server", () => {
     });
 
     it("should use default port when not specified", async () => {
-      await createWebSocketServer({
+      server = await createWebSocketServer({
         render: async (context) => ({ body: "test" }),
       });
 
-      expect(mockBun.serve).toHaveBeenCalledWith(
-        expect.objectContaining({
-          port: 3000,
-        }),
-      );
+      createdServers.push(server);
+
+      expect(mockApp.listen).toHaveBeenCalledWith(3000, expect.any(Function));
+    });
+
+    it("should reject when listen fails", async () => {
+      mockApp.listen.mockImplementation((port: number, callback: any) => {
+        setTimeout(() => callback(null), 0);
+      });
+
+      await expect(async () => {
+        await createWebSocketServer({
+          render: async (context) => ({ body: "test" }),
+          port: 3001,
+        });
+      }).rejects.toThrow("Failed to listen on port 3001");
     });
   });
 
@@ -111,38 +175,102 @@ describe("WebSocket Server", () => {
         port: 3001,
         onConnection: vi.fn(),
         onDisconnection: vi.fn(),
-        onError: vi.fn(),
       });
+
+      createdServers.push(server);
     });
 
     describe("Connection Management", () => {
+      it("should handle WebSocket upgrade", () => {
+        const mockRes = {
+          upgrade: vi.fn(),
+        };
+        const mockReq = {
+          getHeader: vi.fn().mockReturnValue("test-header"),
+        };
+        const mockContext = {};
+
+        wsHandlers.upgrade(mockRes, mockReq, mockContext);
+
+        expect(mockRes.upgrade).toHaveBeenCalledWith(
+          expect.objectContaining({ connectionId: expect.any(String) }),
+          "test-header",
+          "test-header",
+          "test-header",
+          mockContext,
+        );
+      });
+
       it("should handle WebSocket connection open", () => {
-        expect(mockWebSocketHandlers.open).toBeDefined();
+        // Set connectionId like the upgrade handler would
+        mockWebSocket.connectionId = "test-connection-id";
 
-        mockWebSocketHandlers.open(mockWebSocket);
+        wsHandlers.open(mockWebSocket);
 
-        // Verify connection is tracked
-        expect(server.connections.has(mockWebSocket.data.id)).toBe(true);
+        expect(mockWebSocket.connectionData).toBeDefined();
+        expect(mockWebSocket.connectionData.id).toBeDefined();
+        expect(mockWebSocket.connectionData.connectedAt).toBeTypeOf("number");
+        expect(server.connections.has(mockWebSocket.connectionData.id)).toBe(
+          true,
+        );
       });
 
       it("should handle WebSocket connection close", () => {
-        expect(mockWebSocketHandlers.close).toBeDefined();
+        // Set connectionId like the upgrade handler would
+        mockWebSocket.connectionId = "test-connection-id";
 
         // First open the connection
-        mockWebSocketHandlers.open(mockWebSocket);
-        expect(server.connections.has(mockWebSocket.data.id)).toBe(true);
+        wsHandlers.open(mockWebSocket);
+        const connectionId = mockWebSocket.connectionData.id;
+        expect(server.connections.has(connectionId)).toBe(true);
 
         // Then close it
-        mockWebSocketHandlers.close(mockWebSocket, 1000, "Normal closure");
+        wsHandlers.close(mockWebSocket, 1000, Buffer.from("Normal closure"));
 
         // Verify connection is removed
-        expect(server.connections.has(mockWebSocket.data.id)).toBe(false);
+        expect(server.connections.has(connectionId)).toBe(false);
+      });
+
+      it("should call lifecycle callbacks when provided", async () => {
+        const onConnection = vi.fn();
+        const onDisconnection = vi.fn();
+
+        const serverWithCallbacks = await createWebSocketServer({
+          render: async (context) => ({ body: "test" }),
+          onConnection,
+          onDisconnection,
+          port: 3002,
+        });
+
+        createdServers.push(serverWithCallbacks);
+
+        // Get the handlers for the new server
+        const callbackHandlers =
+          mockApp.ws.mock.calls[mockApp.ws.mock.calls.length - 1][1];
+
+        // Simulate connection
+        callbackHandlers.open(mockWebSocket);
+        expect(onConnection).toHaveBeenCalledWith(mockWebSocket.connectionData);
+
+        // Simulate disconnection
+        callbackHandlers.close(
+          mockWebSocket,
+          1000,
+          Buffer.from("Normal closure"),
+        );
+        expect(onDisconnection).toHaveBeenCalledWith(
+          mockWebSocket.connectionData,
+          1000,
+          "Normal closure",
+        );
       });
     });
 
     describe("Message Handling", () => {
       beforeEach(() => {
-        mockWebSocketHandlers.open(mockWebSocket);
+        // Set connectionId like the upgrade handler would
+        mockWebSocket.connectionId = "test-connection-id";
+        wsHandlers.open(mockWebSocket);
       });
 
       it("should handle SSR request messages", async () => {
@@ -152,10 +280,14 @@ describe("WebSocket Server", () => {
           payload: { url: "/test-page", props: { user: "testuser" } },
         };
 
-        mockWebSocketHandlers.message(mockWebSocket, JSON.stringify(message));
+        wsHandlers.message(
+          mockWebSocket,
+          Buffer.from(JSON.stringify(message)),
+          false,
+        );
 
         // Wait for async operations to complete
-        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 10));
 
         // Verify response was sent
         expect(mockWebSocket.send).toHaveBeenCalledWith(
@@ -173,7 +305,11 @@ describe("WebSocket Server", () => {
           payload: {},
         };
 
-        mockWebSocketHandlers.message(mockWebSocket, JSON.stringify(message));
+        wsHandlers.message(
+          mockWebSocket,
+          Buffer.from(JSON.stringify(message)),
+          false,
+        );
 
         // Verify health response was sent
         expect(mockWebSocket.send).toHaveBeenCalledWith(
@@ -195,10 +331,14 @@ describe("WebSocket Server", () => {
           },
         };
 
-        mockWebSocketHandlers.message(mockWebSocket, JSON.stringify(message));
+        wsHandlers.message(
+          mockWebSocket,
+          Buffer.from(JSON.stringify(message)),
+          false,
+        );
 
         // Wait for async operations to complete
-        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 10));
 
         // Verify streaming messages were sent
         expect(mockWebSocket.send).toHaveBeenCalledWith(
@@ -213,7 +353,7 @@ describe("WebSocket Server", () => {
       });
 
       it("should handle invalid JSON gracefully", () => {
-        mockWebSocketHandlers.message(mockWebSocket, "invalid json");
+        wsHandlers.message(mockWebSocket, Buffer.from("invalid json"), false);
 
         // Verify error response was sent
         expect(mockWebSocket.send).toHaveBeenCalledWith(
@@ -231,7 +371,11 @@ describe("WebSocket Server", () => {
           payload: { props: { test: true } }, // Missing URL
         };
 
-        mockWebSocketHandlers.message(mockWebSocket, JSON.stringify(message));
+        wsHandlers.message(
+          mockWebSocket,
+          Buffer.from(JSON.stringify(message)),
+          false,
+        );
 
         // Verify error response was sent
         expect(mockWebSocket.send).toHaveBeenCalledWith(
@@ -249,6 +393,8 @@ describe("WebSocket Server", () => {
           port: 3003,
         });
 
+        createdServers.push(serverWithoutStreaming);
+
         const message: WebSocketMessage = {
           id: "test-no-streaming",
           type: "stream_request",
@@ -257,10 +403,13 @@ describe("WebSocket Server", () => {
 
         // Get the handlers for the new server
         const handlers =
-          mockBun.serve.mock.calls[mockBun.serve.mock.calls.length - 1][0]
-            .websocket;
+          mockApp.ws.mock.calls[mockApp.ws.mock.calls.length - 1][1];
         handlers.open(mockWebSocket);
-        handlers.message(mockWebSocket, JSON.stringify(message));
+        handlers.message(
+          mockWebSocket,
+          Buffer.from(JSON.stringify(message)),
+          false,
+        );
 
         // Verify error response was sent
         expect(mockWebSocket.send).toHaveBeenCalledWith(
@@ -283,7 +432,11 @@ describe("WebSocket Server", () => {
           .spyOn(console, "warn")
           .mockImplementation(() => {});
 
-        mockWebSocketHandlers.message(mockWebSocket, JSON.stringify(message));
+        wsHandlers.message(
+          mockWebSocket,
+          Buffer.from(JSON.stringify(message)),
+          false,
+        );
 
         expect(consoleSpy).toHaveBeenCalledWith(
           "Unknown message type: unknown_type",
@@ -294,94 +447,136 @@ describe("WebSocket Server", () => {
     });
   });
 
-  describe("Server Configuration", () => {
-    it("should configure WebSocket settings correctly", async () => {
-      await createWebSocketServer({
-        render: async (context) => ({ body: "test" }),
-        port: 3001,
-      });
-
-      expect(mockBun.serve).toHaveBeenCalledWith(
-        expect.objectContaining({
-          websocket: expect.objectContaining({
-            maxPayloadLength: 16 * 1024 * 1024, // 16MB
-            idleTimeout: 120, // 2 minutes
-            backpressureLimit: 1024 * 1024, // 1MB
-            closeOnBackpressureLimit: false,
-            sendPings: true,
-          }),
-        }),
-      );
-    });
-
-    it("should call lifecycle callbacks when provided", async () => {
-      const onConnection = vi.fn();
-      const onDisconnection = vi.fn();
-
+  describe("HTTP Fallback", () => {
+    beforeEach(async () => {
       server = await createWebSocketServer({
         render: async (context) => ({ body: "test" }),
-        onConnection,
-        onDisconnection,
         port: 3001,
       });
 
-      // Simulate connection
-      mockWebSocketHandlers.open(mockWebSocket);
-      expect(onConnection).toHaveBeenCalledWith(mockWebSocket.data);
+      createdServers.push(server);
+    });
 
-      // Simulate disconnection
-      mockWebSocketHandlers.close(mockWebSocket, 1000, "Normal closure");
-      expect(onDisconnection).toHaveBeenCalledWith(
-        mockWebSocket.data,
-        1000,
-        "Normal closure",
+    it("should return upgrade required for HTTP requests", () => {
+      const mockRes = {
+        writeStatus: vi.fn().mockReturnThis(),
+        writeHeader: vi.fn().mockReturnThis(),
+        end: vi.fn().mockReturnThis(),
+      };
+      const mockReq = {};
+
+      httpHandlers(mockRes, mockReq);
+
+      expect(mockRes.writeStatus).toHaveBeenCalledWith("426 Upgrade Required");
+      expect(mockRes.writeHeader).toHaveBeenCalledWith(
+        "Content-Type",
+        "text/plain",
+      );
+      expect(mockRes.end).toHaveBeenCalledWith(
+        "This server only accepts WebSocket connections",
       );
     });
   });
 
-  describe("HTTP Upgrade", () => {
-    it("should upgrade HTTP requests to WebSocket", async () => {
+  describe("Server Management", () => {
+    it("should broadcast messages to all connections", async () => {
       server = await createWebSocketServer({
         render: async (context) => ({ body: "test" }),
         port: 3001,
       });
 
-      const mockRequest = new Request("http://localhost:3001");
-      const mockServerUpgrade = {
-        upgrade: vi.fn().mockReturnValue(true),
+      createdServers.push(server);
+
+      // Simulate multiple connections with unique IDs
+      const mockWs1 = {
+        ...mockWebSocket,
+        send: vi.fn().mockReturnValue(true),
+        connectionId: "conn-1",
+      };
+      const mockWs2 = {
+        ...mockWebSocket,
+        send: vi.fn().mockReturnValue(true),
+        connectionId: "conn-2",
       };
 
-      const config = mockBun.serve.mock.calls[0][0];
-      const result = config.fetch(mockRequest, mockServerUpgrade);
+      wsHandlers.open(mockWs1);
+      wsHandlers.open(mockWs2);
 
-      expect(mockServerUpgrade.upgrade).toHaveBeenCalledWith(
-        mockRequest,
-        expect.objectContaining({
-          data: expect.objectContaining({
-            id: expect.any(String),
-            connectedAt: expect.any(Number),
-          }),
-        }),
-      );
-      expect(result).toBeUndefined();
+      const broadcastMessage: WebSocketMessage = {
+        id: "broadcast-test",
+        type: "health_check",
+        payload: {},
+      };
+
+      server.broadcast(broadcastMessage);
+
+      const expectedMessage = JSON.stringify(broadcastMessage);
+      expect(mockWs1.send).toHaveBeenCalledWith(expectedMessage);
+      expect(mockWs2.send).toHaveBeenCalledWith(expectedMessage);
     });
 
-    it("should return error response when upgrade fails", async () => {
+    it("should handle broadcast errors gracefully", async () => {
       server = await createWebSocketServer({
         render: async (context) => ({ body: "test" }),
         port: 3001,
       });
 
-      const mockRequest = new Request("http://localhost:3001");
-      const mockServerUpgrade = {
-        upgrade: vi.fn().mockReturnValue(false),
+      createdServers.push(server);
+
+      // Simulate connection that throws on send
+      const mockWs = {
+        ...mockWebSocket,
+        send: vi.fn().mockImplementation(() => {
+          throw new Error("Connection closed");
+        }),
+        connectionId: "error-conn",
       };
 
-      const config = mockBun.serve.mock.calls[0][0];
-      const result = config.fetch(mockRequest, mockServerUpgrade);
+      wsHandlers.open(mockWs);
 
-      expect(result).toBeInstanceOf(Response);
-      expect(result.status).toBe(400);
+      const broadcastMessage: WebSocketMessage = {
+        id: "broadcast-test",
+        type: "health_check",
+        payload: {},
+      };
+
+      // Should not throw
+      expect(() => server.broadcast(broadcastMessage)).not.toThrow();
+    });
+
+    it("should close server properly", async () => {
+      server = await createWebSocketServer({
+        render: async (context) => ({ body: "test" }),
+        port: 3001,
+      });
+
+      // Don't add to createdServers since we're testing close manually
+
+      // Simulate connections with unique IDs
+      const mockWs1 = {
+        ...mockWebSocket,
+        close: vi.fn(),
+        connectionId: "close-conn-1",
+      };
+      const mockWs2 = {
+        ...mockWebSocket,
+        close: vi.fn(),
+        connectionId: "close-conn-2",
+      };
+
+      wsHandlers.open(mockWs1);
+      wsHandlers.open(mockWs2);
+
+      server.close();
+
+      // Verify all connections were closed
+      expect(mockWs1.close).toHaveBeenCalled();
+      expect(mockWs2.close).toHaveBeenCalled();
+
+      // Verify listen socket was closed
+      expect(mockUWS.us_listen_socket_close).toHaveBeenCalledWith(
+        mockListenSocket,
+      );
     });
   });
 });

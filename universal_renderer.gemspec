@@ -26,7 +26,7 @@ Gem::Specification.new do |spec|
 
   spec.add_dependency "loofah", "~> 2.24"
   spec.add_dependency "rails", ">= 7.1", "< 8.0"
-  spec.add_dependency "websocket-client-simple", "~> 0.8"
-  spec.add_dependency "concurrent-ruby", "~> 1.2"
+  spec.add_dependency "faye-websocket", "~> 0.11"
+  spec.add_dependency "eventmachine", "~> 1.2"
   spec.metadata["rubygems_mfa_required"] = "true"
 end
