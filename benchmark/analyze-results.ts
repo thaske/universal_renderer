@@ -15,6 +15,7 @@ interface BenchmarkMetrics {
 
 interface Stats {
   mean: number;
+  median: number;
   p95: number;
   stdDev: number;
   count: number;
@@ -27,12 +28,13 @@ interface AggregatedVariantResult {
 
 function calculateStats(numbers: number[]): Stats {
   if (numbers.length === 0) {
-    return { mean: 0, p95: 0, stdDev: 0, count: 0 };
+    return { mean: 0, median: 0, p95: 0, stdDev: 0, count: 0 };
   }
   numbers.sort((a, b) => a - b);
 
   const sum = numbers.reduce((acc, val) => acc + val, 0);
   const mean = sum / numbers.length;
+  const median = numbers[Math.floor(numbers.length / 2)];
 
   const p95Index = Math.max(0, Math.ceil(numbers.length * 0.95) - 1);
   const p95 = numbers[p95Index];
@@ -44,6 +46,7 @@ function calculateStats(numbers: number[]): Stats {
 
   return {
     mean,
+    median,
     p95,
     stdDev,
     count: numbers.length,
