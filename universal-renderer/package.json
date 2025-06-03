@@ -45,6 +45,11 @@
       "import": "./dist/fastify/index.mjs",
       "require": "./dist/fastify/index.js",
       "types": "./dist/fastify/index.d.mts"
+    },
+    "./uwebsocket": {
+      "import": "./dist/uwebsocket/index.mjs",
+      "require": "./dist/uwebsocket/index.js",
+      "types": "./dist/uwebsocket/index.d.mts"
     }
   },
   "files": [
@@ -88,5 +93,8 @@
   "publishConfig": {
     "access": "public"
   },
-  "dependencies": {}
+  "dependencies": {
+    "fastify": "^5.3.3",
+    "uWebSockets.js": "github:uNetworking/uWebSockets.js#v20.52.0"
+  }
 }

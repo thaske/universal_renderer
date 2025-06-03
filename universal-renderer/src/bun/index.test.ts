@@ -1,4 +1,5 @@
 import Bun, { type Server } from "bun";
+import React from "react";
 import { afterAll, describe, expect, it } from "vitest";
 import { createServer } from "./index"; // Adjust if exports are different
 import type { BunServerOptions } from "./types";
@@ -69,10 +70,7 @@ describe("Bun createServer", () => {
   it("should accept valid stream configuration and start/stop server", async () => {
     const mockStreamCallbacks = {
       node: (context: any) =>
-        ({
-          type: "div",
-          props: { children: `Test Bun Stream ${context.streamTest}` },
-        }) as any,
+        React.createElement("div", null, `Test Bun Stream ${context.streamTest}`),
       head: async (context: any) =>
         `<meta name=\"stream-test\" content=\"${context.streamTest}\">`,
     };
@@ -114,7 +112,7 @@ describe("Bun createServer", () => {
     expect(streamHtml).toContain('<meta name="stream-test" content="data">');
     expect(streamHtml).toContain("<div>Test Bun Stream data</div>");
     expect(streamHtml.startsWith("<html><head>")).toBe(true);
-    expect(streamHtml.endsWith("</body></html>")).toBe(true);
+    expect(streamHtml.trim()).toMatch(/<\/body>\s*<\/html>$/);
 
     // Stop the server (handled by afterAll, will stop the last assigned serverInstance)
   });

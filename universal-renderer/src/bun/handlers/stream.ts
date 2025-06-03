@@ -106,6 +106,7 @@ export function createStreamHandler<TContext extends Record<string, any>>(
       return new Promise<Response>((resolve, reject) => {
         try {
           let controller: ReadableStreamDefaultController<Uint8Array>;
+          let templateEndStr = "";
           const webReadableStream = new ReadableStream<Uint8Array>({
             start(c) {
               controller = c;
@@ -141,6 +142,7 @@ export function createStreamHandler<TContext extends Record<string, any>>(
             final(callback) {
               if (controller) {
                 try {
+                  controller.enqueue(new TextEncoder().encode(templateEndStr));
                   controller.close();
                   callback();
                 } catch (e) {
@@ -175,9 +177,10 @@ export function createStreamHandler<TContext extends Record<string, any>>(
                 }),
               );
 
-              const [templateStart = "", templateEnd = ""] = template.split(
+              const [templateStart = "", templateEnd] = template.split(
                 SSR_MARKERS.BODY,
               );
+              templateEndStr = templateEnd || "";
               const headContent = streamCallbacks.head
                 ? await streamCallbacks.head(context!)
                 : "";
