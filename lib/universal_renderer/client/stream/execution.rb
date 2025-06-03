@@ -8,30 +8,31 @@ module UniversalRenderer
           response,
           stream_uri
         )
-          success =
-            http_client.request(http_post_request) do |node_res|
-              if node_res.is_a?(Net::HTTPSuccess)
-                node_res.read_body { |chunk| response.stream.write(chunk) }
+          success = false
 
-                true
-              else
-                Rails.logger.error(
-                  "SSR stream server at #{stream_uri} responded with #{node_res.code} #{node_res.message}."
-                )
+          http_client.request(http_post_request) do |node_res|
+            if node_res.is_a?(Net::HTTPSuccess)
+              node_res.read_body { |chunk| response.stream.write(chunk) }
 
-                # Close stream without forwarding error to allow fallback to client rendering
-                response.stream.close unless response.stream.closed?
-
-                false
-              end
-            rescue StandardError => e
+              success = true
+            else
               Rails.logger.error(
-                "Error during SSR data transfer or stream writing from #{stream_uri}: #{e.class.name} - #{e.message}"
+                "SSR stream server at #{stream_uri} responded with #{node_res.code} #{node_res.message}."
               )
-              false
-            ensure
+
+              # Close stream without forwarding error to allow fallback to client rendering
               response.stream.close unless response.stream.closed?
+
+              success = false
             end
+          rescue StandardError => e
+            Rails.logger.error(
+              "Error during SSR data transfer or stream writing from #{stream_uri}: #{e.class.name} - #{e.message}"
+            )
+            success = false
+          ensure
+            response.stream.close unless response.stream.closed?
+          end
 
           success
         end
