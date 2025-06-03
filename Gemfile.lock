@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    universal_renderer (0.4.2)
+    universal_renderer (0.4.3)
       loofah (~> 2.24)
       rails (>= 7.1, < 9.0)
 
