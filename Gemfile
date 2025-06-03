@@ -12,7 +12,7 @@ gem "sqlite3"
 # gem "debug", ">= 1.0.0"
 
 group :development do
-  gem "rails", ">= 7.1", "< 8.0"
+  gem "rails", ">= 7.1", "< 9.0"
   gem "rspec-rails", "~> 6.0"
   gem "webmock", "~> 3.18"
 
