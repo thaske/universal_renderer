@@ -35,7 +35,15 @@ export type HonoSSRHandlerOptions<TContext extends Record<string, any>> =
  * @template TContext - The type of context object used throughout the rendering pipeline
  */
 export type HonoStreamHandlerOptions<TContext extends Record<string, any>> =
-  CoreStreamHandlerOptions<TContext> & {
+  Omit<CoreStreamHandlerOptions<TContext>, "streamCallbacks"> & {
+    streamCallbacks: Omit<
+      CoreStreamHandlerOptions<TContext>["streamCallbacks"],
+      "transform"
+    > & {
+      transform?: (
+        context: TContext,
+      ) => TransformStream<Uint8Array, Uint8Array>;
+    };
     /**
      * Optional Hono error handler.
      */

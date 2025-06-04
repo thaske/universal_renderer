@@ -8,6 +8,8 @@ import type { FastifyServerOptions } from "universal-renderer/fastify";
 import { createServer as createFastifyServer } from "universal-renderer/fastify";
 import type { HonoServerOptions } from "universal-renderer/hono";
 import { createServer as createHonoServer } from "universal-renderer/hono";
+import type { UWSServerOptions } from "universal-renderer/uwebsocket";
+
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 
@@ -24,7 +26,7 @@ const argv = yargs(hideBin(process.argv))
     description: "Enable Streaming",
   })
   .option("server", {
-    choices: ["express", "hono", "bun", "fastify"],
+    choices: ["express", "hono", "bun", "fastify", "uwebsocket"],
     default: "express",
     description: "Server implementation to use",
   })
@@ -112,6 +114,14 @@ async function main() {
     const app = await createFastifyServer(options);
     await app.listen({ port });
     console.log(`Fastify server running on http://localhost:${port}`);
+  } else if (serverImpl === "uwebsocket") {
+    const { createServer: createUWebSocketServer } = await import(
+      "universal-renderer/uwebsocket"
+    );
+    const options: UWSServerOptions<any> = {
+      ...commonOptions,
+    };
+    const app = await createUWebSocketServer(options);
   }
 }
 

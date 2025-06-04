@@ -1,6 +1,5 @@
-import { PassThrough, Writable } from "node:stream";
 import type { ReactNode } from "react";
-import { renderToPipeableStream } from "react-dom/server.node";
+import { renderToReadableStream } from "react-dom/server.bun";
 
 import { SSR_MARKERS } from "@/constants";
 import type {
@@ -9,16 +8,6 @@ import type {
   BunStreamHandlerOptions,
 } from "../types";
 
-/**
- * Creates a streaming Server-Side Rendering route handler for Bun (React 18+).
- *
- * This handler expects POST requests with `{ url: string, props?: any, template?: string }`
- * and returns streamed HTML responses.
- *
- * @template TContext - The type of context object used throughout the rendering pipeline
- * @param options - Configuration options for streaming SSR
- * @returns Bun route handler for streaming SSR requests
- */
 export function createStreamHandler<TContext extends Record<string, any>>(
   options: BunStreamHandlerOptions<TContext>,
 ): BunRequestHandler {
@@ -28,9 +17,10 @@ export function createStreamHandler<TContext extends Record<string, any>>(
     cleanup,
     error: customErrorHandler,
   } = options;
+
   const errorHandler: BunErrorHandler =
     customErrorHandler ||
-    ((error: Error, _request: Request) => {
+    ((error: Error) => {
       console.error("[SSR] Unhandled stream error:", error);
       const isDev = process.env.NODE_ENV !== "production";
       return new Response(
@@ -38,10 +28,7 @@ export function createStreamHandler<TContext extends Record<string, any>>(
           error: isDev ? error.message : "Internal Server Error",
           ...(isDev && { stack: error.stack }),
         }),
-        {
-          status: 500,
-          headers: { "Content-Type": "application/json" },
-        },
+        { status: 500, headers: { "Content-Type": "application/json" } },
       );
     });
 
@@ -54,7 +41,6 @@ export function createStreamHandler<TContext extends Record<string, any>>(
 
   return async (request: Request): Promise<Response> => {
     let context: TContext | undefined;
-
     try {
       if (request.method !== "POST") {
         throw new Error(
@@ -93,182 +79,81 @@ export function createStreamHandler<TContext extends Record<string, any>>(
       let reactNode: ReactNode;
       if (streamCallbacks.node) {
         reactNode = streamCallbacks.node(context!);
-      } else if (context && "app" in context && context.app) {
-        reactNode = context.app as ReactNode;
-      } else if (context && "jsx" in context && context.jsx) {
-        reactNode = context.jsx as ReactNode;
+      } else if (context && "app" in context && (context as any).app) {
+        reactNode = (context as any).app as ReactNode;
+      } else if (context && "jsx" in context && (context as any).jsx) {
+        reactNode = (context as any).jsx as ReactNode;
       } else {
         throw new Error(
           "No React node found. Provide streamCallbacks.node or context.app/jsx.",
         );
       }
 
-      return new Promise<Response>((resolve, reject) => {
-        try {
-          let controller: ReadableStreamDefaultController<Uint8Array>;
-          let templateEndStr = "";
-          const webReadableStream = new ReadableStream<Uint8Array>({
-            start(c) {
-              controller = c;
-            },
-            cancel(reason) {
-              console.warn("[SSR] Bun web ReadableStream cancelled:", reason);
-            },
-          });
+      const reactStream = (await renderToReadableStream(
+        reactNode,
+      )) as ReadableStream<Uint8Array>;
+      await (reactStream as any).allReady;
 
-          const nodeWritableBridge = new Writable({
-            write(chunk, encoding, callback) {
-              if (controller) {
-                try {
-                  if (typeof chunk === "string") {
-                    controller.enqueue(new TextEncoder().encode(chunk));
-                  } else if (chunk instanceof Uint8Array) {
-                    controller.enqueue(chunk);
-                  } else {
-                    console.warn(
-                      "[SSR] Bun unhandled chunk type for stream bridge:",
-                      typeof chunk,
-                    );
-                    controller.enqueue(new TextEncoder().encode(String(chunk)));
-                  }
-                  callback();
-                } catch (e) {
-                  callback(e instanceof Error ? e : new Error(String(e)));
-                }
-              } else {
-                callback(new Error("Stream controller not available"));
-              }
-            },
-            final(callback) {
-              if (controller) {
-                try {
-                  controller.enqueue(new TextEncoder().encode(templateEndStr));
-                  controller.close();
-                  callback();
-                } catch (e) {
-                  callback(e instanceof Error ? e : new Error(String(e)));
-                }
-              } else {
-                callback(
-                  new Error("Stream controller not available for closing"),
-                );
-              }
-            },
-            destroy(error, callback) {
-              if (controller && error) {
-                controller.error(error);
-              }
-              callback(error);
-            },
-          });
+      let bodyStream: ReadableStream<Uint8Array> = reactStream;
+      const transform = streamCallbacks.transform?.(context!);
+      if (transform) bodyStream = bodyStream.pipeThrough(transform);
 
-          let headersSent = false;
+      const [templateStart = "", templateEnd = ""] = template.split(
+        SSR_MARKERS.BODY,
+      );
+      const headContent = streamCallbacks.head
+        ? await streamCallbacks.head(context!)
+        : "";
+      const encoder = new TextEncoder();
+      const startChunk = encoder.encode(
+        templateStart.replace(SSR_MARKERS.HEAD, headContent),
+      );
+      const endChunk = encoder.encode(templateEnd);
 
-          const { pipe, abort } = renderToPipeableStream(reactNode, {
-            onShellReady: async () => {
-              headersSent = true;
-              resolve(
-                new Response(webReadableStream, {
-                  status: 200,
-                  headers: {
-                    "Content-Type": "text/html; charset=utf-8",
-                    "Transfer-Encoding": "chunked",
-                  },
-                }),
-              );
-
-              const [templateStart = "", templateEnd] = template.split(
-                SSR_MARKERS.BODY,
-              );
-              templateEndStr = templateEnd || "";
-              const headContent = streamCallbacks.head
-                ? await streamCallbacks.head(context!)
-                : "";
-
-              nodeWritableBridge.write(
-                templateStart.replace(SSR_MARKERS.HEAD, headContent),
-              );
-
-              const transformStream = streamCallbacks.transform?.(context!);
-              if (transformStream) {
-                const intermediateRelay = new PassThrough();
-                intermediateRelay
-                  .pipe(transformStream)
-                  .pipe(nodeWritableBridge);
-                pipe(intermediateRelay);
-              } else {
-                pipe(nodeWritableBridge);
-              }
-            },
-            onShellError: async (err: any) => {
-              console.error("[SSR] Bun Shell Error:", err);
-              if (!headersSent) {
-                abort();
-                resolve(
-                  errorHandler(new Error("Shell rendering error"), request),
-                );
-              } else {
-                nodeWritableBridge.destroy(
-                  err instanceof Error ? err : new Error(String(err)),
-                );
-                abort();
-              }
-              if (cleanup && context) {
-                await cleanup(context);
-              }
-            },
-            onError: (error: unknown, errorInfo: unknown) => {
-              console.error("[SSR] Bun Stream Error:", error, errorInfo);
-              if (!nodeWritableBridge.destroyed && controller) {
-              }
-            },
-          });
-
-          nodeWritableBridge.on("finish", async () => {
-            if (cleanup && context) {
-              try {
-                await cleanup(context);
-              } catch (cleanupErr) {
-                console.error(
-                  "[SSR] Error during cleanup after stream finish:",
-                  cleanupErr,
-                );
-              }
+      const finalStream = new ReadableStream<Uint8Array>({
+        async start(controller) {
+          controller.enqueue(startChunk);
+          const reader = bodyStream.getReader();
+          try {
+            while (true) {
+              const { value, done } = await reader.read();
+              if (done) break;
+              if (value) controller.enqueue(value);
             }
-          });
+          } catch (e) {
+            controller.error(e);
+          } finally {
+            controller.enqueue(endChunk);
+            controller.close();
+            if (cleanup && context) await cleanup(context);
+          }
+        },
+        cancel(reason) {
+          bodyStream.cancel(reason);
+          if (cleanup && context) cleanup(context);
+        },
+      });
 
-          nodeWritableBridge.on("error", async (err) => {
-            console.error("[SSR] Bun nodeWritableBridge error:", err);
-            if (!headersSent) {
-              abort();
-              resolve(errorHandler(err, request));
-            } else {
-              if (!nodeWritableBridge.destroyed) {
-                nodeWritableBridge.destroy(err);
-              }
-              abort();
-            }
-            if (cleanup && context) {
-              await cleanup(context);
-            }
-          });
-        } catch (e: any) {
-          const errorToHandle = e instanceof Error ? e : new Error(String(e));
-          resolve(errorHandler(errorToHandle, request));
-        }
+      return new Response(finalStream, {
+        status: 200,
+        headers: {
+          "Content-Type": "text/html; charset=utf-8",
+          "Transfer-Encoding": "chunked",
+        },
       });
     } catch (err: any) {
       if (cleanup && context) {
         try {
           await cleanup(context);
-        } catch (cleanupError) {
+        } catch (cleanupErr) {
           console.error(
             "[SSR] Error during cleanup after stream setup error:",
-            cleanupError,
+            cleanupErr,
           );
         }
       }
-      return errorHandler(err, request);
+      const errorToHandle = err instanceof Error ? err : new Error(String(err));
+      return errorHandler(errorToHandle, request);
     }
   };
 }

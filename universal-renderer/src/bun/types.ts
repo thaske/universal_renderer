@@ -48,7 +48,15 @@ export type BunSSRHandlerOptions<TContext extends Record<string, any>> =
  * @template TContext - The type of context object used throughout the rendering pipeline
  */
 export type BunStreamHandlerOptions<TContext extends Record<string, any>> =
-  CoreStreamHandlerOptions<TContext> & {
+  Omit<CoreStreamHandlerOptions<TContext>, "streamCallbacks"> & {
+    streamCallbacks: Omit<
+      CoreStreamHandlerOptions<TContext>["streamCallbacks"],
+      "transform"
+    > & {
+      transform?: (
+        context: TContext,
+      ) => TransformStream<Uint8Array, Uint8Array>;
+    };
     /**
      * Optional Bun error handler.
      */

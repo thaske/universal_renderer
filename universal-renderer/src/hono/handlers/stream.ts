@@ -1,21 +1,10 @@
 import type { Handler } from "hono";
-import { PassThrough } from "node:stream";
-import { renderToPipeableStream } from "react-dom/server.node";
-import { Writable } from "stream";
+import type { ReactNode } from "react";
+import { renderToReadableStream } from "react-dom/server.bun";
 
 import { SSR_MARKERS } from "@/constants";
 import type { HonoStreamHandlerOptions } from "../types";
 
-/**
- * Creates a streaming Server-Side Rendering route handler for React 18+ streaming SSR.
- *
- * This handler expects POST requests with `{ url: string, props?: any, template: string }`
- * and returns streamed HTML responses for faster perceived performance.
- *
- * @template TContext - The type of context object used throughout the rendering pipeline
- * @param options - Configuration options for streaming SSR
- * @returns Hono route handler for streaming SSR requests
- */
 export function createStreamHandler<TContext extends Record<string, any>>(
   options: HonoStreamHandlerOptions<TContext>,
 ): Handler {
@@ -27,7 +16,6 @@ export function createStreamHandler<TContext extends Record<string, any>>(
 
   return async (c) => {
     let context: TContext | undefined;
-
     try {
       const body = await c.req.json();
       const { url, props = {}, template = "" } = body;
@@ -37,103 +25,67 @@ export function createStreamHandler<TContext extends Record<string, any>>(
         return c.text("URL is required");
       }
 
-      // Validate that the template contains the required body marker
       if (!template.includes(SSR_MARKERS.BODY)) {
         c.status(400);
         return c.text(`Template missing ${SSR_MARKERS.BODY} marker`);
       }
 
-      // Set up the rendering context
       context = await options.setup(url, props);
 
-      let reactNode;
+      let reactNode: ReactNode;
       if (streamCallbacks.node) {
         reactNode = streamCallbacks.node(context!);
       } else if (context && "app" in context) {
-        reactNode = context.app;
+        reactNode = (context as any).app;
       } else if (context && "jsx" in context) {
-        reactNode = context.jsx;
+        reactNode = (context as any).jsx;
       } else {
         throw new Error("No app callback or context.app/context.jsx provided");
       }
 
-      const stream = new PassThrough();
+      const reactStream = (await renderToReadableStream(
+        reactNode,
+      )) as ReadableStream<Uint8Array>;
+      await (reactStream as any).allReady;
+
+      let bodyStream: ReadableStream<Uint8Array> = reactStream;
+      const transform = streamCallbacks.transform?.(context!);
+      if (transform) bodyStream = bodyStream.pipeThrough(transform);
+
+      const [head, tail] = template.split(SSR_MARKERS.BODY);
+      let finalHead = head;
+      if (streamCallbacks.head) {
+        const headContent = await streamCallbacks.head(context!);
+        if (headContent) {
+          finalHead = head.replace(SSR_MARKERS.HEAD, headContent);
+        }
+      }
+
       const encoder = new TextEncoder();
-      let abort: () => void;
-      let controller: ReadableStreamDefaultController<Uint8Array>;
+      const startChunk = encoder.encode(finalHead);
+      const tailChunk = encoder.encode(tail ?? "");
 
       const readableStream = new ReadableStream<Uint8Array>({
-        start(ctrl) {
-          controller = ctrl;
-
-          const { pipe, abort: abortFn } = renderToPipeableStream(reactNode, {
-            onShellReady: async () => {
-              const [head, tail] = template.split(SSR_MARKERS.BODY);
-              let finalHead = head;
-              if (streamCallbacks.head) {
-                const headContent = await streamCallbacks.head(context!);
-                if (headContent) {
-                  finalHead = head.replace(SSR_MARKERS.HEAD, headContent);
-                }
-              }
-              controller.enqueue(encoder.encode(finalHead));
-
-              const transform = streamCallbacks.transform?.(context!);
-              if (transform) {
-                stream
-                  .pipe(transform)
-                  .pipe(
-                    new Writable({
-                      write(chunk, _encoding, callback) {
-                        controller.enqueue(encoder.encode(chunk.toString()));
-                        callback();
-                      },
-                      final(callback) {
-                        controller.enqueue(encoder.encode(tail));
-                        controller.close();
-                        if (context && options.cleanup) options.cleanup(context!);
-                        callback();
-                      },
-                    }),
-                  );
-              } else {
-                stream.pipe(
-                  new Writable({
-                    write(chunk, _encoding, callback) {
-                      controller.enqueue(encoder.encode(chunk.toString()));
-                      callback();
-                    },
-                    final(callback) {
-                      controller.enqueue(encoder.encode(tail));
-                      controller.close();
-                      if (context && options.cleanup) options.cleanup(context!);
-                      callback();
-                    },
-                  }),
-                );
-              }
-
-              pipe(stream);
-            },
-            onShellError: (error: any) => {
-              console.error("[SSR] Shell error");
-              console.error(error);
-              controller.error(error);
-              if (context && options.cleanup) options.cleanup(context!);
-            },
-            onError: (error: any) => {
-              console.error("[SSR] Stream error");
-              console.error(error);
-              if (context && options.cleanup && error && error.message && error.message.includes("aborted")) {
-                options.cleanup(context);
-              }
-            },
-          });
-          abort = abortFn;
+        async start(controller) {
+          controller.enqueue(startChunk);
+          const reader = bodyStream.getReader();
+          try {
+            while (true) {
+              const { value, done } = await reader.read();
+              if (done) break;
+              if (value) controller.enqueue(value);
+            }
+          } catch (err) {
+            controller.error(err);
+          } finally {
+            controller.enqueue(tailChunk);
+            controller.close();
+            if (context && options.cleanup) await options.cleanup(context);
+          }
         },
-        cancel() {
-          abort?.();
-          if (context && options.cleanup) options.cleanup(context!);
+        cancel(reason) {
+          bodyStream.cancel(reason);
+          if (context && options.cleanup) options.cleanup(context);
         },
       });
 
