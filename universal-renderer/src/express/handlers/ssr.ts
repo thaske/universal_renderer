@@ -1,5 +1,6 @@
-import type { Request, Response } from "express";
+import type { NextFunction, Request, Response } from "express";
 import type { RenderOutput, SSRHandlerOptions } from "../../types";
+import { HttpError } from "./error";
 
 /**
  * Creates a Server-Side Rendering route handler for Express.
@@ -21,14 +22,14 @@ export function createSSRHandler<TContext extends Record<string, any>>(
     throw new Error("setup callback is required");
   }
 
-  return async (req: Request, res: Response) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
     let context: TContext | undefined;
 
     try {
       const { url, props = {} } = req.body;
 
       if (!url || typeof url !== "string") {
-        return res.status(400).json({ error: "URL string is required" });
+        throw new HttpError("URL string is required", 400);
       }
 
       context = await options.setup(url, props);
@@ -36,8 +37,7 @@ export function createSSRHandler<TContext extends Record<string, any>>(
 
       res.json(result);
     } catch (error) {
-      console.error("[SSR] Express Render error:", error);
-      throw error;
+      return next(error);
     } finally {
       if (context && options.cleanup) {
         await options.cleanup(context);

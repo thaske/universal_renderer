@@ -1,7 +1,7 @@
 import Bun, { type Server } from "bun";
 import React from "react";
 import { afterAll, describe, expect, it } from "vitest";
-import { createServer } from "./index"; // Adjust if exports are different
+import { createServer } from "./server";
 import type { BunServerOptions } from "./types";
 
 const TEST_PORT = 3003; // Use a different port for Bun tests
@@ -70,7 +70,11 @@ describe("Bun createServer", () => {
   it("should accept valid stream configuration and start/stop server", async () => {
     const mockStreamCallbacks = {
       node: (context: any) =>
-        React.createElement("div", null, `Test Bun Stream ${context.streamTest}`),
+        React.createElement(
+          "div",
+          null,
+          `Test Bun Stream ${context.streamTest}`,
+        ),
       head: async (context: any) =>
         `<meta name=\"stream-test\" content=\"${context.streamTest}\">`,
     };
