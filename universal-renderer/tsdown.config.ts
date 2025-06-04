@@ -7,6 +7,7 @@ export default defineConfig({
     "src/hono/index.ts",
     "src/bun/index.ts",
     "src/fastify/index.ts",
+    "src/uwebsocket/index.ts",
   ],
   format: ["esm", "cjs"],
   dts: true,
