@@ -1,9 +1,10 @@
-import { PassThrough, Writable } from "node:stream";
-import { renderToPipeableStream } from "react-dom/server.node";
 import { SSR_MARKERS } from "@/constants";
+import { PassThrough } from "node:stream";
 import type { ReactNode } from "react";
-import type { UWSStreamHandlerOptions, UWSHandler } from "../types";
+import type { UWSHandler, UWSStreamHandlerOptions } from "../types";
 import { createErrorHandler } from "./error";
+
+import { renderToPipeableStream } from "react-dom/server.node";
 
 export function createStreamHandler<TContext extends Record<string, any>>(
   options: UWSStreamHandlerOptions<TContext>,
@@ -23,8 +24,10 @@ export function createStreamHandler<TContext extends Record<string, any>>(
       context = await setup(url, props);
       let reactNode: ReactNode;
       if (streamCallbacks.node) reactNode = streamCallbacks.node(context);
-      else if (context && (context as any).app) reactNode = (context as any).app;
-      else if (context && (context as any).jsx) reactNode = (context as any).jsx;
+      else if (context && (context as any).app)
+        reactNode = (context as any).app;
+      else if (context && (context as any).jsx)
+        reactNode = (context as any).jsx;
       else throw new Error("No app callback provided");
 
       const [headPart, tailPart] = template.split(SSR_MARKERS.BODY);

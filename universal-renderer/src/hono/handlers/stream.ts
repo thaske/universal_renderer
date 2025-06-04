@@ -1,6 +1,6 @@
 import type { Handler } from "hono";
-import { renderToReadableStream } from "react-dom/server";
 import type { ReactNode } from "react";
+import { renderToReadableStream } from "react-dom/server.bun";
 
 import { SSR_MARKERS } from "@/constants";
 import type { HonoStreamHandlerOptions } from "../types";

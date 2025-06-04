@@ -20,7 +20,7 @@ interface BenchmarkMetrics {
 interface ServerVariant {
   ssr: boolean;
   stream: boolean;
-  server: "express" | "hono" | "bun" | "fastify";
+  server: "express" | "hono" | "bun" | "fastify" | "uwebsocket";
   port: number;
 }
 
@@ -38,7 +38,8 @@ async function launchServer(variant: ServerVariant): Promise<ChildProcess> {
     String(variant.port),
   ];
 
-  const serverProcess = spawn("bun", args, {
+  const runtime = variant.server === "uwebsocket" ? "node" : "bun";
+  const serverProcess = spawn(runtime, args, {
     stdio: ["ignore", "pipe", "pipe"],
     detached: true,
   });
@@ -202,8 +203,9 @@ async function measurePage(page: Page, url: string): Promise<BenchmarkMetrics> {
           const lcpEntries = performance.getEntriesByType(
             "largest-contentful-paint",
           );
-          if (lcpEntries.length > 0)
-            lcpTime = lcpEntries[lcpEntries.length - 1].startTime;
+          if (lcpEntries && lcpEntries.length > 0) {
+            lcpTime = lcpEntries?.[lcpEntries.length - 1]?.startTime ?? 0;
+          }
         }
         resolve({ fcp: fcpTime ?? 0, lcp: lcpTime ?? 0 });
       }, 500); // Wait up to 500ms after load for LCP
@@ -235,6 +237,8 @@ test.describe("Page Load Benchmark", () => {
   });
 
   const variants: Omit<ServerVariant, "port">[] = [
+    // { ssr: true, stream: false, server: "uwebsocket" },
+    // { ssr: false, stream: false, server: "uwebsocket" },
     { ssr: true, stream: false, server: "express" },
     { ssr: true, stream: true, server: "express" },
     { ssr: false, stream: false, server: "express" }, // SSR off, stream should be irrelevant
