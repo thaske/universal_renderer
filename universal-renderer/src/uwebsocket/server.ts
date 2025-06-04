@@ -1,8 +1,8 @@
 import uWS from "uWebSockets.js";
-import { createErrorHandler } from "./handlers/error";
 import { createHealthHandler } from "./handlers/health";
 import { createSSRHandler } from "./handlers/ssr";
 import { createStreamHandler } from "./handlers/stream";
+import { readJson } from "./json";
 import type { UWSServerOptions } from "./types";
 
 export async function createServer<
@@ -27,25 +27,18 @@ export async function createServer<
     error: options.error,
   });
 
-  const jsonHandler = (handler: (body: any, res: uWS.HttpResponse) => void) => {
-    return (res: uWS.HttpResponse, _req: uWS.HttpRequest) => {
-      let body = "";
-      res.onData((chunk, isLast) => {
-        body += Buffer.from(chunk).toString();
-        if (isLast) {
-          try {
-            const data = body ? JSON.parse(body) : {};
-            handler(data, res);
-          } catch (err) {
-            createErrorHandler()(res, err as Error);
-          }
-        }
-      });
-    };
-  };
-
-  app.post("/", jsonHandler(ssr));
-  app.post("/static", jsonHandler(ssr));
+  app.post("/", (res, req) => {
+    readJson(
+      res,
+      (body) => {
+        ssr(body, res);
+      },
+      () => {
+        /* Request was prematurely aborted or invalid or missing, stop reading */
+        console.log("Invalid JSON or no data at all!");
+      },
+    );
+  });
 
   if (options.streamCallbacks) {
     const stream = createStreamHandler({
@@ -54,7 +47,19 @@ export async function createServer<
       streamCallbacks: options.streamCallbacks,
       error: options.error,
     });
-    app.post("/stream", jsonHandler(stream));
+
+    app.post("/stream", (res, req) => {
+      readJson(
+        res,
+        (body) => {
+          stream(body, res);
+        },
+        () => {
+          /* Request was prematurely aborted or invalid or missing, stop reading */
+          console.log("Invalid JSON or no data at all!");
+        },
+      );
+    });
   }
 
   return app;
