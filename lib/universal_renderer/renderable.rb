@@ -69,6 +69,7 @@ module UniversalRenderer
       # SSR streaming failed or was not possible (e.g. server down, config missing).
       if streaming_succeeded
         response.stream.close unless response.stream.closed?
+        true
       else
         Rails.logger.error(
           "SSR stream fallback: " \
