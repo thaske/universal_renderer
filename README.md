@@ -33,13 +33,13 @@ UniversalRenderer helps you forward rendering requests to external SSR services,
    ```
 
 3. Run the generator:
+
    ```bash
    $ rails generate universal_renderer:install
    ```
 
 4. Install a server framework for the Node SSR server:
    ```bash
-   $ npm install fastify        # Fastify server
    $ npm install uWebSockets.js # uWebSockets.js server (requires Node runtime)
    ```
    These frameworks are peer dependencies of the `universal-renderer` package.

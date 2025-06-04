@@ -20,7 +20,7 @@ interface BenchmarkMetrics {
 interface ServerVariant {
   ssr: boolean;
   stream: boolean;
-  server: "express" | "hono" | "bun" | "fastify" | "uwebsocket";
+  server: "express" | "bun" | "uwebsocket";
   port: number;
 }
 
@@ -242,15 +242,9 @@ test.describe("Page Load Benchmark", () => {
     { ssr: true, stream: false, server: "express" },
     { ssr: true, stream: true, server: "express" },
     { ssr: false, stream: false, server: "express" }, // SSR off, stream should be irrelevant
-    { ssr: true, stream: false, server: "hono" },
-    { ssr: true, stream: true, server: "hono" },
-    { ssr: false, stream: false, server: "hono" },
     { ssr: true, stream: false, server: "bun" },
     { ssr: true, stream: true, server: "bun" },
     { ssr: false, stream: false, server: "bun" },
-    { ssr: true, stream: false, server: "fastify" },
-    { ssr: true, stream: true, server: "fastify" },
-    { ssr: false, stream: false, server: "fastify" },
   ];
 
   for (const baseVariant of variants) {
