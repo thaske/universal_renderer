@@ -1,10 +1,11 @@
-import type { RequestHandler } from "express";
+import type { NextFunction, RequestHandler } from "express";
 import { PassThrough } from "node:stream";
 import { renderToPipeableStream } from "react-dom/server.node";
 
 import { SSR_MARKERS } from "@/constants";
 import type { ReactNode } from "react";
 import type { ExpressStreamHandlerOptions } from "../types";
+import { HttpError } from "./error";
 
 /**
  * Creates a streaming Server-Side Rendering route handler for React 18+ streaming SSR.
@@ -24,17 +25,24 @@ export function createStreamHandler<TContext extends Record<string, any>>(
 
   const { streamCallbacks } = options;
 
-  return async (req, res) => {
+  return async (req, res, next: NextFunction) => {
     const { url = "", props = {}, template = "" } = req.body;
 
     let context: TContext | undefined;
     let reactNode: ReactNode | undefined;
 
     try {
-      if (!url) throw new Error("URL is required");
+      if (!url) {
+        throw new HttpError("URL is required", 400);
+      }
 
-      if (!template.includes(SSR_MARKERS.BODY))
-        throw new Error(`Template missing ${SSR_MARKERS.BODY} marker`);
+      if (!template) {
+        throw new HttpError("Template is required", 400);
+      }
+
+      if (!template.includes(SSR_MARKERS.BODY)) {
+        throw new HttpError(`Template missing ${SSR_MARKERS.BODY} marker`, 400);
+      }
 
       context = await options.setup(url, props);
 
@@ -45,11 +53,10 @@ export function createStreamHandler<TContext extends Record<string, any>>(
       } else if (context && "jsx" in context) {
         reactNode = context.jsx;
       } else {
-        throw new Error("No app callback provided");
+        throw new HttpError("No app callback provided", 400);
       }
     } catch (error) {
-      console.error("[SSR] Stream setup error");
-      throw error;
+      return next(error);
     }
 
     const { pipe } = renderToPipeableStream(reactNode, {
@@ -78,12 +85,12 @@ export function createStreamHandler<TContext extends Record<string, any>>(
         });
       },
       onShellError(error) {
-        console.error("[SSR] Shell error");
-        throw error;
+        console.error("[SSR] Shell error:", error);
+        if (!res.headersSent) next(error);
       },
       onError(error) {
-        console.error("[SSR] Stream error");
-        throw error;
+        console.error("[SSR] Stream error:", error);
+        if (!res.headersSent) next(error);
       },
     });
   };
