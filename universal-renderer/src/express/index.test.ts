@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import createServer from "./index";
+import { createServer } from "./server";
 
 describe("Express createServer", () => {
   it("should throw an error when no render callback is provided", async () => {

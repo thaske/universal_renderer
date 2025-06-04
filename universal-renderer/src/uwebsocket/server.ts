@@ -1,10 +1,8 @@
 import uWS from "uWebSockets.js";
-import {
-  createErrorHandler,
-  createHealthHandler,
-  createSSRHandler,
-  createStreamHandler,
-} from "./handlers";
+import { createErrorHandler } from "./handlers/error";
+import { createHealthHandler } from "./handlers/health";
+import { createSSRHandler } from "./handlers/ssr";
+import { createStreamHandler } from "./handlers/stream";
 import type { UWSServerOptions } from "./types";
 
 export async function createServer<
