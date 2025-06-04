@@ -130,7 +130,6 @@ export function createStreamHandler<TContext extends Record<string, any>>(
             },
           });
           abort = abortFn;
-          pipe(stream);
         },
         cancel() {
           abort?.();
