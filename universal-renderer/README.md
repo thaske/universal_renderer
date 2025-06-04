@@ -14,6 +14,8 @@ npm install universal-renderer
 npm install express   # For Express.js
 npm install hono      # For Hono
 npm install bun       # For Bun (usually Bun is the runtime, ensure @types/bun for TS)
+npm install fastify   # For Fastify
+npm install uwebsockets.js # For uWebSockets.js
 ```
 
 ## Examples
