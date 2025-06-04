@@ -16,3 +16,4 @@ export type {
   ExpressSSRHandlerOptions,
   ExpressStreamHandlerOptions,
 } from "./types";
+export { startCluster } from "./cluster";
