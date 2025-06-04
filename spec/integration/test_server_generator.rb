@@ -54,7 +54,7 @@ module IntegrationHelpers
     # Generates the TypeScript content for the test server
     def self.generate_server_content(port:, hostname:, **_config)
       <<~TYPESCRIPT
-        import { createServer } from 'universal-renderer';
+        import { createServer } from 'universal-renderer/express';
         import React from 'react';
 
         // Test callbacks for integration testing

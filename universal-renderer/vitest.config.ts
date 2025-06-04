@@ -7,7 +7,7 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
     include: ["src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}"],
-    exclude: ["node_modules", "dist"],
+    exclude: ["node_modules", "dist", "src/bun/index.test.ts"],
     coverage: {
       reporter: ["text", "json", "html"],
       include: ["src/**/*.{js,ts,jsx,tsx}"],

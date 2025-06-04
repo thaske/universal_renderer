@@ -1,0 +1,520 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Universal Renderer - Performance Benchmark</title>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family:
+          "SF Mono", "Monaco", "Cascadia Code", "Roboto Mono", Consolas,
+          "Courier New", monospace;
+        background: #ffffff;
+        color: #333;
+        line-height: 1.6;
+        padding: 20px;
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+
+      .header {
+        text-align: center;
+        margin-bottom: 40px;
+        border-bottom: 2px solid #e1e5e9;
+        padding-bottom: 20px;
+      }
+
+      .header h1 {
+        font-size: 2rem;
+        font-weight: 600;
+        margin-bottom: 8px;
+        color: #1f2937;
+      }
+
+      .header .subtitle {
+        font-size: 1rem;
+        color: #6b7280;
+        margin-bottom: 15px;
+      }
+
+      .performance-badge {
+        display: inline-block;
+        background: #f3f4f6;
+        padding: 6px 12px;
+        border: 1px solid #d1d5db;
+        border-radius: 4px;
+        font-size: 0.875rem;
+        color: #374151;
+      }
+
+      #controls {
+        text-align: center;
+        margin: 20px 0;
+      }
+
+      #controls button {
+        background: #374151;
+        color: white;
+        border: 1px solid #d1d5db;
+        padding: 8px 16px;
+        margin: 0 8px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        font-family: inherit;
+        transition: background-color 0.2s;
+      }
+
+      #controls button:hover {
+        background: #1f2937;
+      }
+
+      .table-container {
+        background: white;
+        border: 1px solid #e1e5e9;
+        border-radius: 4px;
+        overflow: hidden;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.875rem;
+      }
+
+      thead {
+        background: #f8f9fa;
+        border-bottom: 2px solid #dee2e6;
+      }
+
+      th {
+        padding: 12px 8px;
+        text-align: center;
+        font-weight: 600;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #495057;
+        border-right: 1px solid #dee2e6;
+      }
+
+      th:last-child {
+        border-right: none;
+      }
+
+      tbody tr {
+        border-bottom: 1px solid #e9ecef;
+      }
+
+      tbody tr:hover {
+        background: #f8f9fa;
+      }
+
+      tbody tr:last-child {
+        border-bottom: none;
+      }
+
+      td {
+        padding: 10px 8px;
+        text-align: center;
+        border-right: 1px solid #e9ecef;
+      }
+
+      td:last-child {
+        border-right: none;
+      }
+
+      .variant-name {
+        font-weight: 600;
+        text-align: left;
+        font-family: inherit;
+      }
+
+      .winner {
+        background: #e6f3ff !important;
+        font-weight: 600;
+      }
+
+      .second-place {
+        background: #f0f9ff !important;
+      }
+
+      .third-place {
+        background: #fafafa !important;
+      }
+
+      .performance-good {
+        background: #f0f9ff;
+      }
+
+      .performance-average {
+        background: #fffbeb;
+      }
+
+      .performance-poor {
+        background: #fef2f2;
+      }
+
+      .metric-value {
+        font-weight: 500;
+      }
+
+      .stats-row {
+        display: flex;
+        justify-content: space-around;
+        margin: 20px 0;
+        background: #f8f9fa;
+        padding: 20px;
+        border: 1px solid #e9ecef;
+        border-radius: 4px;
+      }
+
+      .stat-item {
+        text-align: center;
+      }
+
+      .stat-value {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: #1f2937;
+      }
+
+      .stat-label {
+        font-size: 0.75rem;
+        color: #6b7280;
+        margin-top: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .loading {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 200px;
+        color: #6b7280;
+        font-size: 1rem;
+      }
+
+      .error {
+        text-align: center;
+        color: #dc2626;
+        font-size: 1rem;
+        margin: 50px 0;
+      }
+
+      .legend {
+        display: flex;
+        justify-content: center;
+        gap: 16px;
+        margin: 20px 0;
+        flex-wrap: wrap;
+      }
+
+      .legend-item {
+        display: flex;
+        align-items: center;
+        background: #f8f9fa;
+        padding: 6px 12px;
+        border: 1px solid #e9ecef;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        color: #495057;
+      }
+
+      .legend-color {
+        width: 12px;
+        height: 12px;
+        border-radius: 2px;
+        margin-right: 6px;
+        border: 1px solid #dee2e6;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>Universal Renderer</h1>
+        <div class="subtitle">Performance Benchmark Results</div>
+        <div class="performance-badge">Real-time Performance Analysis</div>
+      </div>
+
+      <div class="stats-row" id="statsRow" style="display: none">
+        <div class="stat-item">
+          <div class="stat-value" id="totalVariants">-</div>
+          <div class="stat-label">Variants Tested</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" id="bestTTFB">-</div>
+          <div class="stat-label">Best TTFB (ms)</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" id="fastestLoad">-</div>
+          <div class="stat-label">Fastest Load (ms)</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" id="smallestBytes">-</div>
+          <div class="stat-label">Smallest HTML (KB)</div>
+        </div>
+      </div>
+
+      <div class="legend">
+        <div class="legend-item">
+          <div class="legend-color" style="background: #e6f3ff"></div>
+          <span>Best Performance</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color" style="background: #f0f9ff"></div>
+          <span>Second Best</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color" style="background: #fafafa"></div>
+          <span>Third Best</span>
+        </div>
+      </div>
+
+      <div id="controls">
+        <button id="downloadPdfBtn">Download PDF Report</button>
+        <button id="downloadImgBtn">Download PNG</button>
+      </div>
+
+      <div class="table-container">
+        <div id="loadingDiv" class="loading">Loading benchmark results...</div>
+        <table id="resultsTable" style="display: none">
+          <thead>
+            <tr>
+              <th>Variant</th>
+              <th>TTFB (ms)</th>
+              <th>DCL (ms)</th>
+              <th>FCP (ms)</th>
+              <th>LCP (ms)</th>
+              <th>Load Time (ms)</th>
+              <th>HTML Size (KB)</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <script>
+      async function loadData() {
+        try {
+          const res = await fetch("../tmp/reports/summary.json");
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+
+          if (!data || data.length === 0) {
+            document.getElementById("loadingDiv").innerHTML =
+              '<div class="error">No benchmark data found</div>';
+            return;
+          }
+
+          // Hide loading and show table
+          document.getElementById("loadingDiv").style.display = "none";
+          document.getElementById("resultsTable").style.display = "table";
+          document.getElementById("statsRow").style.display = "flex";
+
+          // Calculate rankings for each metric
+          const metrics = [
+            "ttfb",
+            "domContentLoaded",
+            "fcp",
+            "lcp",
+            "loadTime",
+          ];
+          const rankings = {};
+
+          metrics.forEach((metric) => {
+            rankings[metric] = [...data].sort(
+              (a, b) => a.metrics[metric].mean - b.metrics[metric].mean,
+            );
+          });
+
+          // HTML bytes ranking (smaller is better)
+          rankings["htmlBytes"] = [...data].sort(
+            (a, b) => a.metrics.htmlBytes.mean - b.metrics.htmlBytes.mean,
+          );
+
+          // Update stats
+          document.getElementById("totalVariants").textContent = data.length;
+          document.getElementById("bestTTFB").textContent = Math.min(
+            ...data.map((d) => d.metrics.ttfb.mean),
+          ).toFixed(1);
+          document.getElementById("fastestLoad").textContent = Math.min(
+            ...data.map((d) => d.metrics.loadTime.mean),
+          ).toFixed(1);
+          document.getElementById("smallestBytes").textContent = (
+            Math.min(...data.map((d) => d.metrics.htmlBytes.mean)) / 1024
+          ).toFixed(1);
+
+          const tbody = document.querySelector("#resultsTable tbody");
+
+          data.forEach((row) => {
+            const tr = document.createElement("tr");
+
+            // Create cells with ranking classes
+            const cells = [
+              `<td class="variant-name">${row.variantName}</td>`,
+              createMetricCell(
+                row.metrics.ttfb.mean,
+                "ms",
+                rankings.ttfb,
+                row,
+                "ttfb",
+              ),
+              createMetricCell(
+                row.metrics.domContentLoaded.mean,
+                "ms",
+                rankings.domContentLoaded,
+                row,
+                "domContentLoaded",
+              ),
+              createMetricCell(
+                row.metrics.fcp.mean,
+                "ms",
+                rankings.fcp,
+                row,
+                "fcp",
+              ),
+              createMetricCell(
+                row.metrics.lcp.mean,
+                "ms",
+                rankings.lcp,
+                row,
+                "lcp",
+              ),
+              createMetricCell(
+                row.metrics.loadTime.mean,
+                "ms",
+                rankings.loadTime,
+                row,
+                "loadTime",
+              ),
+              createMetricCell(
+                row.metrics.htmlBytes.mean,
+                "bytes",
+                rankings.htmlBytes,
+                row,
+                "htmlBytes",
+                true,
+              ),
+            ];
+
+            tr.innerHTML = cells.join("");
+            tbody.appendChild(tr);
+          });
+        } catch (err) {
+          console.error("Error loading summary:", err);
+          document.getElementById("loadingDiv").innerHTML =
+            '<div class="error">Error loading benchmark results</div>';
+        }
+      }
+
+      function createMetricCell(
+        value,
+        unit,
+        ranking,
+        currentRow,
+        metricName,
+        isBytes = false,
+      ) {
+        const position = ranking.findIndex(
+          (r) => r.variantName === currentRow.variantName,
+        );
+        let className = "";
+        let displayValue = isBytes
+          ? (value / 1024).toFixed(1) + " KB"
+          : value.toFixed(2) + " ms";
+
+        if (position === 0) {
+          className = "winner";
+        } else if (position === 1) {
+          className = "second-place";
+        } else if (position === 2) {
+          className = "third-place";
+        } else {
+          // Color based on performance relative to best
+          const best = ranking[0].metrics[metricName].mean;
+          const ratio = value / best;
+
+          if (ratio <= 1.2) className = "performance-good";
+          else if (ratio <= 1.5) className = "performance-average";
+          else className = "performance-poor";
+        }
+
+        return `<td class="${className}"><span class="metric-value">${displayValue}</span></td>`;
+      }
+
+      async function downloadImage() {
+        const container = document.querySelector(".container");
+        const originalBg = container.style.background;
+        container.style.background =
+          "linear-gradient(135deg, #667eea 0%, #764ba2 100%)";
+
+        const canvas = await html2canvas(container, {
+          backgroundColor: null,
+          scale: 2,
+          useCORS: true,
+        });
+
+        container.style.background = originalBg;
+
+        const link = document.createElement("a");
+        link.href = canvas.toDataURL("image/png");
+        link.download = "universal_renderer_benchmark.png";
+        link.click();
+      }
+
+      async function downloadPdf() {
+        const container = document.querySelector(".container");
+        const canvas = await html2canvas(container, {
+          scale: 2,
+          useCORS: true,
+        });
+
+        const imgData = canvas.toDataURL("image/png");
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({
+          orientation: canvas.width > canvas.height ? "landscape" : "portrait",
+          unit: "mm",
+          format: "a4",
+        });
+
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        const imgWidth = canvas.width;
+        const imgHeight = canvas.height;
+        const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+
+        const width = imgWidth * ratio;
+        const height = imgHeight * ratio;
+        const x = (pdfWidth - width) / 2;
+        const y = (pdfHeight - height) / 2;
+
+        pdf.addImage(imgData, "PNG", x, y, width, height);
+        pdf.save("universal_renderer_benchmark_report.pdf");
+      }
+
+      document
+        .getElementById("downloadPdfBtn")
+        .addEventListener("click", downloadPdf);
+      document
+        .getElementById("downloadImgBtn")
+        .addEventListener("click", downloadImage);
+      window.onload = loadData;
+    </script>
+  </body>
+</html>
