@@ -4,361 +4,132 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Benchmark Results</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <style>
       body {
         font-family: sans-serif;
         margin: 20px;
         background-color: #f4f4f4;
       }
-      .chart-container {
-        width: 80%;
-        max-width: 900px;
-        margin: 30px auto;
+      table {
+        border-collapse: collapse;
+        width: 100%;
+      }
+      th,
+      td {
+        border: 1px solid #ddd;
+        padding: 8px;
+      }
+      th {
+        background-color: #333;
+        color: #fff;
+        position: sticky;
+        top: 0;
+      }
+      tr:nth-child(even) {
+        background-color: #f9f9f9;
+      }
+      h1 {
+        text-align: center;
+      }
+      #controls {
+        text-align: right;
+        margin: 10px 0;
+      }
+      #controls button {
+        margin-left: 5px;
+        padding: 6px 12px;
+      }
+      .table-container {
+        overflow-x: auto;
+        background: #fff;
         padding: 20px;
-        background-color: #fff;
         border-radius: 8px;
         box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-      }
-      h1,
-      h2 {
-        text-align: center;
-        color: #333;
       }
     </style>
   </head>
   <body>
     <h1>Benchmark Results</h1>
-
-    <div class="chart-container">
-      <h2>Time to First Byte (TTFB) - Mean</h2>
-      <canvas id="ttfbMeanChart"></canvas>
+    <div id="controls">
+      <button id="downloadPdfBtn">Download PDF</button>
+      <button id="downloadImgBtn">Download PNG</button>
     </div>
-    <div class="chart-container">
-      <h2>Time to First Byte (TTFB) - Median</h2>
-      <canvas id="ttfbMedianChart"></canvas>
+    <div class="table-container">
+      <table id="resultsTable">
+        <thead>
+          <tr>
+            <th>Variant</th>
+            <th>TTFB (ms)</th>
+            <th>DCL (ms)</th>
+            <th>FCP (ms)</th>
+            <th>LCP (ms)</th>
+            <th>Load (ms)</th>
+            <th>HTML bytes</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
     </div>
-    <div class="chart-container">
-      <h2>Time to First Byte (TTFB) - P95</h2>
-      <canvas id="ttfbP95Chart"></canvas>
-    </div>
-
-    <div class="chart-container">
-      <h2>DOM Content Loaded - Mean</h2>
-      <canvas id="domContentLoadedMeanChart"></canvas>
-    </div>
-    <div class="chart-container">
-      <h2>DOM Content Loaded - Median</h2>
-      <canvas id="domContentLoadedMedianChart"></canvas>
-    </div>
-    <div class="chart-container">
-      <h2>DOM Content Loaded - P95</h2>
-      <canvas id="domContentLoadedP95Chart"></canvas>
-    </div>
-
-    <div class="chart-container">
-      <h2>First Contentful Paint (FCP) - Mean</h2>
-      <canvas id="fcpMeanChart"></canvas>
-    </div>
-    <div class="chart-container">
-      <h2>First Contentful Paint (FCP) - Median</h2>
-      <canvas id="fcpMedianChart"></canvas>
-    </div>
-    <div class="chart-container">
-      <h2>First Contentful Paint (FCP) - P95</h2>
-      <canvas id="fcpP95Chart"></canvas>
-    </div>
-
-    <div class="chart-container">
-      <h2>Largest Contentful Paint (LCP) - Mean</h2>
-      <canvas id="lcpMeanChart"></canvas>
-    </div>
-    <div class="chart-container">
-      <h2>Largest Contentful Paint (LCP) - Median</h2>
-      <canvas id="lcpMedianChart"></canvas>
-    </div>
-    <div class="chart-container">
-      <h2>Largest Contentful Paint (LCP) - P95</h2>
-      <canvas id="lcpP95Chart"></canvas>
-    </div>
-
-    <div class="chart-container">
-      <h2>Page Load Time - Mean</h2>
-      <canvas id="loadTimeMeanChart"></canvas>
-    </div>
-    <div class="chart-container">
-      <h2>Page Load Time - Median</h2>
-      <canvas id="loadTimeMedianChart"></canvas>
-    </div>
-    <div class="chart-container">
-      <h2>Page Load Time - P95</h2>
-      <canvas id="loadTimeP95Chart"></canvas>
-    </div>
-
-    <div class="chart-container">
-      <h2>HTML Bytes - Mean</h2>
-      <canvas id="htmlBytesMeanChart"></canvas>
-    </div>
-    <div class="chart-container">
-      <h2>HTML Bytes - Median</h2>
-      <canvas id="htmlBytesMedianChart"></canvas>
-    </div>
-
     <script>
-      async function fetchDataAndRenderCharts() {
+      async function loadData() {
         try {
-          const response = await fetch("../tmp/reports/summary.json");
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-          const summaryData = await response.json();
-
-          if (!summaryData || summaryData.length === 0) {
-            console.warn("No summary data found or data is empty.");
-            document.body.innerHTML =
-              "<h1>Benchmark Results</h1><p>No summary data found. Run benchmarks and analysis first.</p>";
+          const res = await fetch("../tmp/reports/summary.json");
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+          if (!data || data.length === 0) {
+            document.body.innerHTML = "<h1>No summary data found.</h1>";
             return;
           }
-
-          const labels = summaryData.map((item) => item.variantName);
-
-          function createChart(
-            canvasId,
-            chartLabel,
-            dataProperty,
-            statProperty = "mean",
-          ) {
-            const data = summaryData.map((item) =>
-              item.metrics[dataProperty]
-                ? item.metrics[dataProperty][statProperty]
-                : 0,
-            );
-
-            const numericData = data
-              .map((val) => parseFloat(val))
-              .filter((val) => Number.isFinite(val));
-            let chartMin, chartMax;
-
-            if (numericData.length === 0) {
-              chartMin = 0;
-              chartMax = 10; // Default for no data
-            } else {
-              let dataMin = Math.min(...numericData);
-              let dataMax = Math.max(...numericData);
-
-              if (dataMin === dataMax) {
-                if (dataMin === 0) {
-                  chartMin = 0;
-                  chartMax = 1;
-                } else {
-                  const margin = Math.abs(dataMin * 0.1);
-                  const effectiveMargin =
-                    margin === 0 ? Math.abs(dataMin) / 2 || 0.1 : margin;
-                  chartMin = dataMin - effectiveMargin;
-                  chartMax = dataMax + effectiveMargin;
-                }
-              } else {
-                const range = dataMax - dataMin;
-                const padding = range * 0.1;
-                chartMin = dataMin - padding;
-                chartMax = dataMax + padding;
-              }
-
-              chartMin = Math.max(0, chartMin); // Ensure min is not negative
-
-              if (chartMax <= chartMin) {
-                chartMax =
-                  chartMin +
-                  (chartMin === 0 && dataMax === 0
-                    ? 1
-                    : Math.abs(dataMax * 0.05) || 0.1);
-                if (chartMax <= chartMin) {
-                  chartMax = chartMin + 1; // Final fallback
-                }
-              }
-            }
-
-            new Chart(document.getElementById(canvasId), {
-              type: "bar",
-              data: {
-                labels: labels,
-                datasets: [
-                  {
-                    label: chartLabel,
-                    data: data,
-                    backgroundColor: "rgba(75, 192, 192, 0.6)",
-                    borderColor: "rgba(75, 192, 192, 1)",
-                    borderWidth: 1,
-                  },
-                ],
-              },
-              options: {
-                scales: {
-                  y: {
-                    min: chartMin,
-                    max: chartMax,
-                    title: {
-                      display: true,
-                      text: "Milliseconds (ms) - Lower is Better",
-                    },
-                  },
-                },
-                responsive: true,
-                maintainAspectRatio: true,
-              },
-            });
-          }
-
-          // Adjust y-axis label for htmlBytes
-          function createHtmlBytesChart(
-            canvasId,
-            chartLabel,
-            dataProperty,
-            statProperty = "mean",
-          ) {
-            const data = summaryData.map((item) =>
-              item.metrics[dataProperty]
-                ? item.metrics[dataProperty][statProperty]
-                : 0,
-            );
-
-            const numericData = data
-              .map((val) => parseFloat(val))
-              .filter((val) => Number.isFinite(val));
-            let chartMin, chartMax;
-
-            if (numericData.length === 0) {
-              chartMin = 0;
-              chartMax = 10; // Default for no data
-            } else {
-              let dataMin = Math.min(...numericData);
-              let dataMax = Math.max(...numericData);
-
-              if (dataMin === dataMax) {
-                if (dataMin === 0) {
-                  chartMin = 0;
-                  chartMax = 1;
-                } else {
-                  const margin = Math.abs(dataMin * 0.1);
-                  const effectiveMargin =
-                    margin === 0 ? Math.abs(dataMin) / 2 || 0.1 : margin;
-                  chartMin = dataMin - effectiveMargin;
-                  chartMax = dataMax + effectiveMargin;
-                }
-              } else {
-                const range = dataMax - dataMin;
-                const padding = range * 0.1;
-                chartMin = dataMin - padding;
-                chartMax = dataMax + padding;
-              }
-
-              chartMin = Math.max(0, chartMin); // Ensure min is not negative
-
-              if (chartMax <= chartMin) {
-                chartMax =
-                  chartMin +
-                  (chartMin === 0 && dataMax === 0
-                    ? 1
-                    : Math.abs(dataMax * 0.05) || 0.1);
-                if (chartMax <= chartMin) {
-                  chartMax = chartMin + 1; // Final fallback
-                }
-              }
-            }
-
-            new Chart(document.getElementById(canvasId), {
-              type: "bar",
-              data: {
-                labels: labels,
-                datasets: [
-                  {
-                    label: chartLabel,
-                    data: data,
-                    backgroundColor: "rgba(153, 102, 255, 0.6)",
-                    borderColor: "rgba(153, 102, 255, 1)",
-                    borderWidth: 1,
-                  },
-                ],
-              },
-              options: {
-                scales: {
-                  y: {
-                    min: chartMin,
-                    max: chartMax,
-                    title: { display: true, text: "Bytes - Lower is Better" },
-                  },
-                },
-                responsive: true,
-                maintainAspectRatio: true,
-              },
-            });
-          }
-
-          createChart("ttfbMeanChart", "TTFB (Mean)", "ttfb", "mean");
-          createChart("ttfbMedianChart", "TTFB (Median)", "ttfb", "median");
-          createChart("ttfbP95Chart", "TTFB (P95)", "ttfb", "p95");
-
-          createChart(
-            "domContentLoadedMeanChart",
-            "DOM Content Loaded (Mean)",
-            "domContentLoaded",
-            "mean",
-          );
-          createChart(
-            "domContentLoadedMedianChart",
-            "DOM Content Loaded (Median)",
-            "domContentLoaded",
-            "median",
-          );
-          createChart(
-            "domContentLoadedP95Chart",
-            "DOM Content Loaded (P95)",
-            "domContentLoaded",
-            "p95",
-          );
-
-          createChart("fcpMeanChart", "FCP (Mean)", "fcp", "mean");
-          createChart("fcpMedianChart", "FCP (Median)", "fcp", "median");
-          createChart("fcpP95Chart", "FCP (P95)", "fcp", "p95");
-
-          createChart("lcpMeanChart", "LCP (Mean)", "lcp", "mean");
-          createChart("lcpMedianChart", "LCP (Median)", "lcp", "median");
-          createChart("lcpP95Chart", "LCP (P95)", "lcp", "p95");
-
-          createChart(
-            "loadTimeMeanChart",
-            "Load Time (Mean)",
-            "loadTime",
-            "mean",
-          );
-          createChart(
-            "loadTimeMedianChart",
-            "Load Time (Median)",
-            "loadTime",
-            "median",
-          );
-          createChart("loadTimeP95Chart", "Load Time (P95)", "loadTime", "p95");
-
-          createHtmlBytesChart(
-            "htmlBytesMeanChart",
-            "HTML Bytes (Mean)",
-            "htmlBytes",
-            "mean",
-          );
-          createHtmlBytesChart(
-            "htmlBytesMedianChart",
-            "HTML Bytes (Median)",
-            "htmlBytes",
-            "median",
-          );
-        } catch (error) {
-          console.error("Error fetching or rendering charts:", error);
-          document.body.innerHTML =
-            "<h1>Benchmark Results</h1><p>Error loading or processing benchmark data. Check console for details.</p>";
+          const tbody = document.querySelector("#resultsTable tbody");
+          data.forEach((row) => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+              <td>${row.variantName}</td>
+              <td>${row.metrics.ttfb.mean.toFixed(2)}</td>
+              <td>${row.metrics.domContentLoaded.mean.toFixed(2)}</td>
+              <td>${row.metrics.fcp.mean.toFixed(2)}</td>
+              <td>${row.metrics.lcp.mean.toFixed(2)}</td>
+              <td>${row.metrics.loadTime.mean.toFixed(2)}</td>
+              <td>${row.metrics.htmlBytes.mean.toFixed(0)}</td>
+            `;
+            tbody.appendChild(tr);
+          });
+        } catch (err) {
+          console.error("Error loading summary:", err);
+          document.body.innerHTML = "<h1>Error loading results</h1>";
         }
       }
 
-      window.onload = fetchDataAndRenderCharts;
+      async function downloadImage() {
+        const table = document.querySelector(".table-container");
+        const canvas = await html2canvas(table);
+        const link = document.createElement("a");
+        link.href = canvas.toDataURL("image/png");
+        link.download = "benchmark_results.png";
+        link.click();
+      }
+
+      async function downloadPdf() {
+        const table = document.querySelector(".table-container");
+        const canvas = await html2canvas(table);
+        const imgData = canvas.toDataURL("image/png");
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({ orientation: "landscape" });
+        const width = pdf.internal.pageSize.getWidth();
+        const height = (canvas.height * width) / canvas.width;
+        pdf.addImage(imgData, "PNG", 0, 0, width, height);
+        pdf.save("benchmark_results.pdf");
+      }
+
+      document
+        .getElementById("downloadPdfBtn")
+        .addEventListener("click", downloadPdf);
+      document
+        .getElementById("downloadImgBtn")
+        .addEventListener("click", downloadImage);
+      window.onload = loadData;
     </script>
   </body>
 </html>
