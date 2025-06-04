@@ -93,8 +93,8 @@ export function createStreamHandler<TContext extends Record<string, any>>(
                   reply.raw.end(tail);
                 });
               } else {
-                pipe(reply.raw);
                 const streamCompleter = new PassThrough();
+                streamCompleter.pipe(reply.raw, { end: false });
                 streamCompleter.on("end", () => {
                   if (!reply.raw.writableEnded) {
                     reply.raw.end(tail);
