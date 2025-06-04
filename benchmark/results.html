@@ -35,6 +35,10 @@
       <canvas id="ttfbMeanChart"></canvas>
     </div>
     <div class="chart-container">
+      <h2>Time to First Byte (TTFB) - Median</h2>
+      <canvas id="ttfbMedianChart"></canvas>
+    </div>
+    <div class="chart-container">
       <h2>Time to First Byte (TTFB) - P95</h2>
       <canvas id="ttfbP95Chart"></canvas>
     </div>
@@ -42,6 +46,10 @@
     <div class="chart-container">
       <h2>DOM Content Loaded - Mean</h2>
       <canvas id="domContentLoadedMeanChart"></canvas>
+    </div>
+    <div class="chart-container">
+      <h2>DOM Content Loaded - Median</h2>
+      <canvas id="domContentLoadedMedianChart"></canvas>
     </div>
     <div class="chart-container">
       <h2>DOM Content Loaded - P95</h2>
@@ -53,6 +61,10 @@
       <canvas id="fcpMeanChart"></canvas>
     </div>
     <div class="chart-container">
+      <h2>First Contentful Paint (FCP) - Median</h2>
+      <canvas id="fcpMedianChart"></canvas>
+    </div>
+    <div class="chart-container">
       <h2>First Contentful Paint (FCP) - P95</h2>
       <canvas id="fcpP95Chart"></canvas>
     </div>
@@ -60,6 +72,10 @@
     <div class="chart-container">
       <h2>Largest Contentful Paint (LCP) - Mean</h2>
       <canvas id="lcpMeanChart"></canvas>
+    </div>
+    <div class="chart-container">
+      <h2>Largest Contentful Paint (LCP) - Median</h2>
+      <canvas id="lcpMedianChart"></canvas>
     </div>
     <div class="chart-container">
       <h2>Largest Contentful Paint (LCP) - P95</h2>
@@ -71,6 +87,10 @@
       <canvas id="loadTimeMeanChart"></canvas>
     </div>
     <div class="chart-container">
+      <h2>Page Load Time - Median</h2>
+      <canvas id="loadTimeMedianChart"></canvas>
+    </div>
+    <div class="chart-container">
       <h2>Page Load Time - P95</h2>
       <canvas id="loadTimeP95Chart"></canvas>
     </div>
@@ -78,6 +98,10 @@
     <div class="chart-container">
       <h2>HTML Bytes - Mean</h2>
       <canvas id="htmlBytesMeanChart"></canvas>
+    </div>
+    <div class="chart-container">
+      <h2>HTML Bytes - Median</h2>
+      <canvas id="htmlBytesMedianChart"></canvas>
     </div>
 
     <script>
@@ -271,6 +295,7 @@
           }
 
           createChart("ttfbMeanChart", "TTFB (Mean)", "ttfb", "mean");
+          createChart("ttfbMedianChart", "TTFB (Median)", "ttfb", "median");
           createChart("ttfbP95Chart", "TTFB (P95)", "ttfb", "p95");
 
           createChart(
@@ -280,6 +305,12 @@
             "mean",
           );
           createChart(
+            "domContentLoadedMedianChart",
+            "DOM Content Loaded (Median)",
+            "domContentLoaded",
+            "median",
+          );
+          createChart(
             "domContentLoadedP95Chart",
             "DOM Content Loaded (P95)",
             "domContentLoaded",
@@ -287,9 +318,11 @@
           );
 
           createChart("fcpMeanChart", "FCP (Mean)", "fcp", "mean");
+          createChart("fcpMedianChart", "FCP (Median)", "fcp", "median");
           createChart("fcpP95Chart", "FCP (P95)", "fcp", "p95");
 
           createChart("lcpMeanChart", "LCP (Mean)", "lcp", "mean");
+          createChart("lcpMedianChart", "LCP (Median)", "lcp", "median");
           createChart("lcpP95Chart", "LCP (P95)", "lcp", "p95");
 
           createChart(
@@ -298,6 +331,12 @@
             "loadTime",
             "mean",
           );
+          createChart(
+            "loadTimeMedianChart",
+            "Load Time (Median)",
+            "loadTime",
+            "median",
+          );
           createChart("loadTimeP95Chart", "Load Time (P95)", "loadTime", "p95");
 
           createHtmlBytesChart(
@@ -305,6 +344,12 @@
             "HTML Bytes (Mean)",
             "htmlBytes",
             "mean",
+          );
+          createHtmlBytesChart(
+            "htmlBytesMedianChart",
+            "HTML Bytes (Median)",
+            "htmlBytes",
+            "median",
           );
         } catch (error) {
           console.error("Error fetching or rendering charts:", error);

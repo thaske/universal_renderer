@@ -1,4 +1,4 @@
-import type { ResponseUtils } from "../../types";
+import type { BunErrorHandler } from "../types";
 
 /**
  * Creates an error handler.
@@ -7,16 +7,19 @@ import type { ResponseUtils } from "../../types";
  *
  * @returns Error handler function
  */
-export function createErrorHandler() {
-  return (err: Error, res: ResponseUtils) => {
+export function createErrorHandler(): BunErrorHandler {
+  return (err: Error) => {
     console.error("[SSR] Unhandled error:", err);
     const isDev = process.env.NODE_ENV !== "production";
-    res.json(
-      {
+    return new Response(
+      JSON.stringify({
         error: isDev ? err.message : "Internal Server Error",
         ...(isDev && { stack: err.stack }),
+      }),
+      {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
       },
-      500,
     );
   };
 }

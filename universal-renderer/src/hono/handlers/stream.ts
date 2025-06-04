@@ -59,83 +59,80 @@ export function createStreamHandler<TContext extends Record<string, any>>(
 
       const stream = new PassThrough();
       const encoder = new TextEncoder();
-
-      const { pipe, abort } = renderToPipeableStream(reactNode, {
-        onShellReady: async () => {
-          const [head, tail] = template.split(SSR_MARKERS.BODY);
-          let finalHead = head;
-          if (streamCallbacks.head) {
-            const headContent = await streamCallbacks.head(context!);
-            if (headContent) {
-              finalHead = head.replace(SSR_MARKERS.HEAD, headContent);
-            }
-          }
-          // Immediately send the head
-          controller.enqueue(encoder.encode(finalHead));
-
-          const transform = streamCallbacks.transform?.(context!);
-          if (transform) {
-            stream.pipe(transform).pipe(
-              new Writable({
-                write(chunk, _encoding, callback) {
-                  controller.enqueue(encoder.encode(chunk.toString()));
-                  callback();
-                },
-                final(callback) {
-                  controller.enqueue(encoder.encode(tail));
-                  controller.close();
-                  if (context && options.cleanup) options.cleanup(context!);
-                  callback();
-                },
-              }),
-            );
-          } else {
-            stream.pipe(
-              new Writable({
-                write(chunk, _encoding, callback) {
-                  controller.enqueue(encoder.encode(chunk.toString()));
-                  callback();
-                },
-                final(callback) {
-                  controller.enqueue(encoder.encode(tail));
-                  controller.close();
-                  if (context && options.cleanup) options.cleanup(context!);
-                  callback();
-                },
-              }),
-            );
-          }
-          pipe(stream);
-        },
-        onShellError: (error: any) => {
-          console.error("[SSR] Shell error");
-          console.error(error);
-          controller.error(error);
-          if (context && options.cleanup) options.cleanup(context!);
-        },
-        onError: (error: any) => {
-          console.error("[SSR] Stream error");
-          console.error(error);
-          // Don't call controller.error here as the stream might still be recoverable
-          // However, we should ensure cleanup still happens if the stream is aborted.
-          if (context && options.cleanup) {
-            // Check if the stream was aborted, then cleanup.
-            // This is a simplified check; in a real-world scenario, you might need a more robust way
-            // to determine if the error is fatal and requires cleanup.
-            if (error && error.message && error.message.includes("aborted")) {
-              options.cleanup(context);
-            }
-          }
-        },
-      });
-
+      let abort: () => void;
       let controller: ReadableStreamDefaultController<Uint8Array>;
-      const readableStream = new ReadableStream({
+
+      const readableStream = new ReadableStream<Uint8Array>({
         start(ctrl) {
           controller = ctrl;
+
+          const { pipe, abort: abortFn } = renderToPipeableStream(reactNode, {
+            onShellReady: async () => {
+              const [head, tail] = template.split(SSR_MARKERS.BODY);
+              let finalHead = head;
+              if (streamCallbacks.head) {
+                const headContent = await streamCallbacks.head(context!);
+                if (headContent) {
+                  finalHead = head.replace(SSR_MARKERS.HEAD, headContent);
+                }
+              }
+              controller.enqueue(encoder.encode(finalHead));
+
+              const transform = streamCallbacks.transform?.(context!);
+              if (transform) {
+                stream
+                  .pipe(transform)
+                  .pipe(
+                    new Writable({
+                      write(chunk, _encoding, callback) {
+                        controller.enqueue(encoder.encode(chunk.toString()));
+                        callback();
+                      },
+                      final(callback) {
+                        controller.enqueue(encoder.encode(tail));
+                        controller.close();
+                        if (context && options.cleanup) options.cleanup(context!);
+                        callback();
+                      },
+                    }),
+                  );
+              } else {
+                stream.pipe(
+                  new Writable({
+                    write(chunk, _encoding, callback) {
+                      controller.enqueue(encoder.encode(chunk.toString()));
+                      callback();
+                    },
+                    final(callback) {
+                      controller.enqueue(encoder.encode(tail));
+                      controller.close();
+                      if (context && options.cleanup) options.cleanup(context!);
+                      callback();
+                    },
+                  }),
+                );
+              }
+
+              pipe(stream);
+            },
+            onShellError: (error: any) => {
+              console.error("[SSR] Shell error");
+              console.error(error);
+              controller.error(error);
+              if (context && options.cleanup) options.cleanup(context!);
+            },
+            onError: (error: any) => {
+              console.error("[SSR] Stream error");
+              console.error(error);
+              if (context && options.cleanup && error && error.message && error.message.includes("aborted")) {
+                options.cleanup(context);
+              }
+            },
+          });
+          abort = abortFn;
         },
         cancel() {
-          abort();
+          abort?.();
           if (context && options.cleanup) options.cleanup(context!);
         },
       });

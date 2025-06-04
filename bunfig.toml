@@ -1,0 +1,2 @@
+[install]
+workspaces = ["./universal-renderer"]

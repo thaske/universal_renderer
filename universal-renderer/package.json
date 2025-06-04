@@ -45,6 +45,11 @@
       "import": "./dist/fastify/index.mjs",
       "require": "./dist/fastify/index.js",
       "types": "./dist/fastify/index.d.mts"
+    },
+    "./uwebsocket": {
+      "import": "./dist/uwebsocket/index.mjs",
+      "require": "./dist/uwebsocket/index.js",
+      "types": "./dist/uwebsocket/index.d.mts"
     }
   },
   "files": [
@@ -59,7 +64,7 @@
     "express": "^4.18.0",
     "hono": "^4.0.0",
     "fastify": "^5.3.3",
-    "uwebsockets.js": "*"
+    "uWebSockets.js": "github:uNetworking/uWebSockets.js#v20.52.0"
   },
   "devDependencies": {
     "@types/bun": "^1.1.6",
@@ -71,6 +76,10 @@
     "@types/react-dom": "^19.1.5",
     "hono": "^4.0.0",
     "jsdom": "^24.0.0",
+    "express": "^4.18.0",
+    "fastify": "^5.3.3",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
     "prettier": "^3.5.3",
     "tsdown": "^0.11.11",
     "typescript": "^5.8.3",

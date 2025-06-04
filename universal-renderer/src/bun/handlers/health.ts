@@ -1,4 +1,6 @@
-import type { RequestInfo, ResponseUtils } from "../../types";
+// Bun handlers operate directly with the standard Request/Response primitives
+// rather than the framework-agnostic helpers used by other implementations.
+import type { BunRequestHandler } from "../types";
 
 /**
  * Creates a health check handler.
@@ -8,11 +10,16 @@ import type { RequestInfo, ResponseUtils } from "../../types";
  *
  * @returns Health check handler
  */
-export function createHealthHandler() {
-  return (req: RequestInfo, res: ResponseUtils) => {
-    res.json({
-      status: "OK",
-      timestamp: new Date().toISOString(),
-    });
-  };
+export function createHealthHandler(): BunRequestHandler {
+  return async () =>
+    new Response(
+      JSON.stringify({
+        status: "OK",
+        timestamp: new Date().toISOString(),
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
 }
