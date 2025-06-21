@@ -1,5 +1,5 @@
 import type { RenderOutput } from "../../types";
-import type { UWSSSRHandlerOptions, UWSHandler } from "../types";
+import type { UWSHandler, UWSSSRHandlerOptions } from "../types";
 
 export function createSSRHandler<TContext extends Record<string, any>>(
   options: UWSSSRHandlerOptions<TContext>,
@@ -9,24 +9,21 @@ export function createSSRHandler<TContext extends Record<string, any>>(
   if (!render) throw new Error("render callback is required");
 
   return async (body: any, res: import("uWebSockets.js").HttpResponse) => {
-    let context: TContext | undefined;
-    try {
-      const { url, props = {} } = body ?? {};
-      if (!url || typeof url !== "string") {
-        res.writeStatus("400");
-        res.end(JSON.stringify({ error: "URL string is required" }));
-        return;
-      }
-      context = await setup(url, props);
-      const result: RenderOutput = await render(context);
-      res.writeHeader("Content-Type", "application/json");
-      res.end(JSON.stringify(result));
-    } catch (err) {
-      (options.error || createErrorHandler())(res, err as Error);
-    } finally {
-      if (context && cleanup) await cleanup(context);
+    /* Can't return or yield from here without responding or attaching an abort handler */
+    res.onAborted(() => {
+      res.aborted = true;
+    });
+
+    const { url, props = {} } = body ?? {};
+
+    const context = await setup(url, props);
+    const result: RenderOutput = await render(context);
+
+    if (!res.aborted) {
+      res.cork(() => {
+        res.writeHeader("Content-Type", "application/json");
+        res.end(JSON.stringify(result));
+      });
     }
   };
 }
-
-import { createErrorHandler } from "./error";
