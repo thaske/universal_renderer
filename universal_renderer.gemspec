@@ -26,5 +26,7 @@ Gem::Specification.new do |spec|
 
   spec.add_dependency "loofah", "~> 2.24"
   spec.add_dependency "rails", ">= 7.1", "< 9.0"
-spec.metadata['rubygems_mfa_required'] = 'true'
+  spec.add_dependency "mini_racer", "~> 0.8"
+  spec.add_dependency "connection_pool", "~> 2.4"
+  spec.metadata["rubygems_mfa_required"] = "true"
 end

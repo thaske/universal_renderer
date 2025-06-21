@@ -50,9 +50,62 @@ Configure in `config/initializers/universal_renderer.rb`:
 
 ```ruby
 UniversalRenderer.configure do |config|
+  # Choose your SSR engine:
+  # :http      - External Node.js/Bun server (default, supports streaming)
+  # :mini_racer - In-process V8 via MiniRacer (no streaming, no external server)
+  config.engine = :http
+
+  # HTTP Engine Configuration (when engine = :http)
   config.ssr_url = "http://localhost:3001"
+  config.timeout = 3
+
+  # MiniRacer configuration is handled via environment variables:
+  # SSR_MINI_RACER_POOL_SIZE (default: 5)
+  # SSR_MINI_RACER_TIMEOUT (default: 5000ms)
+  # SSR_MINI_RACER_MAX_MEMORY (default: 256MB)
 end
 ```
+
+## SSR Engines
+
+UniversalRenderer supports two different SSR engines:
+
+### HTTP Engine (Default)
+
+The HTTP engine forwards SSR requests to an external Node.js or Bun server. This is the default and recommended approach for most applications.
+
+**Pros:**
+
+- Supports streaming SSR
+- Full JavaScript ecosystem access
+- Easy to scale horizontally
+- Battle-tested in production
+
+**Cons:**
+
+- Requires external server setup
+- Network overhead for each request
+- Additional infrastructure complexity
+
+### MiniRacer Engine
+
+The MiniRacer engine executes JavaScript directly within your Rails process using Google's V8 engine via the `mini_racer` gem.
+
+**Pros:**
+
+- No external server required
+- Eliminates network overhead
+- Simplified deployment
+- Better for simple SSR needs
+
+**Cons:**
+
+- No streaming support
+- Limited JavaScript ecosystem (no npm packages)
+- Memory overhead per V8 context
+- Not suitable for complex JavaScript applications
+
+To use MiniRacer, set `config.engine = :mini_racer` and customize the JavaScript bundle at `app/assets/javascripts/universal_renderer/ssr_bundle.js` with your React components.
 
 ## Basic Usage
 
@@ -229,6 +282,93 @@ To set up the SSR server for your Rails application:
    web: bin/rails s
    ssr: bin/vite ssr
    ```
+
+## Setting Up MiniRacer Engine
+
+If you prefer to use the MiniRacer engine instead of an external server:
+
+1. Configure the engine in your initializer:
+
+   ```ruby
+   # config/initializers/universal_renderer.rb
+   UniversalRenderer.configure { |config| config.engine = :mini_racer }
+   ```
+
+2. Customize the SSR bundle at `app/assets/javascripts/universal_renderer/ssr_bundle.js`:
+
+   ```javascript
+   // Import your bundled React components here
+   // This file is created by the universal_renderer:install generator
+
+   globalThis.UniversalSSR = {
+     render: function (componentName, props, url) {
+       try {
+         // Map component names to actual components
+         const components = {
+           // Add your components here, e.g.:
+           // App: YourAppComponent,
+           // HomePage: YourHomePageComponent,
+         };
+
+         const Component = components[componentName];
+         if (!Component) {
+           throw new Error(`Unknown component: ${componentName}`);
+         }
+
+         // Use React.createElement and renderToString here
+         const element = React.createElement(Component, { ...props, url });
+         const body = renderToString(element);
+
+         return {
+           head: "<title>Your App</title>",
+           body: body,
+           bodyAttrs: {},
+         };
+       } catch (error) {
+         return this.handleError(error, componentName, props, url);
+       }
+     },
+
+     handleError: function (error, componentName, props, url) {
+       console.error("SSR Error:", error);
+       return {
+         head: "<title>SSR Error</title>",
+         body: `<div><h1>Server-Side Rendering Error</h1><p>Component: ${componentName}</p></div>`,
+         bodyAttrs: {},
+       };
+     },
+   };
+   ```
+
+3. Bundle your React components into the SSR bundle file using your preferred bundler (Webpack, Vite, etc.)
+
+4. Restart your Rails application - no external server needed!
+
+**Note:** The MiniRacer engine requires that you bundle all your JavaScript dependencies into a single file, as it cannot access npm packages directly. The engine automatically includes the [fast-text-encoding](https://github.com/samthor/fast-text-encoding) polyfill for UTF-8 compatibility.
+
+## Development
+
+To contribute to this project:
+
+1. Clone the repository:
+
+   ```bash
+   git clone https://github.com/thaske/universal_renderer.git
+   cd universal_renderer
+   ```
+
+2. Initialize and update submodules:
+
+   ```bash
+   git submodule update --init --recursive
+   ```
+
+3. Install dependencies:
+   ```bash
+   bundle install
+   ```
+
+The project uses the [fast-text-encoding](https://github.com/samthor/fast-text-encoding) library as a Git submodule for UTF-8 text encoding support in the MiniRacer engine.
 
 ## Contributing
 

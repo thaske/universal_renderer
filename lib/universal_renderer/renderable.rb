@@ -1,3 +1,5 @@
+require_relative "adapter_factory"
+
 module UniversalRenderer
   module Renderable
     extend ActiveSupport::Concern
@@ -19,7 +21,7 @@ module UniversalRenderer
     end
 
     # Fetches Server-Side Rendered (SSR) content for the current request.
-    # This method makes a blocking call to the SSR service using {UniversalRenderer::Client::Base.fetch}
+    # This method makes a blocking call to the SSR service using the configured adapter
     # and stores the result in the `@ssr` instance variable.
     #
     # The SSR content is fetched based on the `request.original_url` and the
@@ -29,7 +31,7 @@ module UniversalRenderer
     #   or `nil` if the fetch fails or SSR is not configured.
     def fetch_ssr
       @ssr =
-        UniversalRenderer::Client::Base.call(
+        UniversalRenderer::AdapterFactory.adapter.call(
           request.original_url,
           @universal_renderer_props
         )
@@ -55,11 +57,22 @@ module UniversalRenderer
     private
 
     def render_ssr_stream(*, **)
+      adapter = UniversalRenderer::AdapterFactory.adapter
+
+      # Check if the current adapter supports streaming
+      unless adapter.supports_streaming?
+        Rails.logger.warn(
+          "Current SSR adapter (#{adapter.class.name}) does not support streaming. " \
+            "Falling back to blocking SSR."
+        )
+        return false
+      end
+
       full_layout = render_to_string(*, **)
       current_props = @universal_renderer_props.dup
 
       streaming_succeeded =
-        UniversalRenderer::Client::Stream.call(
+        adapter.stream(
           request.original_url,
           current_props,
           full_layout,
