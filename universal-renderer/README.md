@@ -2,7 +2,7 @@
 
 SSR micro-server that pairs with the `universal_renderer` Ruby gem.
 
-• **Express-based** – lightweight and familiar Node.js server.
+• **Multi-framework** – Express.js, Bun, and uWebSockets.js support out of the box.
 • **Framework-agnostic** – just start a server and hand it JSX/HTML.
 • **Simple API** – minimal configuration, maximum flexibility.
 
@@ -10,20 +10,23 @@ SSR micro-server that pairs with the `universal_renderer` Ruby gem.
 
 ```bash
 npm install universal-renderer
+# Also install your preferred web framework:
+npm install express   # For Express.js
+npm install bun       # For Bun (usually Bun is the runtime, ensure @types/bun for TS)
+npm install uWebSockets.js  # For uWebSockets.js (Node runtime only)
 ```
 
-## Example
+## Examples
 
-### Basic Setup
+### Express.js Setup
 
 ```ts
-// ssr.ts
-import { createServer } from "universal-renderer";
+// ssr-express.ts
+import { createServer } from "universal-renderer/express";
 import { renderToString } from "react-dom/server.node";
 import App from "./App";
 
 const app = await createServer({
-  port: 3001,
   setup: async (url, props) => {
     // Set up your app context - routing, state, etc.
     return {
@@ -53,14 +56,61 @@ app.listen(3001, () => {
 });
 ```
 
+### Bun Setup
+
+```ts
+// ssr-bun.ts
+import { createServer } from "universal-renderer/bun";
+import { renderToString } from "react-dom/server"; // Or your preferred renderer
+import App from "./App"; // Your main application component
+
+async function startServer() {
+  const serverConfig = await createServer({
+    port: 3000, // Or your desired port
+    setup: async (url, props) => {
+      // Set up your app context - routing, state, etc.
+      // This context is passed to render and cleanup
+      return {
+        jsx: <App {...props} url={url} />, // Example: pass url and props to your App
+        url,
+        props,
+        // Example: initialize a store or other request-specific resources
+        // store: createMyStore(),
+      };
+    },
+    render: async (context) => {
+      // Render your React (or other framework) app to HTML
+      const html = renderToString(context.jsx);
+
+      return {
+        // Optional: HTML content for the <head>
+        head: '<meta name="description" content="My Bun SSR App">',
+        // Required: The main rendered HTML body content
+        body: html,
+        // Optional: Attributes for the <body> tag
+        bodyAttrs: 'class="bun-ssr-rendered"'
+      };
+    },
+    cleanup: (context) => {
+      // Clean up any resources if needed (e.g., close store connections)
+      console.log(`Rendered ${context.url} with Bun`);
+      // context.store?.dispose();
+    }
+  });
+
+  Bun.serve(serverConfig);
+  console.log(`Bun SSR server running on http://localhost:${serverConfig.port}`);
+}
+
+startServer();
+```
+
 ### With Streaming (React 18+)
 
 ```ts
-import { createServer } from "universal-renderer";
-import { renderToPipeableStream } from "react-dom/server.node";
+import { createServer } from "universal-renderer/express";
 
 const app = await createServer({
-  port: 3001,
   setup: async (url, props) => ({ url, props }),
   render: async (context) => ({ body: "fallback" }), // Required but not used for streaming
   streamCallbacks: {
@@ -75,11 +125,23 @@ const app = await createServer({
 
 Point the gem at `http://localhost:3001` and you're done.
 
+## Framework Support
+
+Universal Renderer supports multiple web frameworks through subpath imports:
+
+- **Express.js**: `import { createServer } from "universal-renderer/express"`
+- **Bun**: `import { createServer } from "universal-renderer/bun"`
+
+All frameworks provide a similar API surface, allowing you to switch between them with minimal changes to your SSR logic. Choose based on your deployment target:
+
+- **Express.js**: Traditional Node.js environments
+- **Bun**: Native Bun environments using `Bun.serve`
+
 ## API
 
 ### `createServer(options)`
 
-Creates an Express application configured for SSR. Each request arrives as `{ url, props }` JSON and must respond with:
+Creates a web application configured for SSR. Each request arrives as `{ url, props }` JSON and must respond with:
 
 ```ts
 export type RenderOutput = {
@@ -109,7 +171,7 @@ These markers are used by the Rails gem to inject SSR content into your template
 - `render(context)` → `RenderOutput` &mdash; stringify markup.
 - `cleanup(context)` (optional) &mdash; dispose per-request resources.
 - `streamCallbacks` (optional) &mdash; for streaming SSR support.
-- `middleware` (optional) &mdash; Express middleware for static assets, etc.
+- `middleware` (optional) &mdash; Framework-specific middleware for static assets, etc.
 
 ### Streaming (Optional)
 

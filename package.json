@@ -1,9 +1,21 @@
 {
+  "scripts": {
+    "benchmark": "playwright test benchmark/load-test.spec.ts",
+    "analyze": "bun run benchmark/analyze-results.ts",
+    "serve": "bunx serve"
+  },
   "dependencies": {
     "@prettier/plugin-ruby": "^4.0.4",
     "prettier": "^3.5.3"
   },
+  "private": true,
   "workspaces": [
     "universal-renderer"
-  ]
+  ],
+  "devDependencies": {
+    "@playwright/test": "^1.52.0",
+    "@types/yargs": "^17.0.33",
+    "get-port": "^7.1.0",
+    "yargs": "^17.7.2"
+  }
 }

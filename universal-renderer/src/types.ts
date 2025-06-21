@@ -1,4 +1,3 @@
-import type { ErrorRequestHandler, RequestHandler } from "express";
 import type { ReactNode } from "react";
 
 /**
@@ -64,12 +63,6 @@ export type BaseHandlerOptions<TContext extends Record<string, any>> = {
    * @param context - The context object returned by the setup function
    */
   cleanup?: (context: TContext) => void;
-
-  /**
-   * Optional error handler to be applied to the server.
-   * This error handler will be applied after the built-in middleware but before the error handler.
-   */
-  error?: ErrorRequestHandler;
 };
 
 /**
@@ -142,30 +135,54 @@ export type StreamHandlerOptions<TContext extends Record<string, any>> =
   };
 
 /**
- * Configuration options for creating an SSR server.
- * @template TContext - The type of context object passed between setup, render, and cleanup functions
+ * Request information extracted from the framework-specific request object.
  */
-export type ServerOptions<
-  TContext extends Record<string, any> = Record<string, any>,
-> = SSRHandlerOptions<TContext> & {
+export type RequestInfo = {
   /**
-   * Optional streaming callbacks for React 18+ streaming SSR.
-   * When provided, enables the `/stream` endpoint for streaming responses.
+   * The request body as a parsed object
    */
-  streamCallbacks?: StreamHandlerOptions<TContext>["streamCallbacks"];
+  body: Record<string, any>;
 
   /**
-   * Optional Express middleware to be applied to the server.
-   * This middleware will be applied after the built-in middleware but before the error handler.
-   *
-   * @example
-   * ```typescript
-   * middleware: (req, res, next) => {
-   *   // Add custom headers, authentication, etc.
-   *   res.setHeader('X-Custom-Header', 'value');
-   *   next();
-   * }
-   * ```
+   * HTTP method (GET, POST, etc.)
    */
-  middleware?: RequestHandler;
+  method: string;
+
+  /**
+   * Request URL
+   */
+  url: string;
 };
+
+/**
+ * Response utilities that abstract framework-specific response methods.
+ */
+export type ResponseUtils = {
+  /**
+   * Send a JSON response
+   */
+  json: (data: any, status?: number) => void | Promise<void>;
+
+  /**
+   * Send a text response
+   */
+  text: (data: string, status?: number) => void | Promise<void>;
+
+  /**
+   * Set response status
+   */
+  status: (code: number) => void;
+
+  /**
+   * Set response headers
+   */
+  setHeader: (name: string, value: string) => void;
+};
+
+/**
+ * Framework-agnostic handler function type
+ */
+export type UniversalHandler = (
+  req: RequestInfo,
+  res: ResponseUtils,
+) => Promise<void> | void;
