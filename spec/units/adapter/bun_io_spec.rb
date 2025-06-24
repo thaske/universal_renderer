@@ -2,14 +2,7 @@ require "rails_helper"
 
 RSpec.describe UniversalRenderer::Adapter::BunIo do
   let(:cli_script) { "app/frontend/ssr/ssr.ts" }
-  let(:options) do
-    {
-      pool_size: 2,
-      timeout: 3000,
-      cli_script: cli_script,
-      bundle_path: "app/assets/javascripts/universal_renderer/ssr_bundle.js",
-    }
-  end
+  let(:config_mock) { instance_double(UniversalRenderer::Configuration) }
 
   before do
     # Mock Rails.root
@@ -19,6 +12,12 @@ RSpec.describe UniversalRenderer::Adapter::BunIo do
     allow(Rails.logger).to receive(:info)
     allow(Rails.logger).to receive(:error)
     allow(Rails.logger).to receive(:warn)
+
+    # Mock UniversalRenderer.config
+    allow(UniversalRenderer).to receive(:config).and_return(config_mock)
+    allow(config_mock).to receive(:bun_pool_size).and_return(2)
+    allow(config_mock).to receive(:bun_timeout).and_return(3000)
+    allow(config_mock).to receive(:bun_cli_script).and_return(cli_script)
   end
 
   describe "#initialize" do
@@ -37,7 +36,7 @@ RSpec.describe UniversalRenderer::Adapter::BunIo do
       end
 
       it "initializes successfully" do
-        adapter = described_class.new(options)
+        adapter = described_class.new
         expect(adapter).to be_a(described_class)
       end
 
@@ -46,7 +45,7 @@ RSpec.describe UniversalRenderer::Adapter::BunIo do
           "Universal Renderer BunIo process pool (2) initialized",
         )
 
-        described_class.new(options)
+        described_class.new
       end
     end
 
@@ -62,13 +61,13 @@ RSpec.describe UniversalRenderer::Adapter::BunIo do
           /BunIo CLI script not found/,
         )
 
-        described_class.new(options)
+        described_class.new
       end
     end
   end
 
   describe "#call" do
-    let(:adapter) { described_class.new(options) }
+    let(:adapter) { described_class.new }
     let(:url) { "http://example.com/test" }
     let(:props) { { "component" => "TestComponent", "title" => "Test" } }
 
@@ -89,10 +88,7 @@ RSpec.describe UniversalRenderer::Adapter::BunIo do
       end
 
       it "renders successfully and returns SSR::Response" do
-        allow(process_mock).to receive(:render).with(
-          "TestComponent",
-          hash_including("title" => "Test", :url => url),
-        ).and_return(
+        allow(process_mock).to receive(:render).with(url, props).and_return(
           {
             "head" => "<title>Test Page</title>",
             "body" => "<div>Test Component</div>",
@@ -138,7 +134,7 @@ RSpec.describe UniversalRenderer::Adapter::BunIo do
   end
 
   describe "#stream" do
-    let(:adapter) { described_class.new(options) }
+    let(:adapter) { described_class.new }
 
     it "does not support streaming and returns false" do
       expect(Rails.logger).to receive(:warn).with(
@@ -151,7 +147,7 @@ RSpec.describe UniversalRenderer::Adapter::BunIo do
   end
 
   describe "#supports_streaming?" do
-    let(:adapter) { described_class.new(options) }
+    let(:adapter) { described_class.new }
 
     it "returns false" do
       expect(adapter.supports_streaming?).to be false
@@ -191,11 +187,11 @@ RSpec.describe UniversalRenderer::StdioBunProcess do
 
   describe "#render" do
     let(:process) { described_class.new(cli_script) }
-    let(:component) { "TestComponent" }
+    let(:url) { "http://example.com/test" }
     let(:props) { { "title" => "Test" } }
 
     it "sends JSON payload and returns parsed JSON response" do
-      expected_payload = JSON.generate({ component: component, props: props })
+      expected_payload = JSON.generate({ url: url, props: props })
       expected_response =
         JSON.generate(
           {
@@ -210,7 +206,7 @@ RSpec.describe UniversalRenderer::StdioBunProcess do
       expect(stdin_mock).to receive(:flush)
       expect(stdout_mock).to receive(:readline).and_return(expected_response)
 
-      result = process.render(component, props)
+      result = process.render(url, props)
       expect(result).to eq(
         {
           "head" => "<title>Test</title>",

@@ -8,10 +8,10 @@ require "connection_pool"
 module UniversalRenderer
   module Adapter
     class BunIo < Base
-      def initialize(options = {})
-        @pool_size = options.fetch(:pool_size, 5)
-        @timeout = options.fetch(:timeout, 5_000) # ms (not used for now but kept for consistency)
-        @cli_script = options.fetch(:cli_script, "app/frontend/ssr/ssr.ts")
+      def initialize
+        @pool_size = UniversalRenderer.config.bun_pool_size
+        @timeout = UniversalRenderer.config.bun_timeout
+        @cli_script = UniversalRenderer.config.bun_cli_script
         @process_pool = nil
         setup
       end

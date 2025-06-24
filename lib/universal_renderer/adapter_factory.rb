@@ -13,8 +13,7 @@ module UniversalRenderer
         when :http
           Adapter::Http.new
         when :bun_io
-          # Initialize BunIo with optional configuration
-          Adapter::BunIo.new(bun_io_options)
+          Adapter::BunIo.new
         else
           Rails.logger.warn(
             "Unknown SSR engine '#{UniversalRenderer.config.engine}'. Falling back to HTTP adapter.",
@@ -32,18 +31,6 @@ module UniversalRenderer
       # Resets the adapter (useful for testing or configuration changes)
       def reset!
         @adapter = nil
-      end
-
-      private
-
-      def bun_io_options
-        {
-          pool_size: ENV.fetch("SSR_BUN_POOL_SIZE", 5).to_i,
-          timeout: ENV.fetch("SSR_BUN_TIMEOUT", 5_000).to_i,
-          cli_script:
-            ENV.fetch("SSR_BUN_CLI_SCRIPT", "app/frontend/ssr/ssr.ts"),
-          bundle_path: UniversalRenderer.config.bundle_path,
-        }
       end
     end
   end

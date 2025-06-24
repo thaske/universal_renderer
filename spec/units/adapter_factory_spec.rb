@@ -26,14 +26,21 @@ RSpec.describe UniversalRenderer::AdapterFactory do
 
     context "when engine is :bun_io" do
       before do
-        allow(UniversalRenderer.config).to receive(:engine).and_return(
-          :bun_io
+        allow(UniversalRenderer.config).to receive(:engine).and_return(:bun_io)
+        # Mock BunIo configuration options
+        allow(UniversalRenderer.config).to receive(:bun_pool_size).and_return(2)
+        allow(UniversalRenderer.config).to receive(:bun_timeout).and_return(
+          3000,
         )
+        allow(UniversalRenderer.config).to receive(:bun_cli_script).and_return(
+          "app/frontend/ssr/ssr.ts",
+        )
+
         # Mock file existence for CLI script
         allow(File).to receive(:exist?).and_return(true)
         # Mock Rails.root
         allow(Rails).to receive(:root).and_return(
-          Pathname.new("/mock/rails/root")
+          Pathname.new("/mock/rails/root"),
         )
 
         # Mock BunIo components to avoid actual process spawning
@@ -42,8 +49,8 @@ RSpec.describe UniversalRenderer::AdapterFactory do
             instance_double(IO),
             instance_double(IO),
             instance_double(IO),
-            instance_double(Process::Waiter)
-          ]
+            instance_double(Process::Waiter),
+          ],
         )
 
         pool_mock = instance_double(ConnectionPool)
