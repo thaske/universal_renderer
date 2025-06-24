@@ -4,7 +4,7 @@ import { createSSRHandler } from "./handlers/ssr";
 import { createStreamHandler } from "./handlers/stream";
 import type { BunServerOptions } from "./types";
 
-export type { RenderOutput } from "@/types";
+export type { RenderOutput } from "../../types";
 
 /**
  * Creates a Bun server configured for Server-Side Rendering (SSR).

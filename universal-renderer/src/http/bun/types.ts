@@ -2,7 +2,7 @@ import type {
   BaseHandlerOptions,
   SSRHandlerOptions as CoreSSRHandlerOptions,
   StreamHandlerOptions as CoreStreamHandlerOptions,
-} from "../types";
+} from "../../types";
 
 /**
  * Bun-specific error handler function type.

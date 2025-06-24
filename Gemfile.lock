@@ -4,7 +4,6 @@ PATH
     universal_renderer (0.4.3)
       connection_pool (~> 2.4)
       loofah (~> 2.24)
-      mini_racer (~> 0.8)
       rails (>= 7.1, < 9.0)
 
 GEM
@@ -122,12 +121,6 @@ GEM
       reline (>= 0.4.2)
     json (2.12.2)
     language_server-protocol (3.17.0.5)
-    libv8-node (23.6.1.0)
-    libv8-node (23.6.1.0-aarch64-linux)
-    libv8-node (23.6.1.0-arm64-darwin)
-    libv8-node (23.6.1.0-x86_64-darwin)
-    libv8-node (23.6.1.0-x86_64-linux)
-    libv8-node (23.6.1.0-x86_64-linux-musl)
     lint_roller (1.1.0)
     logger (1.7.0)
     loofah (2.24.1)
@@ -140,8 +133,6 @@ GEM
       net-smtp
     marcel (1.0.4)
     mini_mime (1.1.5)
-    mini_racer (0.18.1)
-      libv8-node (~> 23.6.1.0)
     minitest (5.25.5)
     net-imap (0.5.8)
       date

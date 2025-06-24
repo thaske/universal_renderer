@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "adapter/http"
-require_relative "adapter/mini_racer"
+require_relative "adapter/bun_io"
 
 module UniversalRenderer
   class AdapterFactory
@@ -12,9 +12,9 @@ module UniversalRenderer
         case UniversalRenderer.config.engine
         when :http
           Adapter::Http.new
-        when :mini_racer
-          # Initialize MiniRacer with optional configuration
-          Adapter::MiniRacer.new(mini_racer_options)
+        when :bun_io
+          # Initialize BunIo with optional configuration
+          Adapter::BunIo.new(bun_io_options)
         else
           Rails.logger.warn(
             "Unknown SSR engine '#{UniversalRenderer.config.engine}'. Falling back to HTTP adapter."
@@ -24,7 +24,7 @@ module UniversalRenderer
       end
 
       # Returns a singleton instance of the adapter
-      # This ensures we don't recreate MiniRacer context pools unnecessarily
+      # This ensures we don't recreate BunIo process pools unnecessarily
       def adapter
         @adapter ||= create_adapter
       end
@@ -36,11 +36,11 @@ module UniversalRenderer
 
       private
 
-      def mini_racer_options
+      def bun_io_options
         {
-          pool_size: ENV.fetch("SSR_MINI_RACER_POOL_SIZE", 5).to_i,
-          timeout: ENV.fetch("SSR_MINI_RACER_TIMEOUT", 5_000).to_i,
-          max_memory: ENV.fetch("SSR_MINI_RACER_MAX_MEMORY", 256_000_000).to_i,
+          pool_size: ENV.fetch("SSR_BUN_POOL_SIZE", 5).to_i,
+          timeout: ENV.fetch("SSR_BUN_TIMEOUT", 5_000).to_i,
+          cli_script: ENV.fetch("SSR_BUN_CLI_SCRIPT", "src/stdio/bun/index.js"),
           bundle_path: UniversalRenderer.config.bundle_path
         }
       end

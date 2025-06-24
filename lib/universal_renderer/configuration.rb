@@ -7,11 +7,6 @@ module UniversalRenderer
       @timeout = (ENV["SSR_TIMEOUT"] || 3).to_i
       @ssr_stream_path = ENV.fetch("SSR_STREAM_PATH", "/stream")
       @engine = (ENV["SSR_ENGINE"] || :http).to_sym
-      @bundle_path =
-        ENV.fetch(
-          "SSR_BUNDLE_PATH",
-          "app/assets/javascripts/universal_renderer/ssr_bundle.js"
-        )
     end
   end
 end

@@ -1,9 +1,9 @@
 namespace :universal_renderer do
-  desc "Benchmark HTTP vs MiniRacer SSR performance"
+  desc "Benchmark HTTP vs BunIo SSR performance"
   task benchmark: :environment do
     require "benchmark"
 
-    puts "Universal Renderer Benchmark: HTTP vs MiniRacer"
+    puts "Universal Renderer Benchmark: HTTP vs BunIo"
     puts "=" * 50
 
     # Setup test props
@@ -46,27 +46,27 @@ namespace :universal_renderer do
 
     puts
 
-    # Benchmark MiniRacer adapter
-    puts "MiniRacer Adapter:"
+    # Benchmark BunIo adapter
+    puts "BunIo Adapter:"
     begin
-      UniversalRenderer.config.engine = :mini_racer
+      UniversalRenderer.config.engine = :bun_io
       UniversalRenderer::AdapterFactory.reset!
 
-      mini_racer_adapter = UniversalRenderer::AdapterFactory.adapter
+      bun_io_adapter = UniversalRenderer::AdapterFactory.adapter
 
-      mini_racer_time =
+      bun_io_time =
         Benchmark.measure do
           iterations.times do
-            result = mini_racer_adapter.call(test_url, test_props)
+            result = bun_io_adapter.call(test_url, test_props)
           end
         end
 
-      puts "  Total time: #{mini_racer_time.real.round(4)}s"
-      puts "  Average per call: #{(mini_racer_time.real / iterations * 1000).round(2)}ms"
-      puts "  Calls per second: #{(iterations / mini_racer_time.real).round(2)}"
+      puts "  Total time: #{bun_io_time.real.round(4)}s"
+      puts "  Average per call: #{(bun_io_time.real / iterations * 1000).round(2)}ms"
+      puts "  Calls per second: #{(iterations / bun_io_time.real).round(2)}"
     rescue => e
       puts "  Error: #{e.message}"
-      puts "  (Make sure SSR bundle is available at app/assets/javascripts/universal_renderer/ssr_bundle.js)"
+      puts "  (Make sure Bun CLI script is available and Bun is installed)"
     ensure
       # Restore original engine
       UniversalRenderer.config.engine = original_engine
@@ -78,17 +78,17 @@ namespace :universal_renderer do
     puts
     puts "Notes:"
     puts "- HTTP adapter requires external Node.js/Bun server"
-    puts "- MiniRacer adapter requires customized SSR bundle"
+    puts "- BunIo adapter requires Bun CLI script and Bun installed"
     puts "- Performance may vary based on JavaScript complexity"
-    puts "- MiniRacer eliminates network overhead but has V8 context switching"
+    puts "- BunIo eliminates network overhead but has process communication overhead"
   end
 
-  desc "Test MiniRacer adapter functionality"
-  task test_mini_racer: :environment do
-    puts "Testing MiniRacer Adapter..."
+  desc "Test BunIo adapter functionality"
+  task test_bun_io: :environment do
+    puts "Testing BunIo Adapter..."
     puts "=" * 30
 
-    UniversalRenderer.config.engine = :mini_racer
+    UniversalRenderer.config.engine = :bun_persistent
     UniversalRenderer::AdapterFactory.reset!
 
     adapter = UniversalRenderer::AdapterFactory.adapter
@@ -96,18 +96,18 @@ namespace :universal_renderer do
     test_props = {
       "component" => "TestComponent",
       "title" => "Test Page",
-      "message" => "Hello from MiniRacer!"
+      "message" => "Hello from BunIo!"
     }
 
     result = adapter.call("http://localhost:3000/test", test_props)
 
     if result
-      puts "✅ MiniRacer adapter working!"
+      puts "✅ BunIo adapter working!"
       puts "Head: #{result.head}"
       puts "Body: #{result.body[0..200]}#{"..." if result.body.length > 200}"
       puts "Body attrs: #{result.body_attrs}"
     else
-      puts "❌ MiniRacer adapter returned nil"
+      puts "❌ BunIo adapter returned nil"
       puts "Check logs for error details"
     end
 

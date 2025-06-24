@@ -30,6 +30,15 @@ AllCops:
 Metrics/BlockLength:
   AllowedMethods: ["describe", "context"]
 
+Metrics/CyclomaticComplexity:
+  Max: 10
+
+Metrics/PerceivedComplexity:
+  Max: 10
+
+Naming/PredicateMethod:
+  Enabled: false
+
 # RSpec-specific configuration
 RSpec/MultipleExpectations:
   Max: 10

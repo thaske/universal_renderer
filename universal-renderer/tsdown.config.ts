@@ -3,9 +3,11 @@ import { defineConfig } from "tsdown/config";
 export default defineConfig({
   entry: [
     "src/index.ts",
-    "src/express/index.ts",
-    "src/bun/index.ts",
-    "src/uwebsocket/index.ts",
+    "src/http/express/index.ts",
+    "src/http/bun/index.ts",
+    "src/stdio/index.ts",
+    "src/stdio/bun/index.ts",
+    "src/stdio/node/index.ts",
   ],
   format: ["esm", "cjs"],
   dts: true,

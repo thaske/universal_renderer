@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
-import type { RenderOutput, SSRHandlerOptions } from "../../types";
+import type { RenderOutput, SSRHandlerOptions } from "../../../types";
 import { HttpError } from "./error";
 
 /**

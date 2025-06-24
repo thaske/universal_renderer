@@ -9,7 +9,7 @@ import type {
   BaseHandlerOptions,
   SSRHandlerOptions as CoreSSRHandlerOptions,
   StreamHandlerOptions as CoreStreamHandlerOptions,
-} from "../types";
+} from "../../types";
 
 /**
  * Express-specific base configuration for handlers.
