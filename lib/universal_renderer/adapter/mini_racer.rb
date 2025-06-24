@@ -26,15 +26,17 @@ module UniversalRenderer
         begin
           with_context do |ctx|
             # Call the main render function with component name extracted from props
-            component_name = extract_component_name(props)
-            result = ctx.call("UniversalSSR.render", component_name, props, url)
+            props[:url] = url
+            props = props.to_json
+            Rails.logger.info("MiniRacer props: #{props}")
+            result = ctx.call("UniversalSSR.render", props)
 
             # Convert JavaScript result to SSR::Response
             build_ssr_response(result)
           end
         rescue ::MiniRacer::RuntimeError, ::MiniRacer::SnapshotError => e
           Rails.logger.error(
-            "MiniRacer SSR execution failed: #{e.message} (URL: #{url})"
+            "MiniRacer SSR execution failed: #{e.message} (URL: #{url}) - #{e.backtrace.join("\n")}"
           )
           nil
         rescue StandardError => e
@@ -61,7 +63,6 @@ module UniversalRenderer
 
       def setup
         bundle_path = Rails.root.join(@bundle_path)
-        polyfill_path = Rails.root.join("vendor/fast-text-encoding/text.min.js")
 
         unless File.exist?(bundle_path)
           Rails.logger.error(
@@ -73,23 +74,11 @@ module UniversalRenderer
 
         bundle_content = File.read(bundle_path)
 
-        # Add polyfill if available
-        polyfill_content = ""
-        if File.exist?(polyfill_path)
-          polyfill_content =
-            "\n/* fast-text-encoding polyfill start */\n" +
-              File.read(polyfill_path) +
-              "\n/* fast-text-encoding polyfill end */\n"
-        end
-
-        # Combine polyfill and bundle
-        snapshot_source = "#{polyfill_content}\n#{bundle_content}"
-
         # Set single-threaded flag for Rails/Puma compatibility
         ::MiniRacer::Platform.set_flags!(:single_threaded)
 
         begin
-          snapshot = ::MiniRacer::Snapshot.new(snapshot_source)
+          snapshot = ::MiniRacer::Snapshot.new(bundle_content)
 
           # Warm up the snapshot
           begin
@@ -115,7 +104,7 @@ module UniversalRenderer
           )
         rescue StandardError => e
           Rails.logger.error(
-            "Failed to initialize MiniRacer context pool: #{e.class.name} - #{e.message}"
+            "Failed to initialize MiniRacer context pool: #{e.class.name} - #{e.message} - #{e.backtrace.join("\n")}"
           )
         end
       end
@@ -123,12 +112,6 @@ module UniversalRenderer
       def with_context
         return unless @context_pool
         @context_pool.with { |ctx| yield ctx }
-      end
-
-      def extract_component_name(props)
-        # Extract component name from props, defaulting to 'App' if not specified
-        # Users can customize this logic based on their routing/component structure
-        props.dig("component") || props.dig(:component) || "App"
       end
 
       def build_ssr_response(js_result)

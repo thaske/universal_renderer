@@ -50,6 +50,7 @@ module UniversalRenderer
         super unless success
       else
         fetch_ssr
+        Rails.logger.info("mini_racer render: #{@ssr}")
         super
       end
     end
