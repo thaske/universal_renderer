@@ -56,7 +56,7 @@ UniversalRenderer.configure do |config|
   # BunIo configuration is handled via environment variables:
   # SSR_BUN_POOL_SIZE (default: 5)
   # SSR_BUN_TIMEOUT (default: 5000ms)
-  # SSR_BUN_CLI_SCRIPT (default: "src/stdio/bun/index.js")
+  # SSR_BUN_CLI_SCRIPT (default: "app/frontend/ssr/ssr.ts")
 end
 ```
 

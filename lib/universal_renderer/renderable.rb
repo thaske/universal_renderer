@@ -33,7 +33,7 @@ module UniversalRenderer
       @ssr =
         UniversalRenderer::AdapterFactory.adapter.call(
           request.original_url,
-          @universal_renderer_props
+          @universal_renderer_props,
         )
     end
 
@@ -50,7 +50,7 @@ module UniversalRenderer
         super unless success
       else
         fetch_ssr
-        Rails.logger.info("mini_racer render: #{@ssr}")
+        Rails.logger.info("universal_renderer render: #{@ssr}")
         super
       end
     end
@@ -64,7 +64,7 @@ module UniversalRenderer
       unless adapter.supports_streaming?
         Rails.logger.warn(
           "Current SSR adapter (#{adapter.class.name}) does not support streaming. " \
-            "Falling back to blocking SSR."
+            "Falling back to blocking SSR.",
         )
         return false
       end
@@ -77,7 +77,7 @@ module UniversalRenderer
           request.original_url,
           current_props,
           full_layout,
-          response
+          response,
         )
 
       # SSR streaming failed or was not possible (e.g. server down, config missing).
@@ -87,7 +87,7 @@ module UniversalRenderer
       else
         Rails.logger.error(
           "SSR stream fallback: " \
-            "Streaming failed, proceeding with standard rendering."
+            "Streaming failed, proceeding with standard rendering.",
         )
         false
       end

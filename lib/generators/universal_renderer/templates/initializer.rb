@@ -12,8 +12,8 @@ UniversalRenderer.configure do |c|
   # These can also be set via environment variables:
   # SSR_BUN_POOL_SIZE, SSR_BUN_TIMEOUT, SSR_BUN_CLI_SCRIPT, SSR_BUNDLE_PATH
   #
-  # CLI script: Path to your Bun CLI script (default: "src/stdio/bun/index.js")
-  # c.cli_script = "src/stdio/bun/index.js"
+  # CLI script: Path to your Bun CLI script (default: "app/frontend/ssr/ssr.ts")
+  # c.cli_script = "app/frontend/ssr/ssr.ts"
   #
   # Pool size: Number of Bun processes (default: 5)
   # Timeout: Process timeout in milliseconds (default: 5000)

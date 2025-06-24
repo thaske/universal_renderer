@@ -17,7 +17,7 @@ module UniversalRenderer
           Adapter::BunIo.new(bun_io_options)
         else
           Rails.logger.warn(
-            "Unknown SSR engine '#{UniversalRenderer.config.engine}'. Falling back to HTTP adapter."
+            "Unknown SSR engine '#{UniversalRenderer.config.engine}'. Falling back to HTTP adapter.",
           )
           Adapter::Http.new
         end
@@ -40,8 +40,9 @@ module UniversalRenderer
         {
           pool_size: ENV.fetch("SSR_BUN_POOL_SIZE", 5).to_i,
           timeout: ENV.fetch("SSR_BUN_TIMEOUT", 5_000).to_i,
-          cli_script: ENV.fetch("SSR_BUN_CLI_SCRIPT", "src/stdio/bun/index.js"),
-          bundle_path: UniversalRenderer.config.bundle_path
+          cli_script:
+            ENV.fetch("SSR_BUN_CLI_SCRIPT", "app/frontend/ssr/ssr.ts"),
+          bundle_path: UniversalRenderer.config.bundle_path,
         }
       end
     end

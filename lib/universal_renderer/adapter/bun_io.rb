@@ -9,10 +9,9 @@ module UniversalRenderer
   module Adapter
     class BunIo < Base
       def initialize(options = {})
-        super
         @pool_size = options.fetch(:pool_size, 5)
         @timeout = options.fetch(:timeout, 5_000) # ms (not used for now but kept for consistency)
-        @cli_script = options.fetch(:cli_script, "src/stdio/bun/index.js")
+        @cli_script = options.fetch(:cli_script, "app/frontend/ssr/ssr.ts")
         @process_pool = nil
         setup
       end
@@ -25,7 +24,7 @@ module UniversalRenderer
             payload = { url:, props: }
 
             Rails.logger.info(
-              "BunIo rendering: #{payload[:url]} with props keys: #{payload[:props].keys}"
+              "BunIo rendering: #{payload[:url]} with props keys: #{payload[:props].keys}",
             )
 
             result = process.render(payload[:url], payload[:props])
@@ -41,12 +40,12 @@ module UniversalRenderer
               body:
                 result["body"] || result[:body] || result["body_html"] ||
                   result[:body_html],
-              body_attrs: result["body_attrs"] || result[:body_attrs] || {}
+              body_attrs: result["body_attrs"] || result[:body_attrs] || {},
             )
           end
         rescue StandardError => e
           Rails.logger.error(
-            "BunIo SSR execution failed: #{e.class.name} - #{e.message} (URL: #{url}) - #{e.backtrace.join("\n")}"
+            "BunIo SSR execution failed: #{e.class.name} - #{e.message} (URL: #{url}) - #{e.backtrace.join("\n")}",
           )
           nil
         end
@@ -55,7 +54,7 @@ module UniversalRenderer
       def stream(_url, _props, _template, _response)
         # Streaming is not supported with stdio Bun processes via stdin/stdout
         Rails.logger.warn(
-          "BunIo adapter does not support streaming SSR. Use HTTP adapter for streaming."
+          "BunIo adapter does not support streaming SSR. Use HTTP adapter for streaming.",
         )
         false
       end
@@ -72,7 +71,7 @@ module UniversalRenderer
         unless File.exist?(cli_script_path)
           Rails.logger.error(
             "BunIo CLI script not found at #{cli_script_path}. " \
-              "Please ensure the Bun CLI script is available."
+              "Please ensure the Bun CLI script is available.",
           )
           return
         end
@@ -84,12 +83,12 @@ module UniversalRenderer
             end
 
           Rails.logger.info(
-            "Universal Renderer BunIo process pool (#{@pool_size}) initialized"
+            "Universal Renderer BunIo process pool (#{@pool_size}) initialized",
           )
         rescue StandardError => e
           Rails.logger.error(
             "Failed to initialize BunIo process pool: " \
-              "#{e.class.name} - #{e.message} - #{e.backtrace.join("\n")}"
+              "#{e.class.name} - #{e.message} - #{e.backtrace.join("\n")}",
           )
         end
       end

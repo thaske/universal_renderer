@@ -1,13 +1,13 @@
 require "rails_helper"
 
 RSpec.describe UniversalRenderer::Adapter::BunIo do
-  let(:cli_script) { "src/stdio/bun/index.js" }
+  let(:cli_script) { "app/frontend/ssr/ssr.ts" }
   let(:options) do
     {
       pool_size: 2,
       timeout: 3000,
       cli_script: cli_script,
-      bundle_path: "app/assets/javascripts/universal_renderer/ssr_bundle.js"
+      bundle_path: "app/assets/javascripts/universal_renderer/ssr_bundle.js",
     }
   end
 
@@ -26,14 +26,14 @@ RSpec.describe UniversalRenderer::Adapter::BunIo do
       before do
         # Mock File.exist? to return true for CLI script
         allow(File).to receive(:exist?).with(
-          Pathname.new("/fake/rails/root").join(cli_script)
+          Pathname.new("/fake/rails/root").join(cli_script),
         ).and_return(true)
 
         # Mock ConnectionPool and StdioBunProcess
         allow(ConnectionPool).to receive(:new).and_return(double("pool"))
-        allow(UniversalRenderer::StdioBunProcess).to receive(
-          :new
-        ).and_return(double("process"))
+        allow(UniversalRenderer::StdioBunProcess).to receive(:new).and_return(
+          double("process"),
+        )
       end
 
       it "initializes successfully" do
@@ -43,7 +43,7 @@ RSpec.describe UniversalRenderer::Adapter::BunIo do
 
       it "logs successful initialization" do
         expect(Rails.logger).to receive(:info).with(
-          "Universal Renderer BunIo process pool (2) initialized"
+          "Universal Renderer BunIo process pool (2) initialized",
         )
 
         described_class.new(options)
@@ -53,13 +53,13 @@ RSpec.describe UniversalRenderer::Adapter::BunIo do
     context "when CLI script does not exist" do
       before do
         allow(File).to receive(:exist?).with(
-          Pathname.new("/fake/rails/root").join(cli_script)
+          Pathname.new("/fake/rails/root").join(cli_script),
         ).and_return(false)
       end
 
       it "logs error and does not create process pool" do
         expect(Rails.logger).to receive(:error).with(
-          /BunIo CLI script not found/
+          /BunIo CLI script not found/,
         )
 
         described_class.new(options)
@@ -73,34 +73,32 @@ RSpec.describe UniversalRenderer::Adapter::BunIo do
     let(:props) { { "component" => "TestComponent", "title" => "Test" } }
 
     context "when process pool is available" do
-      let(:process_mock) do
-        instance_double(UniversalRenderer::StdioBunProcess)
-      end
+      let(:process_mock) { instance_double(UniversalRenderer::StdioBunProcess) }
       let(:pool_mock) { instance_double(ConnectionPool) }
 
       before do
         allow(File).to receive(:exist?).with(
-          Pathname.new("/fake/rails/root").join(cli_script)
+          Pathname.new("/fake/rails/root").join(cli_script),
         ).and_return(true)
 
         allow(ConnectionPool).to receive(:new).and_return(pool_mock)
-        allow(UniversalRenderer::StdioBunProcess).to receive(
-          :new
-        ).and_return(process_mock)
+        allow(UniversalRenderer::StdioBunProcess).to receive(:new).and_return(
+          process_mock,
+        )
         allow(pool_mock).to receive(:with).and_yield(process_mock)
       end
 
       it "renders successfully and returns SSR::Response" do
         allow(process_mock).to receive(:render).with(
           "TestComponent",
-          hash_including("title" => "Test", :url => url)
+          hash_including("title" => "Test", :url => url),
         ).and_return(
           {
             "head" => "<title>Test Page</title>",
             "body" => "<div>Test Component</div>",
             "body_attrs" => {
-            }
-          }
+            },
+          },
         )
 
         result = adapter.call(url, props)
@@ -113,11 +111,11 @@ RSpec.describe UniversalRenderer::Adapter::BunIo do
 
       it "handles rendering errors gracefully" do
         allow(process_mock).to receive(:render).and_raise(
-          StandardError.new("Bun Error")
+          StandardError.new("Bun Error"),
         )
 
         expect(Rails.logger).to receive(:error).with(
-          /BunIo SSR execution failed/
+          /BunIo SSR execution failed/,
         )
 
         result = adapter.call(url, props)
@@ -128,7 +126,7 @@ RSpec.describe UniversalRenderer::Adapter::BunIo do
     context "when process pool is not available" do
       before do
         allow(File).to receive(:exist?).with(
-          Pathname.new("/fake/rails/root").join(cli_script)
+          Pathname.new("/fake/rails/root").join(cli_script),
         ).and_return(false)
       end
 
@@ -144,7 +142,7 @@ RSpec.describe UniversalRenderer::Adapter::BunIo do
 
     it "does not support streaming and returns false" do
       expect(Rails.logger).to receive(:warn).with(
-        /BunIo adapter does not support streaming/
+        /BunIo adapter does not support streaming/,
       )
 
       result = adapter.stream("url", {}, "template", double("response"))
@@ -162,7 +160,7 @@ RSpec.describe UniversalRenderer::Adapter::BunIo do
 end
 
 RSpec.describe UniversalRenderer::StdioBunProcess do
-  let(:cli_script) { "src/stdio/bun/index.js" }
+  let(:cli_script) { "app/frontend/ssr/ssr.ts" }
   let(:stdin_mock) { instance_double(IO) }
   let(:stdout_mock) { instance_double(IO) }
   let(:stderr_mock) { instance_double(IO) }
@@ -170,7 +168,7 @@ RSpec.describe UniversalRenderer::StdioBunProcess do
 
   before do
     allow(Open3).to receive(:popen3).with("bun", cli_script).and_return(
-      [stdin_mock, stdout_mock, stderr_mock, wait_thr_mock]
+      [stdin_mock, stdout_mock, stderr_mock, wait_thr_mock],
     )
 
     allow(stdin_mock).to receive(:puts)
@@ -204,8 +202,8 @@ RSpec.describe UniversalRenderer::StdioBunProcess do
             head: "<title>Test</title>",
             body: "<div>Test Component</div>",
             body_attrs: {
-            }
-          }
+            },
+          },
         )
 
       expect(stdin_mock).to receive(:puts).with(expected_payload)
@@ -218,8 +216,8 @@ RSpec.describe UniversalRenderer::StdioBunProcess do
           "head" => "<title>Test</title>",
           "body" => "<div>Test Component</div>",
           "body_attrs" => {
-          }
-        }
+          },
+        },
       )
     end
   end
