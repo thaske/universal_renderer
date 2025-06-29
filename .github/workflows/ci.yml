@@ -97,7 +97,7 @@ jobs:
       - name: Run Node-specific tests
         run: |
           cd universal-renderer
-          npm run test:node -- --reporter=junit --outputFile=../tmp/node-test-results-${{ matrix.node }}.xml
+          npm run test:node -- --reporter=junit --reporter.outputFile=../tmp/node-test-results-${{ matrix.node }}.xml
 
       - name: Upload Node test results
         uses: actions/upload-artifact@v4
@@ -145,7 +145,7 @@ jobs:
       - name: Run Bun-specific tests
         run: |
           cd universal-renderer
-          bun run test:bun --reporter=junit --reporter-outfile=../tmp/bun-test-results-${{ matrix.bun }}.xml
+          bun run test:bun -- --reporter=junit --reporter.outputFile=../tmp/bun-test-results-${{ matrix.bun }}.xml
 
       - name: Upload Bun test results
         uses: actions/upload-artifact@v4
