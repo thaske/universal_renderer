@@ -79,7 +79,7 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
           cache: "npm"
-          cache-dependency-path: universal-renderer/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install NPM dependencies
         run: |
@@ -125,7 +125,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: universal-renderer/node_modules
-          key: ${{ runner.os }}-bun-${{ matrix.bun }}-${{ hashFiles('universal-renderer/bun.lock') }}
+          key: ${{ runner.os }}-bun-${{ matrix.bun }}-${{ hashFiles('bun.lock') }}
           restore-keys: |
             ${{ runner.os }}-bun-${{ matrix.bun }}-
 
@@ -186,7 +186,7 @@ jobs:
         with:
           node-version: ${{ matrix.runtime.version }}
           cache: "npm"
-          cache-dependency-path: universal-renderer/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Set up Bun (if Bun runtime)
         if: matrix.runtime.name == 'bun'
@@ -199,14 +199,14 @@ jobs:
         uses: actions/cache@v4
         with:
           path: universal-renderer/node_modules
-          key: ${{ runner.os }}-node-${{ matrix.runtime.version }}-${{ hashFiles('universal-renderer/package-lock.json') }}
+          key: ${{ runner.os }}-node-${{ matrix.runtime.version }}-${{ hashFiles('universal-renderer/package.json') }}
 
       - name: Cache NPM dependencies (Bun)
         if: matrix.runtime.name == 'bun'
         uses: actions/cache@v4
         with:
           path: universal-renderer/node_modules
-          key: ${{ runner.os }}-bun-${{ matrix.runtime.version }}-${{ hashFiles('universal-renderer/bun.lock') }}
+          key: ${{ runner.os }}-bun-${{ matrix.runtime.version }}-${{ hashFiles('bun.lock') }}
 
       - name: Install NPM dependencies (Node)
         if: matrix.runtime.name == 'node'
