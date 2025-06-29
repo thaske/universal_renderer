@@ -54,7 +54,7 @@ module ClientIntegrationTester
   # @param props [Hash] Props for rendering
   # @return [Hash] Test results
   def test_bun_io_adapter(url: "http://example.com/test", props: {})
-    begin
+    
       adapter = UniversalRenderer::AdapterFactory.adapter
       response = adapter.call(url, props)
 
@@ -65,7 +65,7 @@ module ClientIntegrationTester
       }
     rescue StandardError => e
       { success: false, error: e.message, error_class: e.class.name }
-    end
+    
   end
 
   private

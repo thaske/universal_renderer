@@ -31,15 +31,15 @@ namespace :universal_renderer do
       http_time =
         Benchmark.measure do
           iterations.times do
-            result = http_adapter.call(test_url, test_props)
-            # Note: HTTP adapter might return nil if server is not running
+            http_adapter.call(test_url, test_props)
+            # NOTE: HTTP adapter might return nil if server is not running
           end
         end
 
       puts "  Total time: #{http_time.real.round(4)}s"
       puts "  Average per call: #{(http_time.real / iterations * 1000).round(2)}ms"
       puts "  Calls per second: #{(iterations / http_time.real).round(2)}"
-    rescue => e
+    rescue StandardError => e
       puts "  Error: #{e.message}"
       puts "  (Make sure SSR server is running if testing HTTP adapter)"
     end
@@ -57,14 +57,14 @@ namespace :universal_renderer do
       bun_io_time =
         Benchmark.measure do
           iterations.times do
-            result = bun_io_adapter.call(test_url, test_props)
+            bun_io_adapter.call(test_url, test_props)
           end
         end
 
       puts "  Total time: #{bun_io_time.real.round(4)}s"
       puts "  Average per call: #{(bun_io_time.real / iterations * 1000).round(2)}ms"
       puts "  Calls per second: #{(iterations / bun_io_time.real).round(2)}"
-    rescue => e
+    rescue StandardError => e
       puts "  Error: #{e.message}"
       puts "  (Make sure Bun CLI script is available and Bun is installed)"
     ensure

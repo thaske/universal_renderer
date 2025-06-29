@@ -15,9 +15,7 @@ RSpec.describe UniversalRenderer::Adapter::BunIo do
 
     # Mock UniversalRenderer.config
     allow(UniversalRenderer).to receive(:config).and_return(config_mock)
-    allow(config_mock).to receive(:bun_pool_size).and_return(2)
-    allow(config_mock).to receive(:bun_timeout).and_return(3000)
-    allow(config_mock).to receive(:bun_cli_script).and_return(cli_script)
+    allow(config_mock).to receive_messages(bun_pool_size: 2, bun_timeout: 3000, bun_cli_script: cli_script)
   end
 
   describe "#initialize" do

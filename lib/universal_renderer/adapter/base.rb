@@ -20,7 +20,7 @@ module UniversalRenderer
       # @param template [String] The HTML template to use for rendering
       # @param response [ActionDispatch::Response] The Rails response object to stream to
       # @return [Boolean] True if streaming was initiated, false otherwise
-      def stream(url, props, template, response)
+      def stream(_url, _props, _template, _response)
         false # Default implementation returns false (not supported)
       end
 

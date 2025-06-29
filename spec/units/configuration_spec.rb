@@ -17,7 +17,7 @@ RSpec.describe UniversalRenderer::Configuration do
     end
 
     it "reads engine from environment variable" do
-      original_env = ENV["SSR_ENGINE"]
+      original_env = ENV.fetch("SSR_ENGINE", nil)
       ENV["SSR_ENGINE"] = "mini_racer"
 
       config = described_class.new
@@ -27,7 +27,7 @@ RSpec.describe UniversalRenderer::Configuration do
     end
 
     it "reads bun_cli_script from environment variable" do
-      original_env = ENV["SSR_BUN_CLI_SCRIPT"]
+      original_env = ENV.fetch("SSR_BUN_CLI_SCRIPT", nil)
       ENV["SSR_BUN_CLI_SCRIPT"] = "custom/path/to/ssr.ts"
 
       config = described_class.new
@@ -37,7 +37,7 @@ RSpec.describe UniversalRenderer::Configuration do
     end
 
     it "reads bun_pool_size from environment variable" do
-      original_env = ENV["SSR_BUN_POOL_SIZE"]
+      original_env = ENV.fetch("SSR_BUN_POOL_SIZE", nil)
       ENV["SSR_BUN_POOL_SIZE"] = "10"
 
       config = described_class.new
@@ -47,7 +47,7 @@ RSpec.describe UniversalRenderer::Configuration do
     end
 
     it "reads bun_timeout from environment variable" do
-      original_env = ENV["SSR_BUN_TIMEOUT"]
+      original_env = ENV.fetch("SSR_BUN_TIMEOUT", nil)
       ENV["SSR_BUN_TIMEOUT"] = "8000"
 
       config = described_class.new

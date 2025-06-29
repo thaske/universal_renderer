@@ -12,21 +12,19 @@ RSpec.shared_examples "SSR contract compliance" do |engine_type|
         array_data: [1, 2, 3]
       }
 
-      if engine_type == :http
-        result =
-          test_ssr_endpoint(
+      result = if engine_type == :http
+        test_ssr_endpoint(
             server_url,
             url: "http://example.com/test-page",
             props: test_props
           )
       else
         # For BUN_IO mode, test via the adapter directly
-        result =
-          test_bun_io_adapter(
+        test_bun_io_adapter(
             url: "http://example.com/test-page",
             props: test_props
           )
-      end
+               end
 
       expect(result[:success]).to be true
       expect(result[:status]).to eq 200 if engine_type == :http
@@ -37,11 +35,11 @@ RSpec.shared_examples "SSR contract compliance" do |engine_type|
     end
 
     it "handles empty props correctly" do
-      if engine_type == :http
-        result = test_ssr_endpoint(server_url, props: {})
+      result = if engine_type == :http
+        test_ssr_endpoint(server_url, props: {})
       else
-        result = test_bun_io_adapter(props: {})
-      end
+        test_bun_io_adapter(props: {})
+               end
 
       expect(result[:success]).to be true
       response_data = result[:response] || result[:json]
@@ -68,11 +66,11 @@ RSpec.shared_examples "SSR contract compliance" do |engine_type|
         }
       }
 
-      if engine_type == :http
-        result = test_ssr_endpoint(server_url, props: complex_props)
+      result = if engine_type == :http
+        test_ssr_endpoint(server_url, props: complex_props)
       else
-        result = test_bun_io_adapter(props: complex_props)
-      end
+        test_bun_io_adapter(props: complex_props)
+               end
 
       expect(result[:success]).to be true
     end
@@ -80,13 +78,12 @@ RSpec.shared_examples "SSR contract compliance" do |engine_type|
 
   describe "Ruby client integration" do
     it "integrates properly with UniversalRenderer::Client::Base" do
-      if engine_type == :http
-        results = test_ruby_client_integration(server_url)
-        base_result = results[:base_client]
+      results = if engine_type == :http
+        test_ruby_client_integration(server_url)
       else
-        results = test_ruby_client_integration_bun_io
-        base_result = results[:base_client]
-      end
+        test_ruby_client_integration_bun_io
+                end
+base_result = results[:base_client]
 
       expect(base_result[:success]).to be true
       expect(base_result[:response]).to be_a(UniversalRenderer::SSR::Response)
