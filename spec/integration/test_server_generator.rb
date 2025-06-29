@@ -5,8 +5,8 @@ require "fileutils"
 require "tmpdir"
 
 module IntegrationHelpers
-  # Service class responsible for generating test SSR server files and configuration
-  class TestServerGenerator
+  # Service class responsible for generating HTTP Express test SSR server files and configuration
+  class HttpExpressServerGenerator
     # Gets the project root directory
     def self.project_root
       @project_root ||= File.expand_path("../..", __dir__)

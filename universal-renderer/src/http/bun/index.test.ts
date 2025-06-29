@@ -1,13 +1,27 @@
-import Bun, { type Server } from "bun";
-import React from "react";
-import { afterAll, describe, expect, it } from "vitest";
-import { createServer } from "./server";
-import type { BunServerOptions } from "./types";
-
-const TEST_PORT = 3003; // Use a different port for Bun tests
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 describe("Bun createServer", () => {
-  let serverInstance: Server | null = null;
+  // Skip tests if not running in Bun environment
+  if (typeof globalThis.Bun === "undefined") {
+    it.skip("Skipping Bun HTTP tests - not running in Bun environment", () => {});
+    return;
+  }
+
+  // Dynamic imports to avoid issues when Bun is not available
+  let BunGlobal: any;
+  let React: any;
+  let createServer: any;
+
+  beforeAll(async () => {
+    BunGlobal = globalThis.Bun;
+    React = await import("react");
+    const serverModule = await import("./server");
+    createServer = serverModule.createServer;
+  });
+
+  const getTestPort = () => 30000 + Math.floor(Math.random() * 1000); // Dynamic port to avoid conflicts
+
+  let serverInstance: any = null;
 
   afterAll(async () => {
     if (serverInstance) {
@@ -23,10 +37,11 @@ describe("Bun createServer", () => {
   });
 
   it("should accept valid render configuration and start/stop server", async () => {
-    const serverConfig: BunServerOptions<any> = {
-      port: TEST_PORT,
+    const testPort = getTestPort();
+    const serverConfig = {
+      port: testPort,
       setup: async () => ({ test: "context" }),
-      render: async (context) => ({
+      render: async (context: any) => ({
         head: `<title>Test Bun ${context.test}</title>`,
         body: "<div>Test Bun SSR</div>",
       }),
@@ -38,23 +53,23 @@ describe("Bun createServer", () => {
     const server = await createServer(serverConfig);
     expect(server).toBeDefined();
     expect(server.fetch).toBeInstanceOf(Function);
-    expect(server.port).toBe(TEST_PORT);
+    expect(server.port).toBe(testPort);
 
     // Start the server
-    serverInstance = Bun.serve(server);
+    serverInstance = BunGlobal.serve(server);
     expect(serverInstance).toBeDefined();
     if (serverInstance) {
-      expect(serverInstance.port).toBe(TEST_PORT);
+      expect(serverInstance.port).toBe(testPort);
     }
 
     // Test health endpoint
-    const healthRes = await fetch(`http://localhost:${TEST_PORT}/health`);
+    const healthRes = await fetch(`http://localhost:${testPort}/health`);
     expect(healthRes.status).toBe(200);
     const healthJson = (await healthRes.json()) as { status: string };
     expect(healthJson.status).toBe("OK");
 
     // Test SSR endpoint
-    const ssrRes = await fetch(`http://localhost:${TEST_PORT}/`, {
+    const ssrRes = await fetch(`http://localhost:${testPort}/`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url: "/test", props: { message: "Hello Bun" } }),
@@ -68,6 +83,7 @@ describe("Bun createServer", () => {
   });
 
   it("should accept valid stream configuration and start/stop server", async () => {
+    const testPort = getTestPort();
     const mockStreamCallbacks = {
       node: (context: any) =>
         React.createElement(
@@ -79,8 +95,8 @@ describe("Bun createServer", () => {
         `<meta name=\"stream-test\" content=\"${context.streamTest}\">`,
     };
 
-    const serverConfig: BunServerOptions<any> = {
-      port: TEST_PORT + 1, // Use a different port to avoid conflict
+    const serverConfig = {
+      port: testPort,
       setup: async () => ({ streamTest: "data" }),
       render: async () => ({ body: "fallback" }), // Required but not used for streaming
       cleanup: () => {
@@ -92,16 +108,16 @@ describe("Bun createServer", () => {
     const server = await createServer(serverConfig);
     expect(server).toBeDefined();
     expect(server.fetch).toBeInstanceOf(Function);
-    expect(server.port).toBe(TEST_PORT + 1);
+    expect(server.port).toBe(testPort);
 
-    serverInstance = Bun.serve(server); // Reassign for cleanup
+    serverInstance = BunGlobal.serve(server); // Reassign for cleanup
     expect(serverInstance).toBeDefined();
     if (serverInstance) {
-      expect(serverInstance.port).toBe(TEST_PORT + 1);
+      expect(serverInstance.port).toBe(testPort);
     }
 
     // Test stream endpoint
-    const streamRes = await fetch(`http://localhost:${TEST_PORT + 1}/stream`, {
+    const streamRes = await fetch(`http://localhost:${testPort}/stream`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

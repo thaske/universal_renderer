@@ -29,10 +29,10 @@ module IntegrationHelpers
       ensure_port_available!(hostname, port)
 
       # Create a temporary directory for the test server
-      server_dir = TestServerGenerator.create_directory
+      server_dir = HttpExpressServerGenerator.create_directory
 
       # Write the test server configuration
-      TestServerGenerator.write_files(
+      HttpExpressServerGenerator.write_files(
         server_dir,
         port: port,
         hostname: hostname,

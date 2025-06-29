@@ -8,6 +8,7 @@ on:
 
 env:
   RUBY_VERSION: "3.2"
+  NODE_VERSION: "20"
   BUN_VERSION: "1.2.7"
 
 jobs:
@@ -30,7 +31,9 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install NPM dependencies
-        run: bun install
+        run: |
+          cd universal-renderer
+          bun install
 
       - name: Run RuboCop
         run: bundle exec rubocop
@@ -61,9 +64,51 @@ jobs:
           name: ruby-test-results-${{ matrix.ruby }}
           path: tmp/rspec-results.json
 
-  npm-tests:
+  typescript-node-tests:
     runs-on: ubuntu-latest
-    name: NPM Tests
+    name: TypeScript Tests (Node)
+    strategy:
+      matrix:
+        node: ["18", "20", "22"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: "npm"
+          cache-dependency-path: universal-renderer/package-lock.json
+
+      - name: Install NPM dependencies
+        run: |
+          cd universal-renderer
+          npm ci
+
+      - name: Create tmp directory for test results
+        run: mkdir -p tmp
+
+      - name: Build TypeScript package
+        run: |
+          cd universal-renderer
+          npm run build
+
+      - name: Run Node-specific tests
+        run: |
+          cd universal-renderer
+          npm run test:node -- --reporter=junit --outputFile=../tmp/node-test-results-${{ matrix.node }}.xml
+
+      - name: Upload Node test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: node-test-results-${{ matrix.node }}
+          path: tmp/node-test-results-${{ matrix.node }}.xml
+
+  typescript-bun-tests:
+    runs-on: ubuntu-latest
+    name: TypeScript Tests (Bun)
     strategy:
       matrix:
         bun: ["1.2.1", "1.2.7", "latest"]
@@ -92,22 +137,22 @@ jobs:
       - name: Create tmp directory for test results
         run: mkdir -p tmp
 
-      - name: Build NPM package
+      - name: Build TypeScript package
         run: |
           cd universal-renderer
           bun run build
 
-      - name: Run NPM unit tests
+      - name: Run Bun-specific tests
         run: |
           cd universal-renderer
-          bun test --reporter=junit --reporter-outfile=../tmp/npm-test-results.xml
+          bun run test:bun --reporter=junit --reporter-outfile=../tmp/bun-test-results-${{ matrix.bun }}.xml
 
-      - name: Upload NPM test results
+      - name: Upload Bun test results
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: npm-test-results-bun-${{ matrix.bun }}
-          path: tmp/npm-test-results.xml
+          name: bun-test-results-${{ matrix.bun }}
+          path: tmp/bun-test-results-${{ matrix.bun }}.xml
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -118,11 +163,13 @@ jobs:
   integration-tests:
     runs-on: ubuntu-latest
     name: Integration Tests
-    needs: [ruby-tests, npm-tests]
+    needs: [ruby-tests, typescript-node-tests, typescript-bun-tests]
     strategy:
       matrix:
         ruby: ["3.2"]
-        bun: ["1.2.7"]
+        runtime:
+          - { name: "node", version: "20" }
+          - { name: "bun", version: "1.2.7" }
 
     steps:
       - uses: actions/checkout@v4
@@ -133,20 +180,42 @@ jobs:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
 
-      - name: Set up Bun ${{ matrix.bun }}
+      - name: Set up Node.js (if Node runtime)
+        if: matrix.runtime.name == 'node'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.runtime.version }}
+          cache: "npm"
+          cache-dependency-path: universal-renderer/package-lock.json
+
+      - name: Set up Bun (if Bun runtime)
+        if: matrix.runtime.name == 'bun'
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: ${{ matrix.bun }}
+          bun-version: ${{ matrix.runtime.version }}
 
-      - name: Cache NPM dependencies
+      - name: Cache NPM dependencies (Node)
+        if: matrix.runtime.name == 'node'
         uses: actions/cache@v4
         with:
           path: universal-renderer/node_modules
-          key: ${{ runner.os }}-bun-${{ matrix.bun }}-${{ hashFiles('universal-renderer/bun.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-bun-${{ matrix.bun }}-
+          key: ${{ runner.os }}-node-${{ matrix.runtime.version }}-${{ hashFiles('universal-renderer/package-lock.json') }}
 
-      - name: Install NPM dependencies
+      - name: Cache NPM dependencies (Bun)
+        if: matrix.runtime.name == 'bun'
+        uses: actions/cache@v4
+        with:
+          path: universal-renderer/node_modules
+          key: ${{ runner.os }}-bun-${{ matrix.runtime.version }}-${{ hashFiles('universal-renderer/bun.lock') }}
+
+      - name: Install NPM dependencies (Node)
+        if: matrix.runtime.name == 'node'
+        run: |
+          cd universal-renderer
+          npm ci
+
+      - name: Install NPM dependencies (Bun)
+        if: matrix.runtime.name == 'bun'
         run: |
           cd universal-renderer
           bun install
@@ -154,26 +223,40 @@ jobs:
       - name: Create tmp directory for test results
         run: mkdir -p tmp
 
-      - name: Build NPM package for integration tests
+      - name: Build NPM package for integration tests (Node)
+        if: matrix.runtime.name == 'node'
+        run: |
+          cd universal-renderer
+          npm run build
+
+      - name: Build NPM package for integration tests (Bun)
+        if: matrix.runtime.name == 'bun'
         run: |
           cd universal-renderer
           bun run build
 
       - name: Run integration tests
         run: |
-          bundle exec rspec spec/integration --format progress --format json --out tmp/integration-results.json
+          bundle exec rspec spec/integration --format progress --format json --out tmp/integration-results-${{ matrix.runtime.name }}-${{ matrix.runtime.version }}.json
 
       - name: Upload integration test results
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: integration-test-results-ruby-${{ matrix.ruby }}-bun-${{ matrix.bun }}
-          path: tmp/integration-results.json
+          name: integration-test-results-ruby-${{ matrix.ruby }}-${{ matrix.runtime.name }}-${{ matrix.runtime.version }}
+          path: tmp/integration-results-${{ matrix.runtime.name }}-${{ matrix.runtime.version }}.json
 
   test-summary:
     runs-on: ubuntu-latest
     name: Test Summary Report
-    needs: [lint, ruby-tests, npm-tests, integration-tests]
+    needs:
+      [
+        lint,
+        ruby-tests,
+        typescript-node-tests,
+        typescript-bun-tests,
+        integration-tests,
+      ]
     if: always()
 
     steps:
@@ -188,5 +271,6 @@ jobs:
         run: |
           .github/scripts/generate-test-summary.sh \
             "${{ needs.ruby-tests.result }}" \
-            "${{ needs.npm-tests.result }}" \
+            "${{ needs.typescript-node-tests.result }}" \
+            "${{ needs.typescript-bun-tests.result }}" \
             "${{ needs.integration-tests.result }}"

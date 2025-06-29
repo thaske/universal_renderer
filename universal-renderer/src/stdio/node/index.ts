@@ -1,8 +1,4 @@
-#!/usr/bin/env node
-
-import path from "path";
 import readline from "readline";
-import { pathToFileURL } from "url";
 import type { RenderOutput, SSRHandlerOptions } from "../../types";
 
 /**
@@ -90,57 +86,6 @@ export async function createRenderer<
 
   for await (const line of rl) {
     await handleLine(line as string);
-  }
-}
-
-// ------------------------------------------------------------
-// CLI support: when the file is executed directly (`node index.js <module>`)
-// ------------------------------------------------------------
-
-// Node supports both CommonJS and ES modules. The following check works in CJS.
-// For ESM builds, import.meta.url comparison is used further below.
-const isExecutedDirectly =
-  typeof require !== "undefined" && require.main === module;
-
-async function runCli() {
-  const entryModuleRaw: string | undefined =
-    process.argv[2] || process.env.UNIVERSAL_RENDERER_ENTRY;
-
-  if (!entryModuleRaw) {
-    console.error(
-      "[universal-renderer] No renderer module provided. " +
-        "Usage: node stdio/node/index.js <path/to/renderer-module> or set UNIVERSAL_RENDERER_ENTRY env var",
-    );
-    process.exit(1);
-  }
-
-  // Dynamically import user-supplied module which should export the options
-  // object as either a default export or a named `options` export.
-  const absPath = path.isAbsolute(entryModuleRaw)
-    ? entryModuleRaw
-    : path.resolve(process.cwd(), entryModuleRaw);
-  const url = pathToFileURL(absPath).href;
-  const mod = await import(url);
-  const opts = mod.default || mod.options;
-
-  if (!opts) {
-    console.error(
-      `[universal-renderer] Module ${entryModuleRaw} does not export renderer options (default export or named 'options').`,
-    );
-    process.exit(1);
-  }
-
-  await createRenderer(opts);
-}
-
-if (isExecutedDirectly) {
-  // CJS path.
-  runCli();
-} else if (typeof import.meta !== "undefined" && (import.meta as any).url) {
-  // Attempt ESM detection.
-  const isMain = process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === (import.meta as any).url;
-  if (isMain) {
-    runCli();
   }
 }
 

@@ -1,5 +1,3 @@
-#!/usr/bin/env bun
-
 import type { RenderOutput, SSRHandlerOptions } from "../../types";
 
 /**
@@ -24,18 +22,6 @@ export type BunStdioOptions<
  * This helper is intended to interoperate with the Ruby adapter
  * `UniversalRenderer::Adapter::BunIo`, which maintains a small pool of
  * Bun processes and communicates via stdio.
- *
- * Usage example (user land):
- * ```ts
- * // renderer.ts
- * import { createStdioRenderer } from "universal-renderer/bun-stdio";
- *
- * await createStdioRenderer({
- *   setup: (url, props) => ({ url, props }),
- *   render: ({ url }) => ({ body: `<h1>${url}</h1>` }),
- * });
- * ```
- * Run it with: `bun renderer.ts` – the Ruby adapter will take care of the rest.
  */
 export async function createRenderer<
   TContext extends Record<string, any> = Record<string, any>,
@@ -110,37 +96,6 @@ export async function createRenderer<
   if (buffer.length) {
     await handleLine(buffer);
   }
-}
-
-// ------------------------------------------------------------
-// CLI support: when the file is executed directly (`bun index.ts <module>`)
-// ------------------------------------------------------------
-
-if (import.meta.main) {
-  const entryModuleRaw: string | undefined = Bun.argv[2] || Bun.env.UNIVERSAL_RENDERER_ENTRY;
-
-  if (!entryModuleRaw) {
-    console.error(
-      "[universal-renderer] No renderer module provided. " +
-        "Usage: bun stdio/bun/index.ts <path/to/renderer-module> or set UNIVERSAL_RENDERER_ENTRY env var",
-    );
-    process.exit(1);
-  }
-
-  // Dynamically import user-supplied module which should export the options
-  // object as either a default export or a named `options` export.
-  const entryModule = entryModuleRaw as string;
-  const mod = await import(entryModule);
-  const opts = mod.default || mod.options;
-
-  if (!opts) {
-    console.error(
-      `[universal-renderer] Module ${entryModule} does not export renderer options (default export or named 'options').`,
-    );
-    process.exit(1);
-  }
-
-  await createRenderer(opts);
 }
 
 // Backwards-compat alias (to be removed in next major)
