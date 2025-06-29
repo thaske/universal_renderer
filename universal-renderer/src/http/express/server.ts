@@ -1,13 +1,14 @@
 import express from "express";
 
-import {
-  createErrorHandler,
-  createHealthHandler,
-  createSSRHandler,
-  createStreamHandler,
-} from "@/handlers";
-import type { ServerOptions } from "@/types";
-export type { RenderOutput, ServerOptions } from "@/types";
+import { createErrorHandler } from "./handlers/error";
+import { createHealthHandler } from "./handlers/health";
+import { createSSRHandler } from "./handlers/ssr";
+import { createStreamHandler } from "./handlers/stream";
+
+import type { ExpressServerOptions } from "./types";
+
+export type { RenderOutput } from "../types";
+export type { ExpressServerOptions };
 
 /**
  * Creates an Express server configured for Server-Side Rendering (SSR).
@@ -29,7 +30,7 @@ export type { RenderOutput, ServerOptions } from "@/types";
  * @example
  * ```typescript
  * // Option 1: Complete server (this function)
- * import { createServer } from 'universal-renderer';
+ * import { createServer } from 'universal-renderer/express';
  *
  * const app = await createServer({
  *   setup: async (url, props) => ({ url, props, store: createStore() }),
@@ -38,7 +39,7 @@ export type { RenderOutput, ServerOptions } from "@/types";
  * });
  *
  * // Option 2: Individual handlers for more control
- * import { createHealthHandler, createSSRHandler } from 'universal-renderer';
+ * import { createHealthHandler, createSSRHandler } from 'universal-renderer/express';
  *
  * const app = express();
  * app.use(express.json());
@@ -48,7 +49,7 @@ export type { RenderOutput, ServerOptions } from "@/types";
  */
 export async function createServer<
   TContext extends Record<string, any> = Record<string, any>,
->(options: ServerOptions<TContext>): Promise<express.Application> {
+>(options: ExpressServerOptions<TContext>): Promise<express.Application> {
   if (!options.render) {
     throw new Error("render callback is required");
   }
@@ -76,6 +77,7 @@ export async function createServer<
       setup: options.setup,
       cleanup: options.cleanup,
       streamCallbacks: options.streamCallbacks,
+      error: options.error,
     });
     app.post("/stream", streamHandler);
   }
@@ -84,6 +86,16 @@ export async function createServer<
   if (options.middleware) {
     app.use(options.middleware);
   }
+
+  // Handle 404 - Not Found
+  app.use((req, res, next) => {
+    // Check if headers have already been sent, which means a response was already initiated.
+    // If so, delegate to the next error handler.
+    if (res.headersSent) {
+      return next();
+    }
+    res.status(404).json({ error: "Not Found" });
+  });
 
   // Error handler
   if (options.error) {

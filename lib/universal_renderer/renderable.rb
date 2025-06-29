@@ -1,3 +1,5 @@
+require_relative "adapter_factory"
+
 module UniversalRenderer
   module Renderable
     extend ActiveSupport::Concern
@@ -5,7 +7,7 @@ module UniversalRenderer
     included do
       include ActionController::Live
       helper UniversalRenderer::SSR::Helpers
-      before_action :initialize_props
+      before_action :initialize_props, unless: :skip_universal_renderer?
     end
 
     class_methods do
@@ -19,7 +21,7 @@ module UniversalRenderer
     end
 
     # Fetches Server-Side Rendered (SSR) content for the current request.
-    # This method makes a blocking call to the SSR service using {UniversalRenderer::Client::Base.fetch}
+    # This method makes a blocking call to the SSR service using the configured adapter
     # and stores the result in the `@ssr` instance variable.
     #
     # The SSR content is fetched based on the `request.original_url` and the
@@ -29,7 +31,7 @@ module UniversalRenderer
     #   or `nil` if the fetch fails or SSR is not configured.
     def fetch_ssr
       @ssr =
-        UniversalRenderer::Client::Base.call(
+        UniversalRenderer::AdapterFactory.adapter.call(
           request.original_url,
           @universal_renderer_props
         )
@@ -43,43 +45,87 @@ module UniversalRenderer
       return super unless self.class.enable_ssr
       return super unless request.format.html?
 
-      if ssr_streaming?
-        success = render_ssr_stream(*, **)
-        super unless success
-      else
-        fetch_ssr
-        super
+      # Allow Warden and other authentication mechanisms to complete first
+      # This prevents interference with authentication throws like :warden
+      begin
+        if ssr_streaming?
+          success = render_ssr_stream(*, **)
+          super unless success
+        else
+          fetch_ssr
+          Rails.logger.info("universal_renderer render: #{@ssr}")
+          super
+        end
+      rescue UncaughtThrowError => e
+        # Re-raise UncaughtThrowError to preserve Warden's authentication flow
+        raise e
       end
     end
 
     private
 
     def render_ssr_stream(*, **)
-      full_layout = render_to_string(*, **)
-      current_props = @universal_renderer_props.dup
+      adapter = UniversalRenderer::AdapterFactory.adapter
 
-      streaming_succeeded =
-        UniversalRenderer::Client::Stream.call(
-          request.original_url,
-          current_props,
-          full_layout,
-          response
+      # Check if the current adapter supports streaming
+      unless adapter.supports_streaming?
+        Rails.logger.warn(
+          "Current SSR adapter (#{adapter.class.name}) does not support streaming. " \
+            "Falling back to blocking SSR."
         )
+        return false
+      end
 
-      # SSR streaming failed or was not possible (e.g. server down, config missing).
-      if streaming_succeeded
-        response.stream.close unless response.stream.closed?
-      else
-        Rails.logger.error(
-          "SSR stream fallback: " \
-            "Streaming failed, proceeding with standard rendering."
-        )
-        false
+      begin
+        full_layout = render_to_string(*, **)
+        current_props = @universal_renderer_props.dup
+
+        streaming_succeeded =
+          adapter.stream(
+            request.original_url,
+            current_props,
+            full_layout,
+            response
+          )
+
+        # SSR streaming failed or was not possible (e.g. server down, config missing).
+        if streaming_succeeded
+          response.stream.close unless response.stream.closed?
+          true
+        else
+          Rails.logger.error(
+            "SSR stream fallback: " \
+              "Streaming failed, proceeding with standard rendering."
+          )
+          false
+        end
+      rescue UncaughtThrowError => e
+        # Re-raise UncaughtThrowError to preserve Warden's authentication flow
+        raise e
       end
     end
 
     def initialize_props
       @universal_renderer_props = {}
+    end
+
+    # Determines whether to skip universal renderer initialization
+    # This helps prevent interference with authentication flows like Warden
+    def skip_universal_renderer?
+      # Skip if SSR is not enabled for this controller
+      return true unless self.class.enable_ssr
+
+      # Skip for non-HTML requests
+      return true unless request.format.html?
+
+      # Skip if we're in the middle of an authentication flow
+      # This helps prevent interference with Warden's throw/catch mechanism
+      if respond_to?(:user_signed_in?, true) && !user_signed_in? &&
+           respond_to?(:authenticate_user!, true)
+        return true
+      end
+
+      false
     end
 
     # Adds a prop or a hash of props to be sent to the SSR service.

@@ -14,3 +14,6 @@ dist/
 
 *.gem
 .rspec_status
+/test-results
+
+app/

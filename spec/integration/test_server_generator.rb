@@ -5,8 +5,8 @@ require "fileutils"
 require "tmpdir"
 
 module IntegrationHelpers
-  # Service class responsible for generating test SSR server files and configuration
-  class TestServerGenerator
+  # Service class responsible for generating HTTP Express test SSR server files and configuration
+  class HttpExpressServerGenerator
     # Gets the project root directory
     def self.project_root
       @project_root ||= File.expand_path("../..", __dir__)
@@ -54,7 +54,7 @@ module IntegrationHelpers
     # Generates the TypeScript content for the test server
     def self.generate_server_content(port:, hostname:, **_config)
       <<~TYPESCRIPT
-        import { createServer } from 'universal-renderer';
+        import { createServer } from 'universal-renderer/express';
         import React from 'react';
 
         // Test callbacks for integration testing

@@ -28,7 +28,74 @@ module ClientIntegrationTester
     results
   end
 
+  # Tests Ruby gem client integration with BUN_IO engine
+  #
+  # @return [Hash] Test results for Ruby client integration with BUN_IO
+  def test_ruby_client_integration_bun_io
+    results = {}
+
+    begin
+      # Test via adapter factory (which should use BUN_IO)
+      results[:base_client] = test_base_client_integration_bun_io
+    rescue StandardError => e
+      results[:base_client] = {
+        success: false,
+        error: e.message,
+        error_class: e.class.name
+      }
+    end
+
+    results
+  end
+
+  # Tests BUN_IO adapter directly
+  #
+  # @param url [String] URL to render
+  # @param props [Hash] Props for rendering
+  # @return [Hash] Test results
+  def test_bun_io_adapter(url: "http://example.com/test", props: {})
+    
+      adapter = UniversalRenderer::AdapterFactory.adapter
+      response = adapter.call(url, props)
+
+      {
+        success: !response.nil?,
+        response: response,
+        status: 200 # BUN_IO doesn't have HTTP status codes, simulate success
+      }
+    rescue StandardError => e
+      { success: false, error: e.message, error_class: e.class.name }
+    
+  end
+
   private
+
+  # Tests the base client integration with BUN_IO engine
+  def test_base_client_integration_bun_io
+    test_url = "http://example.com/integration-test"
+    test_props = {
+      user_id: 123,
+      page_title: "Integration Test BUN_IO",
+      nested: {
+        data: "value"
+      }
+    }
+
+    begin
+      adapter = UniversalRenderer::AdapterFactory.adapter
+      response = adapter.call(test_url, test_props)
+
+      {
+        success: !response.nil?,
+        response: response,
+        has_head: response&.head&.length.to_i > 0,
+        has_body: response&.body&.length.to_i > 0,
+        response_class: response.class.name
+      }
+    rescue StandardError => e
+      { success: false, error: e.message, error_class: e.class.name }
+    end
+  end
 
   # Tests the base client integration
   def test_base_client_integration
