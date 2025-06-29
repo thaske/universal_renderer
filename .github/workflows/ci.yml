@@ -82,20 +82,30 @@ jobs:
           cache: "npm"
           cache-dependency-path: package-lock.json
 
-      - name: Install NPM dependencies
+      - name: Set up Bun for building
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install NPM dependencies with npm
         run: |
           cd universal-renderer
           npm ci
 
+      - name: Install Bun dependencies for build
+        run: |
+          cd universal-renderer
+          bun install
+
       - name: Create tmp directory for test results
         run: mkdir -p tmp
 
-      - name: Build TypeScript package
+      - name: Build TypeScript package with Bun
         run: |
           cd universal-renderer
-          npm run build
+          bun run build
 
-      - name: Run Node-specific tests
+      - name: Run Node-specific tests with Node.js
         run: |
           cd universal-renderer
           npm run test:node -- --reporter=junit --reporter.outputFile=../tmp/node-test-results-${{ matrix.node }}.xml
@@ -209,6 +219,11 @@ jobs:
           path: universal-renderer/node_modules
           key: ${{ runner.os }}-bun-${{ matrix.runtime.version }}-${{ hashFiles('bun.lock') }}
 
+      - name: Set up Bun for building (always needed)
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
       - name: Install NPM dependencies (Node)
         if: matrix.runtime.name == 'node'
         run: |
@@ -221,17 +236,15 @@ jobs:
           cd universal-renderer
           bun install
 
+      - name: Install Bun dependencies for build (always needed)
+        run: |
+          cd universal-renderer
+          bun install
+
       - name: Create tmp directory for test results
         run: mkdir -p tmp
 
-      - name: Build NPM package for integration tests (Node)
-        if: matrix.runtime.name == 'node'
-        run: |
-          cd universal-renderer
-          npm run build
-
-      - name: Build NPM package for integration tests (Bun)
-        if: matrix.runtime.name == 'bun'
+      - name: Build NPM package for integration tests (always use Bun)
         run: |
           cd universal-renderer
           bun run build
