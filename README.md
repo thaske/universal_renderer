@@ -62,7 +62,7 @@ UniversalRenderer supports two SSR modes:
 # Standard SSR (recommended for most use cases)
 enable_ssr
 
-# Streaming SSR (only use if you need real-time streaming)
+# Streaming SSR (only use if you need fast TTFB)
 enable_ssr streaming: true
 ```
 
