@@ -21,7 +21,6 @@ module UniversalRenderer
         class_attribute :ssr_streaming_preference, instance_writer: false
         self.ssr_streaming_preference = options[:streaming]
 
-        # Only include ActionController::Live if streaming is enabled
         include UniversalRenderer::Renderable::Streaming if options[:streaming]
       end
     end
