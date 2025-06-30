@@ -51,9 +51,28 @@ end
 
 After installation, you can pass data to your SSR service using `add_prop` in your controllers:
 
+### SSR Modes
+
+UniversalRenderer supports two SSR modes:
+
+1. **Standard SSR** (default): Fetches complete HTML from the SSR service before rendering
+2. **Streaming SSR**: Streams HTML content as it's generated (requires ActionController::Live)
+
+```ruby
+# Standard SSR (recommended for most use cases)
+enable_ssr
+
+# Streaming SSR (only use if you need real-time streaming)
+enable_ssr streaming: true
+```
+
 ```ruby
 class ProductsController < ApplicationController
-  enable_ssr # enables SSR controller-wide
+  # Enable basic SSR (recommended for most use cases)
+  enable_ssr
+
+  # Or enable SSR with streaming (only if you need real-time rendering)
+  # enable_ssr streaming: true
 
   def show
     @product = Product.find(params[:id])
