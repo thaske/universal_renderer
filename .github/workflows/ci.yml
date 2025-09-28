@@ -87,10 +87,8 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
-      - name: Install NPM dependencies with npm
-        run: |
-          cd universal-renderer
-          npm ci
+      - name: Install NPM workspace dependencies with npm
+        run: npm ci --workspace universal-renderer
 
       - name: Install Bun dependencies for build
         run: |
@@ -210,7 +208,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: universal-renderer/node_modules
-          key: ${{ runner.os }}-node-${{ matrix.runtime.version }}-${{ hashFiles('universal-renderer/package.json') }}
+          key: ${{ runner.os }}-node-${{ matrix.runtime.version }}-${{ hashFiles('package-lock.json') }}
 
       - name: Cache NPM dependencies (Bun)
         if: matrix.runtime.name == 'bun'
@@ -226,9 +224,7 @@ jobs:
 
       - name: Install NPM dependencies (Node)
         if: matrix.runtime.name == 'node'
-        run: |
-          cd universal-renderer
-          npm ci
+        run: npm ci --workspace universal-renderer
 
       - name: Install NPM dependencies (Bun)
         if: matrix.runtime.name == 'bun'
