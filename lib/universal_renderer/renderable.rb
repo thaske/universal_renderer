@@ -147,6 +147,7 @@ module UniversalRenderer
     #   add_prop({theme: "dark", locale: "en"})
     # @return [void]
     def add_prop(key_or_hash, data_value = nil)
+      @universal_renderer_props ||= {}
       if data_value.nil? && key_or_hash.is_a?(Hash)
         @universal_renderer_props.merge!(key_or_hash.deep_stringify_keys)
       else
@@ -172,6 +173,7 @@ module UniversalRenderer
     #   push_prop(:item, "second") # @universal_renderer_props becomes { "item" => ["first", "second"] }
     # @return [void]
     def push_prop(key, value_to_add)
+      @universal_renderer_props ||= {}
       prop_key = key.to_s
       current_value = @universal_renderer_props[prop_key]
 
