@@ -125,10 +125,9 @@ module UniversalRenderer
       # Skip for non-HTML requests
       return true unless request.format.html?
 
-      # Skip if we're in the middle of an authentication flow
-      # This helps prevent interference with Warden's throw/catch mechanism
-      if respond_to?(:user_signed_in?, true) && !user_signed_in? &&
-           respond_to?(:authenticate_user!, true)
+      # Only skip if we're in the middle of an active Warden throw/catch mechanism
+      # This is more specific and allows SSR for public pages with unauthenticated users
+      if defined?(Warden) && request.env['warden']&.message&.present?
         return true
       end
 
