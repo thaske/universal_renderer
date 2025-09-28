@@ -5,9 +5,14 @@ module UniversalRenderer
     extend ActiveSupport::Concern
 
     included do
-      include ActionController::Live
       helper UniversalRenderer::SSR::Helpers
       before_action :initialize_props, unless: :skip_universal_renderer?
+    end
+
+    module Streaming
+      extend ActiveSupport::Concern
+
+      included { include ActionController::Live }
     end
 
     class_methods do
@@ -17,6 +22,8 @@ module UniversalRenderer
 
         class_attribute :ssr_streaming_preference, instance_writer: false
         self.ssr_streaming_preference = options[:streaming]
+
+        include UniversalRenderer::Renderable::Streaming if options[:streaming]
       end
     end
 
