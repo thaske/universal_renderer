@@ -38,11 +38,11 @@ UniversalRenderer helps you forward rendering requests to external SSR services,
    $ rails generate universal_renderer:install
    ```
 
-4. Install a server framework for the Node SSR server:
+4. Install Express if you plan to run the Node-based server:
    ```bash
-   $ npm install uWebSockets.js # uWebSockets.js server (requires Node runtime)
+   $ npm install express # Express.js server
    ```
-   These frameworks are peer dependencies of the `universal-renderer` package.
+   If you deploy with Bun instead, ensure the Bun runtime is available in your environment.
 
 ## Configuration
 

@@ -20,7 +20,7 @@ interface BenchmarkMetrics {
 interface ServerVariant {
   ssr: boolean;
   stream: boolean;
-  server: "express" | "bun" | "uwebsocket";
+  server: "express" | "bun";
   port: number;
 }
 
@@ -38,7 +38,7 @@ async function launchServer(variant: ServerVariant): Promise<ChildProcess> {
     String(variant.port),
   ];
 
-  const runtime = variant.server === "uwebsocket" ? "node" : "bun";
+  const runtime = "bun";
   const serverProcess = spawn(runtime, args, {
     stdio: ["ignore", "pipe", "pipe"],
     detached: true,
@@ -237,8 +237,6 @@ test.describe("Page Load Benchmark", () => {
   });
 
   const variants: Omit<ServerVariant, "port">[] = [
-    // { ssr: true, stream: false, server: "uwebsocket" },
-    // { ssr: false, stream: false, server: "uwebsocket" },
     { ssr: true, stream: false, server: "express" },
     { ssr: true, stream: true, server: "express" },
     { ssr: false, stream: false, server: "express" }, // SSR off, stream should be irrelevant

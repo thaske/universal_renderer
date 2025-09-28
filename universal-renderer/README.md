@@ -2,7 +2,7 @@
 
 SSR micro-server that pairs with the `universal_renderer` Ruby gem.
 
-• **Multi-framework** – Express.js, Bun, and uWebSockets.js support out of the box.
+• **Multi-framework** – Express.js and Bun support out of the box.
 • **Framework-agnostic** – just start a server and hand it JSX/HTML.
 • **Simple API** – minimal configuration, maximum flexibility.
 
@@ -13,7 +13,6 @@ npm install universal-renderer
 # Also install your preferred web framework:
 npm install express   # For Express.js
 npm install bun       # For Bun (usually Bun is the runtime, ensure @types/bun for TS)
-npm install uWebSockets.js  # For uWebSockets.js (Node runtime only)
 ```
 
 ## Examples

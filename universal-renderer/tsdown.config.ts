@@ -5,7 +5,6 @@ export default defineConfig({
     "src/index.ts",
     "src/express/index.ts",
     "src/bun/index.ts",
-    "src/uwebsocket/index.ts",
   ],
   format: ["esm", "cjs"],
   dts: true,

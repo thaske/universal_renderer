@@ -4,8 +4,6 @@ import type { BunServerOptions } from "universal-renderer/bun";
 import { createServer as createBunServer } from "universal-renderer/bun";
 import type { ExpressServerOptions } from "universal-renderer/express";
 import { createServer as createExpressServer } from "universal-renderer/express";
-import type { UWSServerOptions } from "universal-renderer/uwebsocket";
-
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 
@@ -22,7 +20,7 @@ const argv = yargs(hideBin(process.argv))
     description: "Enable Streaming",
   })
   .option("server", {
-    choices: ["express", "bun", "uwebsocket"],
+    choices: ["express", "bun"],
     default: "express",
     description: "Server implementation to use",
   })
@@ -93,14 +91,6 @@ async function main() {
     const server = await createBunServer(options);
     Bun.serve(server);
     console.log(`Bun server running on http://localhost:${port}`);
-  } else if (serverImpl === "uwebsocket") {
-    const { createServer: createUWebSocketServer } = await import(
-      "universal-renderer/uwebsocket"
-    );
-    const options: UWSServerOptions<any> = {
-      ...commonOptions,
-    };
-    const app = await createUWebSocketServer(options);
   }
 }
 
