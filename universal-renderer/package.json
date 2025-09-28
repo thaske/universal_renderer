@@ -71,6 +71,11 @@
       "import": "./dist/http/express/index.mjs",
       "require": "./dist/http/express/index.js",
       "types": "./dist/http/express/index.d.mts"
+    },
+    "./express": {
+      "import": "./dist/http/express/index.mjs",
+      "require": "./dist/http/express/index.js",
+      "types": "./dist/http/express/index.d.mts"
     }
   },
   "files": [

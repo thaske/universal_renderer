@@ -28,10 +28,17 @@ RSpec.shared_examples "SSR contract compliance" do |engine_type|
 
       expect(result[:success]).to be true
       expect(result[:status]).to eq 200 if engine_type == :http
-      expect(result[:response] || result[:json]).to include(
-        head: be_a(String),
-        body: be_a(String)
-      )
+      
+      if engine_type == :http
+        expect(result[:json]).to include(
+          head: be_a(String),
+          body: be_a(String)
+        )
+      else
+        expect(result[:response]).to be_a(UniversalRenderer::SSR::Response)
+        expect(result[:response].head).to be_a(String)
+        expect(result[:response].body).to be_a(String)
+      end
     end
 
     it "handles empty props correctly" do
@@ -42,10 +49,16 @@ RSpec.shared_examples "SSR contract compliance" do |engine_type|
                end
 
       expect(result[:success]).to be true
-      response_data = result[:response] || result[:json]
-      expect(response_data).to be_a(Hash)
-      expect(response_data).to have_key(:head)
-      expect(response_data).to have_key(:body)
+      
+      if engine_type == :http
+        expect(result[:json]).to be_a(Hash)
+        expect(result[:json]).to have_key(:head)
+        expect(result[:json]).to have_key(:body)
+      else
+        expect(result[:response]).to be_a(UniversalRenderer::SSR::Response)
+        expect(result[:response].head).to be_a(String)
+        expect(result[:response].body).to be_a(String)
+      end
     end
 
     it "processes complex nested data structures" do

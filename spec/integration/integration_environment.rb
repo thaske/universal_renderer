@@ -42,8 +42,8 @@ module IntegrationEnvironment
     when :http
       # HTTP mode uses real servers - no additional setup needed
     when :bun_io
-      # BUN_IO mode uses stubbed processes
-      setup_bun_io_stubs
+      # BUN_IO mode uses stubbed processes - but don't set up mocks here
+      # Mocks will be set up in before(:each) blocks
     end
   end
 
@@ -64,34 +64,34 @@ module IntegrationEnvironment
   end
 
   # Sets up BUN_IO mode stubs for testing
+  # This should be called from within a before(:each) block to ensure proper RSpec mock lifecycle
   def setup_bun_io_stubs
+    # Mock Rails.root first
+    allow(Rails).to receive(:root).and_return(Pathname.new("/fake/rails/root"))
+
     # Mock File.exist? for CLI script
     allow(File).to receive(:exist?).and_call_original
     allow(File).to receive(:exist?).with(
-      Rails.root.join("spec/fixtures/test_ssr.ts")
+      Pathname.new("/fake/rails/root/spec/fixtures/test_ssr.ts")
     ).and_return(true)
 
-    # Mock Rails.root
-    allow(Rails).to receive(:root).and_return(Pathname.new("/fake/rails/root"))
-
     # Create a mock process that returns canned responses
-    @mock_bun_process = instance_double(UniversalRenderer::StdioBunProcess)
-    allow(@mock_bun_process).to receive(:render).and_return(
+    mock_bun_process = instance_double(UniversalRenderer::StdioBunProcess)
+    allow(mock_bun_process).to receive(:render).and_return(
       {
         "head" => "<title>Test BUN_IO Response</title>",
         "body" => "<div>BUN_IO rendered content</div>",
-        "body_attrs" => {
-        }
+        "body_attrs" => {}
       }
     )
 
     # Mock the process pool
-    @mock_pool = instance_double(ConnectionPool)
-    allow(@mock_pool).to receive(:with).and_yield(@mock_bun_process)
+    mock_pool = instance_double(ConnectionPool)
+    allow(mock_pool).to receive(:with).and_yield(mock_bun_process)
 
-    allow(ConnectionPool).to receive(:new).and_return(@mock_pool)
+    allow(ConnectionPool).to receive(:new).and_return(mock_pool)
     allow(UniversalRenderer::StdioBunProcess).to receive(:new).and_return(
-      @mock_bun_process
+      mock_bun_process
     )
   end
 

@@ -54,6 +54,11 @@ RSpec.describe "Multi-Engine Contract Integration", type: :integration do
   describe "BUN_IO Engine" do
     before(:all) { setup_integration_environment(engine: :bun_io) }
     after(:all) { teardown_integration_environment }
+    
+    before(:each) do
+      UniversalRenderer::AdapterFactory.reset!
+      setup_bun_io_stubs
+    end
 
     it_behaves_like "SSR contract compliance", :bun_io
     it_behaves_like "non-streaming adapter"
@@ -101,6 +106,8 @@ RSpec.describe "Multi-Engine Contract Integration", type: :integration do
 
       # Test BUN_IO engine
       setup_integration_environment(engine: :bun_io)
+      UniversalRenderer::AdapterFactory.reset!
+      setup_bun_io_stubs
 
       bun_io_result = test_bun_io_adapter
       expect(bun_io_result[:response]).to be_a(UniversalRenderer::SSR::Response)
