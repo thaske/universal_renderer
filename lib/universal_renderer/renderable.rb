@@ -37,10 +37,11 @@ module UniversalRenderer
     # @return [Hash, nil] The fetched SSR data (typically a hash with keys like `:head`, `:body_html`, `:body_attrs`),
     #   or `nil` if the fetch fails or SSR is not configured.
     def fetch_ssr
+      props = @universal_renderer_props || {}
       @ssr =
         UniversalRenderer::AdapterFactory.adapter.call(
           request.original_url,
-          @universal_renderer_props
+          props
         )
     end
 
@@ -85,7 +86,7 @@ module UniversalRenderer
 
       begin
         full_layout = render_to_string(*, **)
-        current_props = @universal_renderer_props.dup
+        current_props = (@universal_renderer_props || {}).dup
 
         streaming_succeeded =
           adapter.stream(

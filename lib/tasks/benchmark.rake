@@ -88,7 +88,7 @@ namespace :universal_renderer do
     puts "Testing BunIo Adapter..."
     puts "=" * 30
 
-    UniversalRenderer.config.engine = :bun_persistent
+    UniversalRenderer.config.engine = :bun_io
     UniversalRenderer::AdapterFactory.reset!
 
     adapter = UniversalRenderer::AdapterFactory.adapter

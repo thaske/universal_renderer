@@ -18,10 +18,10 @@ module IntegrationHelpers
     end
 
     # Writes the necessary files for a test SSR server
-    def self.write_files(server_dir, port:, hostname:, **config)
+    def self.write_files(server_dir, port:, hostname:, runtime: "bun", **config)
       write_package_json(server_dir)
       write_server_file(server_dir, port: port, hostname: hostname, **config)
-      install_dependencies(server_dir)
+      install_dependencies(server_dir, runtime: runtime)
     end
 
     # Writes package.json with correct path to universal-renderer
@@ -45,41 +45,41 @@ module IntegrationHelpers
       )
     end
 
-    # Creates the server.ts file
+    # Creates the server.mjs file
     def self.write_server_file(server_dir, port:, hostname:, **_config)
       server_content = generate_server_content(port: port, hostname: hostname)
-      File.write(File.join(server_dir, "server.ts"), server_content)
+      File.write(File.join(server_dir, "server.mjs"), server_content)
     end
 
-    # Generates the TypeScript content for the test server
+    # Generates the JavaScript content for the test server
     def self.generate_server_content(port:, hostname:, **_config)
-      <<~TYPESCRIPT
+      <<~JAVASCRIPT
         import { createServer } from 'universal-renderer/express';
         import React from 'react';
 
         // Test callbacks for integration testing
         const callbacks = {
-          setup: async (url: string, props: any) => {
+          setup: async (url, props) => {
             return {
               url,
               props,
               timestamp: new Date().toISOString()
             };
           },
-          render: async (context: any) => {
+          render: async (_context) => {
             return {
               head: '<meta name="test" content="true">',
               body: '<div>Test Content</div>'
             };
           },
-          cleanup: async (context: any) => {
+          cleanup: async (_context) => {
             // cleanup
           }
         };
 
         const streamCallbacks = {
-          node: (context: any) => React.createElement('div', null, 'Streaming Test Content'),
-          head: async (context: any) => '<meta name="stream-test" content="true">'
+          node: (_context) => React.createElement('div', null, 'Streaming Test Content'),
+          head: async (_context) => '<meta name="stream-test" content="true">'
         };
 
         // Create and start the server
@@ -100,11 +100,20 @@ module IntegrationHelpers
           server.close();
           process.exit(0);
         });
-      TYPESCRIPT
+      JAVASCRIPT
     end
 
     # Installs NPM dependencies in the server directory
-    def self.install_dependencies(server_dir)
+    def self.install_dependencies(server_dir, runtime:)
+      case runtime.to_s
+      when "node"
+        install_with_npm(server_dir)
+      else
+        install_with_bun(server_dir)
+      end
+    end
+
+    def self.install_with_bun(server_dir)
       result =
         system(
           "bun",
@@ -117,6 +126,22 @@ module IntegrationHelpers
       return if result
 
       error_output = `cd #{server_dir} && bun install 2>&1`
+      raise "Failed to install dependencies for test server in #{server_dir}. Error: #{error_output}"
+    end
+
+    def self.install_with_npm(server_dir)
+      result =
+        system(
+          "npm",
+          "install",
+          chdir: server_dir,
+          out: File::NULL,
+          err: %i[child out]
+        )
+
+      return if result
+
+      error_output = `cd #{server_dir} && npm install 2>&1`
       raise "Failed to install dependencies for test server in #{server_dir}. Error: #{error_output}"
     end
   end

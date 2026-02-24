@@ -246,6 +246,8 @@ jobs:
           bun run build
 
       - name: Run integration tests
+        env:
+          SSR_TEST_RUNTIME: ${{ matrix.runtime.name }}
         run: |
           bundle exec rspec spec/integration --format progress --format json --out tmp/integration-results-${{ matrix.runtime.name }}-${{ matrix.runtime.version }}.json
 

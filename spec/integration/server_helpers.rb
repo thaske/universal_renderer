@@ -14,8 +14,9 @@ module IntegrationHelpers
     DEFAULT_HOSTNAME = "127.0.0.1" # Use IPv4 explicitly for better CI compatibility
     DEFAULT_PORT = 9876
     DEFAULT_TIMEOUT = ENV["CI"] ? 60 : 20 # Longer timeout in CI environments
+    DEFAULT_RUNTIME = ENV.fetch("SSR_TEST_RUNTIME", "bun")
 
-    # Spawns a real SSR server using Bun and the universal-renderer NPM package
+    # Spawns a real SSR server process using the configured runtime and the universal-renderer NPM package
     #
     # @param port [Integer] The port to run the server on
     # @param hostname [String] The hostname to bind to
@@ -27,6 +28,8 @@ module IntegrationHelpers
       **config
     )
       ensure_port_available!(hostname, port)
+      config = config.dup
+      runtime = (config.delete(:runtime) || DEFAULT_RUNTIME).to_s
 
       # Create a temporary directory for the test server
       server_dir = HttpExpressServerGenerator.create_directory
@@ -36,16 +39,22 @@ module IntegrationHelpers
         server_dir,
         port: port,
         hostname: hostname,
+        runtime: runtime,
         **config
       )
 
-      # Spawn the Bun process
+      # Spawn the SSR process
+      command =
+        if runtime == "node"
+          ["node", "server.mjs"]
+        else
+          ["bun", "run", "server.mjs"]
+        end
+
       process =
         Process.spawn(
-          { "NODE_ENV" => "test" },
-          "bun",
-          "run",
-          "server.ts",
+          { "NODE_ENV" => "test", "SSR_TEST_RUNTIME" => runtime },
+          *command,
           chdir: server_dir,
           out: config[:verbose] || !ENV["CI"] ? $stdout : File::NULL,
           err: config[:verbose] || !ENV["CI"] ? $stderr : File::NULL,
