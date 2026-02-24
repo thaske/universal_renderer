@@ -128,7 +128,7 @@ module UniversalRenderer
 
       # Only skip if we're in the middle of an active Warden throw/catch mechanism
       # This is more specific and allows SSR for public pages with unauthenticated users
-      if defined?(Warden) && request.env['warden']&.message&.present?
+      if defined?(Warden) && request.env["warden"]&.message&.present?
         return true
       end
 
@@ -189,6 +189,19 @@ module UniversalRenderer
       else
         @universal_renderer_props[prop_key] << value_to_add
       end
+    end
+
+    # Adds a React Query cache entry that can be hydrated on SSR/client boot.
+    #
+    # @param query_key [Array, String, Symbol] The React Query key.
+    # @param data [Object] The cached query data.
+    # @return [void]
+    def add_query_data(query_key, data)
+      normalized_query_key = query_key.is_a?(Array) ? query_key : [query_key]
+      push_prop(
+        :react_query,
+        { query_key: normalized_query_key, data: data }.deep_stringify_keys
+      )
     end
   end
 end

@@ -1,0 +1,4 @@
+
+vite: bun run dev
+web: bundle exec rails server
+ssr: bun run app/frontend/ssr/server.tsx

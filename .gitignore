@@ -16,5 +16,4 @@ dist/
 .rspec_status
 /test-results
 
-app/
 node_modules/

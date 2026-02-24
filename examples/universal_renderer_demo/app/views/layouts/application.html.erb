@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title><%= content_for(:title) || "Universal Renderer Demo" %></title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <%= csrf_meta_tags %>
+
+    <%= yield :head %>
+    <%= vite_client_tag %>
+    <%= vite_typescript_tag 'application.tsx' %>
+  </head>
+
+  <body>
+    <%= yield %>
+  </body>
+</html>
