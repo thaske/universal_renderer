@@ -18,6 +18,10 @@ module UniversalRenderer
       say_status "note", "To use HTTP server (external Node.js/Bun):"
       say_status "", "  1. Keep config.engine = :http (default)"
       say_status "", "  2. Set SSR_SERVER_URL environment variable"
+      say_status "note", "To auto-select by Rails env:"
+      say_status "", "  1. Set config.engine = :auto"
+      say_status "",
+                 "  2. Configure config.engine_by_env (default: dev/test :http, production :bun_io)"
     end
   end
 end

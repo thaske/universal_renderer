@@ -47,7 +47,10 @@ UniversalRenderer.configure do |config|
   # Choose your SSR engine:
   # :http           - External Node.js/Bun server (default, supports streaming)
   # :bun_io         - Stdio Bun processes via Open3 (no streaming, no external server)
+  # :auto           - Resolve by Rails env (dev/test: :http, production: :bun_io)
   config.engine = :http
+  # config.engine = :auto
+  # config.engine_by_env = { development: :http, test: :http, production: :bun_io }
 
   # HTTP Engine Configuration (when engine = :http)
   config.ssr_url = "http://localhost:3001"
@@ -62,7 +65,7 @@ end
 
 ## SSR Engines
 
-UniversalRenderer supports two different SSR engines:
+UniversalRenderer supports three SSR engine modes:
 
 ### HTTP Engine (Default)
 
@@ -100,6 +103,24 @@ The BunIo engine maintains a pool of stdio Bun processes and communicates with t
 - Not suitable for complex JavaScript applications
 
 To use BunPersistent, set `config.engine = :bun_persistent` and create a Bun CLI script that can handle JSON input/output for rendering React components.
+
+### Auto Engine Selection (`:auto`)
+
+Set `config.engine = :auto` to select the SSR adapter by Rails environment while keeping one controller/view integration path.
+
+Default mapping:
+
+- `development` => `:http`
+- `test` => `:http`
+- `production` => `:bun_io`
+
+You can customize this via `config.engine_by_env`.
+
+When `:auto` resolves to `:bun_io` (typically production), ensure your deploy pipeline builds the SSR script configured by `SSR_BUN_CLI_SCRIPT` (or `config.bun_cli_script`) before boot:
+
+```bash
+bun run build:ssr
+```
 
 ## Basic Usage
 

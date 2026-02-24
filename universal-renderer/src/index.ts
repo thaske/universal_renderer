@@ -1,4 +1,5 @@
 export { SSR_MARKERS } from "./constants";
+export { ssr } from "./start-ssr";
 export {
   createErrorHandler,
   createHealthHandler,
@@ -12,8 +13,9 @@ export type {
   BaseHandlerOptions,
   RenderOutput,
   SSRHandlerOptions,
-  StreamHandlerOptions
+  StreamHandlerOptions,
 } from "./types";
+export type { SSRTransport, SsrOptions } from "./start-ssr";
 
 export * as http from "./http";
 export * as stdio from "./stdio";

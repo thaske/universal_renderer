@@ -1,2 +1,3 @@
+web: bundle exec rails server
 vite: bun run dev
-web: bun run build:ssr && bundle exec rails server
+ssr: vite build --ssr && node public/vite-ssr/ssr.js

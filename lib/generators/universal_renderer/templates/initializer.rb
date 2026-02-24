@@ -2,7 +2,11 @@ UniversalRenderer.configure do |c|
   # Choose your SSR engine:
   # :http           - External Node.js/Bun server (default, supports streaming)
   # :bun_io         - Stdio Bun processes via Open3 (no streaming, but no external server needed)
+  # :auto           - Resolve engine by Rails environment (dev/test: :http, production: :bun_io)
   c.engine = :http
+  # Example:
+  # c.engine = :auto
+  # c.engine_by_env = { development: :http, test: :http, production: :bun_io }
 
   # HTTP Engine Configuration (when engine = :http)
   c.ssr_url = ENV.fetch("SSR_SERVER_URL", "http://localhost:3001")

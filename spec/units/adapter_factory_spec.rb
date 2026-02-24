@@ -72,6 +72,89 @@ RSpec.describe UniversalRenderer::AdapterFactory do
         expect(adapter).to be_a(UniversalRenderer::Adapter::Http)
       end
     end
+
+    context "when engine is :auto" do
+      before do
+        allow(UniversalRenderer.config).to receive(:engine).and_return(:auto)
+        allow(UniversalRenderer.config).to receive(:engine_by_env).and_return(
+          "development" => :http,
+          "production" => :bun_io
+        )
+      end
+
+      context "in development" do
+        before do
+          allow(Rails).to receive(:env).and_return(
+            ActiveSupport::StringInquirer.new("development")
+          )
+        end
+
+        it "resolves to HTTP adapter" do
+          expect(logger).to receive(:info).with(/resolved SSR engine 'http'/)
+          adapter = described_class.create_adapter
+          expect(adapter).to be_a(UniversalRenderer::Adapter::Http)
+        end
+      end
+
+      context "in production" do
+        before do
+          allow(Rails).to receive(:env).and_return(
+            ActiveSupport::StringInquirer.new("production")
+          )
+
+          allow(UniversalRenderer.config).to receive_messages(
+            bun_pool_size: 2,
+            bun_timeout: 3000,
+            bun_cli_script: "app/frontend/ssr/ssr.ts"
+          )
+          allow(File).to receive(:exist?).and_return(true)
+          allow(Rails).to receive(:root).and_return(
+            Pathname.new("/mock/rails/root")
+          )
+
+          pool_mock = instance_double(ConnectionPool)
+          allow(ConnectionPool).to receive(:new).and_return(pool_mock)
+        end
+
+        it "resolves to BunIo adapter" do
+          expect(logger).to receive(:info).with(/resolved SSR engine 'bun_io'/)
+          adapter = described_class.create_adapter
+          expect(adapter).to be_a(UniversalRenderer::Adapter::BunIo)
+        end
+      end
+
+      context "when Rails.env has no mapping" do
+        before do
+          allow(Rails).to receive(:env).and_return(
+            ActiveSupport::StringInquirer.new("staging")
+          )
+        end
+
+        it "warns and falls back to HTTP" do
+          expect(logger).to receive(:warn).with(/No SSR engine mapping/)
+          expect(logger).to receive(:info).with(/resolved SSR engine 'http'/)
+          adapter = described_class.create_adapter
+          expect(adapter).to be_a(UniversalRenderer::Adapter::Http)
+        end
+      end
+
+      context "when resolved mapping is unknown" do
+        before do
+          allow(Rails).to receive(:env).and_return(
+            ActiveSupport::StringInquirer.new("development")
+          )
+          allow(UniversalRenderer.config).to receive(:engine_by_env).and_return(
+            "development" => :unknown_engine
+          )
+        end
+
+        it "warns and falls back to HTTP" do
+          expect(logger).to receive(:warn).with(/Unknown SSR engine/)
+          adapter = described_class.create_adapter
+          expect(adapter).to be_a(UniversalRenderer::Adapter::Http)
+        end
+      end
+    end
   end
 
   describe ".adapter" do

@@ -2,10 +2,12 @@ UniversalRenderer.configure do |c|
   # Choose your SSR engine:
   # :http           - External Node.js/Bun server (default, supports streaming)
   # :bun_io         - Stdio Bun processes via Open3 (no streaming, but no external server needed)
-  c.engine = :bun_io
+  c.engine = :http
 
   # HTTP Engine Configuration (when engine = :http)
-  c.ssr_url = ENV.fetch("SSR_SERVER_URL", "http://localhost:3001")
+  # In development/test, Procfile.dev starts the Node+Express Vite middleware
+  # SSR server from app/frontend/ssr/ssr.tsx.
+  c.ssr_url = ENV.fetch("SSR_SERVER_URL", "http://localhost:5200")
   c.timeout = 3
   c.ssr_stream_path = "/stream"
 

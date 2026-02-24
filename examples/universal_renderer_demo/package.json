@@ -3,21 +3,27 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
+    "ssr:dev:http": "tsx app/frontend/ssr/ssr.tsx",
     "build:client": "vite build",
     "build:ssr": "vite build --ssr",
     "build": "bun run build:client && bun run build:ssr",
     "ssr": "bun run public/vite-ssr/ssr.js"
   },
   "dependencies": {
+    "@dr.pogodin/react-helmet": "^3.0.6",
     "@tanstack/react-query": "^5.90.21",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
+    "react-query": "^3.39.3",
+    "react-router": "^7.13.1",
     "styled-components": "^6.3.11",
     "universal-renderer": "file:../../universal-renderer"
   },
   "devDependencies": {
+    "express": "^4.21.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "tsx": "^4.20.5",
     "typescript": "^5.9.3",
     "vite": "^5.4.21",
     "vite-plugin-ruby": "^5.1.3"

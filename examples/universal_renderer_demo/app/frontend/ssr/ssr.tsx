@@ -1,40 +1,56 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { default as _setup } from "@/ssr/setup";
+import { head, transform } from "@/ssr/utils";
 import { renderToString } from "react-dom/server.node";
-import { ServerStyleSheet, StyleSheetManager } from "styled-components";
-import { stdio } from "universal-renderer";
-import { App, type Props } from "../components/App";
+import { createServer } from "../../../../../universal-renderer/src/http/express";
+import type { ViteDevServer } from "vite";
 
-function seedQueryClient(queryClient: QueryClient, props: Props) {
-  for (const query of props.react_query || []) {
-    if (!query || query.query_key === undefined) continue;
-    queryClient.setQueryData(query.query_key as readonly unknown[], query.data);
-  }
+const isProduction = process.env.NODE_ENV === "production";
+const port = Number(process.env.SSR_PORT ?? process.env.PORT);
+
+let vite: ViteDevServer | undefined;
+let setup: typeof _setup;
+if (isProduction) {
+  setup = (await import("@/ssr/setup")).default;
+} else {
+  const { createServer: createViteServer } = await import("vite");
+  vite = await createViteServer({
+    server: { middlewareMode: true },
+    appType: "custom",
+  });
+  setup = (await vite.ssrLoadModule("@/ssr/setup")).default;
 }
 
-void stdio.createRenderer({
-  setup: async (_url: string, props: Props) => ({
-    props,
-    queryClient: new QueryClient(),
-    sheet: new ServerStyleSheet(),
-  }),
-  render: async ({ props, queryClient, sheet }) => {
-    seedQueryClient(queryClient, props);
+const app = await createServer({
+  middleware: vite?.middlewares,
 
-    const body = renderToString(
-      <StyleSheetManager sheet={sheet.instance}>
-        <QueryClientProvider client={queryClient}>
-          <App {...props} />
-        </QueryClientProvider>
-      </StyleSheetManager>,
-    );
+  setup,
 
+  render: ({ app, sheet, helmetContext }) => {
+    const root = renderToString(app);
+    const styles = sheet.getStyleTags();
     return {
-      head: sheet.getStyleTags(),
-      body,
+      head: head({ helmetContext }),
+      body: `${root}\n${styles}`,
     };
   },
-  cleanup: async ({ queryClient, sheet }) => {
-    queryClient.clear();
-    sheet.seal();
+
+  cleanup: ({ sheet, queryClient }) => {
+    sheet?.seal();
+    queryClient?.clear();
   },
+
+  error: (err, req, res, next) => {
+    vite?.ssrFixStacktrace(err);
+    console.error(`${err.message}\n${err.stack}`);
+    res.status(500).send("Internal Server Error");
+  },
+
+  streamCallbacks: {
+    head,
+    transform,
+  },
+});
+
+app.listen(port, () => {
+  console.log(`[SSR] Server is running on port ${port}`);
 });

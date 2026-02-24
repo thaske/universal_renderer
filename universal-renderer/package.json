@@ -29,16 +29,6 @@
       "types": "./dist/index.d.mts"
     },
     "./http": {
-      "bun": {
-        "import": "./dist/http/bun/index.mjs",
-        "require": "./dist/http/bun/index.js",
-        "types": "./dist/http/bun/index.d.mts"
-      },
-      "node": {
-        "import": "./dist/http/express/index.mjs",
-        "require": "./dist/http/express/index.js",
-        "types": "./dist/http/express/index.d.mts"
-      },
       "default": {
         "import": "./dist/http/express/index.mjs",
         "require": "./dist/http/express/index.js",
@@ -62,11 +52,6 @@
         "types": "./dist/stdio/node/index.d.mts"
       }
     },
-    "./http/bun": {
-      "import": "./dist/http/bun/index.mjs",
-      "require": "./dist/http/bun/index.js",
-      "types": "./dist/http/bun/index.d.mts"
-    },
     "./http/express": {
       "import": "./dist/http/express/index.mjs",
       "require": "./dist/http/express/index.js",
@@ -76,6 +61,11 @@
       "import": "./dist/http/express/index.mjs",
       "require": "./dist/http/express/index.js",
       "types": "./dist/http/express/index.d.mts"
+    },
+    "./react-query": {
+      "import": "./dist/react-query/index.mjs",
+      "require": "./dist/react-query/index.js",
+      "types": "./dist/react-query/index.d.mts"
     }
   },
   "files": [

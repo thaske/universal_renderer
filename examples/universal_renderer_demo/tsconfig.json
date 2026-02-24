@@ -1,16 +1,33 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "jsx": "react-jsx",
+    "baseUrl": "app/frontend/",
+    "paths": {
+      "@/*": ["*"],
+      "~/*": ["*"]
+    },
+    "target": "ESNext",
+    "useDefineForClassFields": true,
+    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    "allowJs": false,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
     "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
     "noEmit": true,
-    "types": ["vite/client"]
+    "jsx": "react-jsx",
+    "noImplicitAny": true,
+    "noImplicitThis": true,
+    "strictNullChecks": true
   },
   "include": [
-    "app/frontend/**/*.ts",
-    "app/frontend/**/*.tsx",
-    "vite.config.ts"
+    "app/frontend",
+    "jest.setup.ts",
+    "vite.config.ts",
+    "jest.config.ts"
   ]
 }

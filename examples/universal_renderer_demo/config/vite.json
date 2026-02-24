@@ -2,7 +2,8 @@
   "all": {
     "viteBinPath": "bin/shims/vite",
     "sourceCodeDir": "app/frontend",
-    "watchAdditionalPaths": []
+    "watchAdditionalPaths": [],
+    "ssrBuildEnabled": true
   },
   "development": {
     "autoBuild": true,

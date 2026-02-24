@@ -20,23 +20,37 @@ bundle install
 
 ## Run the demo
 
-Run these in separate terminals from this folder:
+Run from this folder:
 
-1. Start Rails:
 ```bash
-bun run build:ssr && bundle exec rails s
-```
-
-2. (Optional) Start Vite dev server:
-```bash
-~/.bun/bin/bun run dev
+bin/dev
 ```
 
 Then open `http://127.0.0.1:3000`.
 
-This demo uses the `:bun_io` engine (persistent Open3-managed Bun processes) and
-executes the Vite-built SSR bundle at `public/vite-ssr/ssr.js` (built from
-`app/frontend/ssr/ssr.tsx`) so SSR and client use the same Vite pipeline.
+This demo uses `config.engine = :http` and runs a dedicated
+Node + Express SSR server via Vite middleware from `app/frontend/ssr/ssr.tsx`.
+SSR setup/render handlers are defined in `app/frontend/ssr/setup.tsx`.
+
+In development, `bin/dev` runs that Node+Express SSR server directly from
+`Procfile.dev`. For BunIo production workflows, the stdio SSR entrypoint
+remains `app/frontend/ssr/ssr.tsx`.
+
+For production BunIo, Rails executes the Vite-built SSR bundle at
+`public/vite-ssr/ssr.js` (built from `app/frontend/ssr/ssr.tsx`).
+
+It uses shared helpers from `universal-renderer/react-query` to:
+- keep query-cache seeding logic aligned between SSR and hydration
+
+## Production build note
+
+When deploying with BunIo in production, make sure SSR bundle output exists:
+
+```bash
+bun run build
+# or at minimum:
+bun run build:ssr
+```
 
 To test larger SSR payloads and more query seed data, use:
 - `http://127.0.0.1:3000/?records=50&size_kb=16`

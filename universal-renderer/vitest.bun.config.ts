@@ -6,7 +6,7 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
-    include: ["src/http/bun/index.test.ts", "src/stdio/bun/index.test.ts"],
+    include: ["src/stdio/bun/index.test.ts"],
     exclude: ["node_modules", "dist"],
     // Run Bun tests sequentially to avoid server singleton conflicts
     poolOptions: {

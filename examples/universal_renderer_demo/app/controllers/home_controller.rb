@@ -24,11 +24,7 @@ class HomeController < ApplicationController
     )
     add_query_data(
       ["demo-metrics"],
-      {
-        records: records,
-        size_kb: size_kb,
-        blob_bytes: blob.bytesize
-      }
+      { records: records, size_kb: size_kb, blob_bytes: blob.bytesize }
     )
     add_query_data(["demo-first-row"], rows.first)
   end
@@ -37,11 +33,7 @@ class HomeController < ApplicationController
 
   def build_rows(records)
     (1..records).map do |id|
-      {
-        "id" => id,
-        "label" => "Item #{id}",
-        "value" => "value-#{id.to_s(36)}"
-      }
+      { "id" => id, "label" => "Item #{id}", "value" => "value-#{id.to_s(36)}" }
     end
   end
 end

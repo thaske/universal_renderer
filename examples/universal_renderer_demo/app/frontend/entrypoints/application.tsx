@@ -1,28 +1,40 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { hydrateRoot } from "react-dom/client";
-import { App, type Props } from "../components/App";
+import { HelmetProvider } from "@dr.pogodin/react-helmet";
+import { createRoot, hydrateRoot } from "react-dom/client";
+import { Hydrate, QueryClient, QueryClientProvider } from "react-query";
+import { BrowserRouter } from "react-router";
 
-function seedQueryClient(queryClient: QueryClient, props: Props) {
-  for (const query of props.react_query || []) {
-    if (!query || query.query_key === undefined) continue;
-    queryClient.setQueryData(query.query_key as readonly unknown[], query.data);
-  }
-}
+import App from "@/App";
 
-const root = document.getElementById("root");
-const propsNode = document.getElementById("ssr-props");
+const rootElement = document.getElementById("root")!;
 
-if (root) {
-  const propsJson = propsNode?.textContent || "{}";
-  const props = JSON.parse(propsJson) as Props;
+const queryClient = new QueryClient();
+queryClient.setDefaultOptions({
+  queries: {
+    staleTime: Infinity,
+  },
+});
 
-  const queryClient = new QueryClient();
-  seedQueryClient(queryClient, props);
+const stateEl = document.getElementById("state");
+const state = JSON.parse(stateEl?.textContent ?? "{}");
+stateEl?.remove();
+const propsEl = document.getElementById("ssr-props");
+const props = JSON.parse(propsEl?.textContent ?? "{}");
 
-  hydrateRoot(
-    root,
+const app = (
+  <HelmetProvider>
     <QueryClientProvider client={queryClient}>
-      <App {...props} />
+      <Hydrate state={state}>
+        <BrowserRouter>
+          <App {...props} />
+        </BrowserRouter>
+      </Hydrate>
     </QueryClientProvider>
-  );
+  </HelmetProvider>
+);
+
+const hydrated = !!rootElement.children.length;
+if (hydrated) {
+  hydrateRoot(rootElement, app);
+} else {
+  createRoot(rootElement).render(app);
 }

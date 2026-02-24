@@ -10,6 +10,11 @@ RSpec.describe UniversalRenderer::Configuration do
 
     it "sets default values" do
       expect(subject.engine).to eq(:http)
+      expect(subject.engine_by_env).to eq(
+        "development" => :http,
+        "test" => :http,
+        "production" => :bun_io
+      )
       expect(subject.timeout).to eq(3)
       expect(subject.bun_cli_script).to eq("app/frontend/ssr/ssr.ts")
       expect(subject.bun_pool_size).to eq(5)
@@ -18,12 +23,25 @@ RSpec.describe UniversalRenderer::Configuration do
 
     it "reads engine from environment variable" do
       original_env = ENV.fetch("SSR_ENGINE", nil)
-      ENV["SSR_ENGINE"] = "mini_racer"
+      ENV["SSR_ENGINE"] = "auto"
 
       config = described_class.new
-      expect(config.engine).to eq(:mini_racer)
+      expect(config.engine).to eq(:auto)
 
       ENV["SSR_ENGINE"] = original_env
+    end
+
+    it "normalizes engine assignments" do
+      subject.engine = "BUN_IO"
+      expect(subject.engine).to eq(:bun_io)
+    end
+
+    it "normalizes engine_by_env assignments" do
+      subject.engine_by_env = { development: "HTTP", "Production" => "BUN_IO" }
+      expect(subject.engine_by_env).to eq(
+        "development" => :http,
+        "production" => :bun_io
+      )
     end
 
     it "reads bun_cli_script from environment variable" do
@@ -91,6 +109,11 @@ RSpec.describe UniversalRenderer::Configuration do
     it "has a bun_timeout attribute" do
       expect(subject).to respond_to(:bun_timeout)
       expect(subject).to respond_to(:bun_timeout=)
+    end
+
+    it "has an engine_by_env attribute" do
+      expect(subject).to respond_to(:engine_by_env)
+      expect(subject).to respond_to(:engine_by_env=)
     end
   end
 end

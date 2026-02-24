@@ -1,5 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
-import styled from "styled-components";
+import { Helmet } from "@dr.pogodin/react-helmet";
+import { useQuery } from "react-query";
+import { Link, Route, Routes, useLocation } from "react-router";
+import { styled } from "styled-components";
 
 type DemoRow = {
   id: number;
@@ -29,7 +31,29 @@ export type Props = {
   }>;
 };
 
-export function App({ rendered_at: renderedAt, demo_payload: payload }: Props) {
+function App({ rendered_at: renderedAt, demo_payload: payload }: Props) {
+  return (
+    <Routes>
+      <Route
+        path="/"
+        element={
+          <HomePage renderedAt={renderedAt} payload={payload} />
+        }
+      />
+      <Route path="/about" element={<AboutPage renderedAt={renderedAt} />} />
+      <Route path="*" element={<NotFoundPage />} />
+    </Routes>
+  );
+}
+
+function HomePage({
+  renderedAt,
+  payload,
+}: {
+  renderedAt?: string;
+  payload?: DemoPayload;
+}) {
+  const location = useLocation();
   const { data: message } = useQuery({
     queryKey: ["demo-message"],
     queryFn: async () => "React Query says: (fetched on client)",
@@ -52,7 +76,15 @@ export function App({ rendered_at: renderedAt, demo_payload: payload }: Props) {
 
   return (
     <Card>
+      <Helmet prioritizeSeoTags>
+        <title>UniversalRenderer Demo | Home</title>
+        <meta
+          name="description"
+          content="Demo page showing SSR, React Query hydration, and React Router."
+        />
+      </Helmet>
       <Title>UniversalRenderer Demo</Title>
+      <Muted>Route: {location.pathname}</Muted>
       <p>{typeof message === "string" ? message : "React Query cache miss."}</p>
       <Muted>SSR timestamp: {renderedAt || "n/a"}</Muted>
       <SectionTitle>React Query cache seeds</SectionTitle>
@@ -68,9 +100,52 @@ export function App({ rendered_at: renderedAt, demo_payload: payload }: Props) {
         <a href="/?records=500&size_kb=128">medium</a>
         <a href="/?records=1000&size_kb=256">large</a>
       </Links>
+      <SectionTitle>Routes</SectionTitle>
+      <Links>
+        <Link to="/">home</Link>
+        <Link to="/about">about</Link>
+      </Links>
     </Card>
   );
 }
+
+function AboutPage({ renderedAt }: { renderedAt?: string }) {
+  return (
+    <Card>
+      <Helmet prioritizeSeoTags>
+        <title>UniversalRenderer Demo | About</title>
+        <meta
+          name="description"
+          content="Second route rendered via React Router and SSR."
+        />
+      </Helmet>
+      <Title>About This Demo</Title>
+      <p>This route is rendered by React Router and works with SSR.</p>
+      <Muted>SSR timestamp: {renderedAt || "n/a"}</Muted>
+      <Links>
+        <Link to="/">home</Link>
+        <Link to="/about">about</Link>
+      </Links>
+    </Card>
+  );
+}
+
+function NotFoundPage() {
+  return (
+    <Card>
+      <Helmet prioritizeSeoTags>
+        <title>UniversalRenderer Demo | Not Found</title>
+      </Helmet>
+      <Title>Not Found</Title>
+      <p>No route matched.</p>
+      <Links>
+        <Link to="/">go home</Link>
+      </Links>
+    </Card>
+  );
+}
+
+export default App;
 
 const Card = styled.main`
   font-family: sans-serif;
@@ -79,6 +154,7 @@ const Card = styled.main`
   margin: 0 auto;
   border: 1px solid #ddd;
   border-radius: 12px;
+  // background-color: #b24949;
 `;
 
 const Title = styled.h1`
