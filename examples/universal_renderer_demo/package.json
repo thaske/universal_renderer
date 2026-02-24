@@ -3,8 +3,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
-    "build": "vite build",
-    "ssr": "bun run app/frontend/ssr/server.tsx"
+    "build:client": "vite build",
+    "build:ssr": "vite build --ssr",
+    "build": "bun run build:client && bun run build:ssr",
+    "ssr": "bun run public/vite-ssr/ssr.js"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.21",

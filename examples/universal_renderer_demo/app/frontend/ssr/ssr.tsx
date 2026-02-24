@@ -1,10 +1,7 @@
-import {
-  QueryClient,
-  QueryClientProvider,
-} from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderToString } from "react-dom/server.node";
 import { ServerStyleSheet, StyleSheetManager } from "styled-components";
-import { createServer } from "../../../../../universal-renderer/src/http/express/index";
+import { stdio } from "universal-renderer";
 import { App, type Props } from "../components/App";
 
 function seedQueryClient(queryClient: QueryClient, props: Props) {
@@ -14,13 +11,12 @@ function seedQueryClient(queryClient: QueryClient, props: Props) {
   }
 }
 
-const app = await createServer({
-  setup: async (_url, props: Props) => ({
+void stdio.createRenderer({
+  setup: async (_url: string, props: Props) => ({
     props,
     queryClient: new QueryClient(),
     sheet: new ServerStyleSheet(),
   }),
-
   render: async ({ props, queryClient, sheet }) => {
     seedQueryClient(queryClient, props);
 
@@ -29,7 +25,7 @@ const app = await createServer({
         <QueryClientProvider client={queryClient}>
           <App {...props} />
         </QueryClientProvider>
-      </StyleSheetManager>
+      </StyleSheetManager>,
     );
 
     return {
@@ -37,13 +33,8 @@ const app = await createServer({
       body,
     };
   },
-
-  cleanup: ({ queryClient, sheet }) => {
+  cleanup: async ({ queryClient, sheet }) => {
     queryClient.clear();
     sheet.seal();
   },
-});
-
-app.listen(3001, "127.0.0.1", () => {
-  console.log("SSR server running at http://127.0.0.1:3001");
 });

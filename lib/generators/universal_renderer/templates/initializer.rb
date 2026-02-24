@@ -14,7 +14,7 @@ UniversalRenderer.configure do |c|
   # SSR_BUN_POOL_SIZE, SSR_BUN_TIMEOUT, SSR_BUN_CLI_SCRIPT
   c.bun_pool_size = 5
   c.bun_timeout = 5_000
-  c.bun_cli_script = "app/frontend/ssr/ssr.ts"
+  c.bun_cli_script = "app/frontend/ssr/ssr.tsx"
 
   # NOTE: When using BunIo, ensure you have a stdio CLI script that can handle
   # JSON input/output with head/body/body_attrs response format.
