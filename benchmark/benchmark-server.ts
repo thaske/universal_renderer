@@ -1,7 +1,5 @@
 #!/usr/bin/env bun
 import React from "react";
-import type { BunServerOptions } from "../universal-renderer/src/http/bun";
-import { createServer as createBunServer } from "../universal-renderer/src/http/bun";
 import type { ExpressServerOptions } from "../universal-renderer/src/http/express";
 import { createServer as createExpressServer } from "../universal-renderer/src/http/express";
 
@@ -21,7 +19,7 @@ const argv = yargs(hideBin(process.argv))
     description: "Enable Streaming",
   })
   .option("server", {
-    choices: ["express", "bun"],
+    choices: ["express"],
     default: "express",
     description: "Server implementation to use",
   })
@@ -83,15 +81,6 @@ async function main() {
     app.listen(port, () => {
       console.log(`Express server running on http://localhost:${port}`);
     });
-  } else if (serverImpl === "bun") {
-    const options: BunServerOptions<any> = {
-      ...commonOptions,
-      ...(stream && { streamCallbacks }),
-      port,
-    };
-    const server = await createBunServer(options);
-    Bun.serve(server);
-    console.log(`Bun server running on http://localhost:${port}`);
   }
 }
 
