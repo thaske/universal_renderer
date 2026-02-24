@@ -10,7 +10,7 @@
     "downlevelIteration": true,
 
     // Module Configuration
-    "moduleResolution": "bundler",
+    "moduleResolution": "node",
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "allowSyntheticDefaultImports": true,

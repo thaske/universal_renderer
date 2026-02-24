@@ -30,7 +30,7 @@ export type { ExpressServerOptions };
  * @example
  * ```typescript
  * // Option 1: Complete server (this function)
- * import { createServer } from 'universal-renderer/express';
+ * import { createServer } from 'universal-renderer/http';
  *
  * const app = await createServer({
  *   setup: async (url, props) => ({ url, props, store: createStore() }),
@@ -39,7 +39,7 @@ export type { ExpressServerOptions };
  * });
  *
  * // Option 2: Individual handlers for more control
- * import { createHealthHandler, createSSRHandler } from 'universal-renderer/express';
+ * import { createHealthHandler, createSSRHandler } from 'universal-renderer/http';
  *
  * const app = express();
  * app.use(express.json());

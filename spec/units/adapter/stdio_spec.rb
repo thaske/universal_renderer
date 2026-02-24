@@ -1,6 +1,6 @@
 require "rails_helper"
 
-RSpec.describe UniversalRenderer::Adapter::BunIo do
+RSpec.describe UniversalRenderer::Adapter::Stdio do
   let(:cli_script) { "app/frontend/ssr/ssr.ts" }
   let(:config_mock) { instance_double(UniversalRenderer::Configuration) }
 
@@ -15,7 +15,7 @@ RSpec.describe UniversalRenderer::Adapter::BunIo do
 
     # Mock UniversalRenderer.config
     allow(UniversalRenderer).to receive(:config).and_return(config_mock)
-    allow(config_mock).to receive_messages(bun_pool_size: 2, bun_timeout: 3000, bun_cli_script: cli_script)
+    allow(config_mock).to receive_messages(stdio_pool_size: 2, stdio_timeout: 3000, stdio_cli_script: cli_script)
   end
 
   describe "#initialize" do
@@ -26,9 +26,9 @@ RSpec.describe UniversalRenderer::Adapter::BunIo do
           Pathname.new("/fake/rails/root").join(cli_script),
         ).and_return(true)
 
-        # Mock ConnectionPool and StdioBunProcess
+        # Mock ConnectionPool and StdioProcess
         allow(ConnectionPool).to receive(:new).and_return(double("pool"))
-        allow(UniversalRenderer::StdioBunProcess).to receive(:new).and_return(
+        allow(UniversalRenderer::StdioProcess).to receive(:new).and_return(
           double("process"),
         )
       end
@@ -40,7 +40,7 @@ RSpec.describe UniversalRenderer::Adapter::BunIo do
 
       it "logs successful initialization" do
         expect(Rails.logger).to receive(:info).with(
-          "Universal Renderer BunIo process pool (2) initialized",
+          "Universal Renderer Stdio process pool (2) initialized",
         )
 
         described_class.new
@@ -56,7 +56,7 @@ RSpec.describe UniversalRenderer::Adapter::BunIo do
 
       it "logs error and does not create process pool" do
         expect(Rails.logger).to receive(:error).with(
-          /BunIo CLI script not found/,
+          /Stdio CLI script not found/,
         )
 
         described_class.new
@@ -70,7 +70,7 @@ RSpec.describe UniversalRenderer::Adapter::BunIo do
     let(:props) { { "component" => "TestComponent", "title" => "Test" } }
 
     context "when process pool is available" do
-      let(:process_mock) { instance_double(UniversalRenderer::StdioBunProcess) }
+      let(:process_mock) { instance_double(UniversalRenderer::StdioProcess) }
       let(:pool_mock) { instance_double(ConnectionPool) }
 
       before do
@@ -79,7 +79,7 @@ RSpec.describe UniversalRenderer::Adapter::BunIo do
         ).and_return(true)
 
         allow(ConnectionPool).to receive(:new).and_return(pool_mock)
-        allow(UniversalRenderer::StdioBunProcess).to receive(:new).and_return(
+        allow(UniversalRenderer::StdioProcess).to receive(:new).and_return(
           process_mock,
         )
         allow(pool_mock).to receive(:with).and_yield(process_mock)
@@ -109,7 +109,7 @@ RSpec.describe UniversalRenderer::Adapter::BunIo do
         )
 
         expect(Rails.logger).to receive(:error).with(
-          /BunIo SSR execution failed/,
+          /Stdio SSR execution failed/,
         )
 
         result = adapter.call(url, props)
@@ -136,7 +136,7 @@ RSpec.describe UniversalRenderer::Adapter::BunIo do
 
     it "does not support streaming and returns false" do
       expect(Rails.logger).to receive(:warn).with(
-        /BunIo adapter does not support streaming/,
+        /Stdio adapter does not support streaming/,
       )
 
       result = adapter.stream("url", {}, "template", double("response"))
@@ -153,7 +153,7 @@ RSpec.describe UniversalRenderer::Adapter::BunIo do
   end
 end
 
-RSpec.describe UniversalRenderer::StdioBunProcess do
+RSpec.describe UniversalRenderer::StdioProcess do
   let(:cli_script) { "app/frontend/ssr/ssr.ts" }
   let(:stdin_mock) { instance_double(IO) }
   let(:stdout_mock) { instance_double(IO) }

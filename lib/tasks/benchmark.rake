@@ -1,9 +1,9 @@
 namespace :universal_renderer do
-  desc "Benchmark HTTP vs BunIo SSR performance"
+  desc "Benchmark HTTP vs Stdio SSR performance"
   task benchmark: :environment do
     require "benchmark"
 
-    puts "Universal Renderer Benchmark: HTTP vs BunIo"
+    puts "Universal Renderer Benchmark: HTTP vs Stdio"
     puts "=" * 50
 
     # Setup test props
@@ -46,27 +46,27 @@ namespace :universal_renderer do
 
     puts
 
-    # Benchmark BunIo adapter
-    puts "BunIo Adapter:"
+    # Benchmark Stdio adapter
+    puts "Stdio Adapter:"
     begin
-      UniversalRenderer.config.engine = :bun_io
+      UniversalRenderer.config.engine = :stdio
       UniversalRenderer::AdapterFactory.reset!
 
-      bun_io_adapter = UniversalRenderer::AdapterFactory.adapter
+      stdio_adapter = UniversalRenderer::AdapterFactory.adapter
 
-      bun_io_time =
+      stdio_time =
         Benchmark.measure do
           iterations.times do
-            bun_io_adapter.call(test_url, test_props)
+            stdio_adapter.call(test_url, test_props)
           end
         end
 
-      puts "  Total time: #{bun_io_time.real.round(4)}s"
-      puts "  Average per call: #{(bun_io_time.real / iterations * 1000).round(2)}ms"
-      puts "  Calls per second: #{(iterations / bun_io_time.real).round(2)}"
+      puts "  Total time: #{stdio_time.real.round(4)}s"
+      puts "  Average per call: #{(stdio_time.real / iterations * 1000).round(2)}ms"
+      puts "  Calls per second: #{(iterations / stdio_time.real).round(2)}"
     rescue StandardError => e
       puts "  Error: #{e.message}"
-      puts "  (Make sure Bun CLI script is available and Bun is installed)"
+      puts "  (Make sure stdio CLI script is available and Node.js is installed)"
     ensure
       # Restore original engine
       UniversalRenderer.config.engine = original_engine
@@ -77,18 +77,18 @@ namespace :universal_renderer do
     puts "Benchmark complete!"
     puts
     puts "Notes:"
-    puts "- HTTP adapter requires external Node.js/Bun server"
-    puts "- BunIo adapter requires Bun CLI script and Bun installed"
+    puts "- HTTP adapter requires external Node.js server"
+    puts "- Stdio adapter requires a stdio CLI script and Node.js"
     puts "- Performance may vary based on JavaScript complexity"
-    puts "- BunIo eliminates network overhead but has process communication overhead"
+    puts "- Stdio eliminates network overhead but has process communication overhead"
   end
 
-  desc "Test BunIo adapter functionality"
-  task test_bun_io: :environment do
-    puts "Testing BunIo Adapter..."
+  desc "Test Stdio adapter functionality"
+  task test_stdio: :environment do
+    puts "Testing Stdio Adapter..."
     puts "=" * 30
 
-    UniversalRenderer.config.engine = :bun_io
+    UniversalRenderer.config.engine = :stdio
     UniversalRenderer::AdapterFactory.reset!
 
     adapter = UniversalRenderer::AdapterFactory.adapter
@@ -96,18 +96,18 @@ namespace :universal_renderer do
     test_props = {
       "component" => "TestComponent",
       "title" => "Test Page",
-      "message" => "Hello from BunIo!"
+      "message" => "Hello from Stdio!"
     }
 
     result = adapter.call("http://localhost:3000/test", test_props)
 
     if result
-      puts "✅ BunIo adapter working!"
+      puts "✅ Stdio adapter working!"
       puts "Head: #{result.head}"
       puts "Body: #{result.body[0..200]}#{"..." if result.body.length > 200}"
       puts "Body attrs: #{result.body_attrs}"
     else
-      puts "❌ BunIo adapter returned nil"
+      puts "❌ Stdio adapter returned nil"
       puts "Check logs for error details"
     end
 

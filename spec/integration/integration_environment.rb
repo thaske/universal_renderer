@@ -36,13 +36,13 @@ module IntegrationEnvironment
 
   # Sets up test resources for the given engine
   #
-  # @param engine [Symbol] The engine to set up (:http or :bun_io)
+  # @param engine [Symbol] The engine to set up (:http or :stdio)
   def setup_engine_resources(engine)
     case engine
     when :http
       # HTTP mode uses real servers - no additional setup needed
-    when :bun_io
-      # BUN_IO mode uses stubbed processes - but don't set up mocks here
+    when :stdio
+      # Stdio mode uses stubbed processes - but don't set up mocks here
       # Mocks will be set up in before(:each) blocks
     end
   end
@@ -55,17 +55,17 @@ module IntegrationEnvironment
       config.timeout = ENV["CI"] ? 15 : 5 # Longer timeout in CI
       config.engine = engine
 
-      if engine == :bun_io
-        config.bun_pool_size = 2
-        config.bun_timeout = 3000
-        config.bun_cli_script = "spec/fixtures/test_ssr.ts"
+      if %i[stdio].include?(engine)
+        config.stdio_pool_size = 2
+        config.stdio_timeout = 3000
+        config.stdio_cli_script = "spec/fixtures/test_ssr.ts"
       end
     end
   end
 
-  # Sets up BUN_IO mode stubs for testing
+  # Sets up STDIO mode stubs for testing
   # This should be called from within a before(:each) block to ensure proper RSpec mock lifecycle
-  def setup_bun_io_stubs
+  def setup_stdio_stubs
     # Mock Rails.root first
     allow(Rails).to receive(:root).and_return(Pathname.new("/fake/rails/root"))
 
@@ -76,11 +76,11 @@ module IntegrationEnvironment
     ).and_return(true)
 
     # Create a mock process that returns canned responses
-    mock_bun_process = instance_double(UniversalRenderer::StdioBunProcess)
+    mock_bun_process = instance_double(UniversalRenderer::StdioProcess)
     allow(mock_bun_process).to receive(:render).and_return(
       {
-        "head" => "<title>Test BUN_IO Response</title>",
-        "body" => "<div>BUN_IO rendered content</div>",
+        "head" => "<title>Test STDIO Response</title>",
+        "body" => "<div>STDIO rendered content</div>",
         "body_attrs" => {}
       }
     )
@@ -90,7 +90,7 @@ module IntegrationEnvironment
     allow(mock_pool).to receive(:with).and_yield(mock_bun_process)
 
     allow(ConnectionPool).to receive(:new).and_return(mock_pool)
-    allow(UniversalRenderer::StdioBunProcess).to receive(:new).and_return(
+    allow(UniversalRenderer::StdioProcess).to receive(:new).and_return(
       mock_bun_process
     )
   end

@@ -16,8 +16,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:node": "vitest run --exclude='**/bun/**'",
-    "test:bun": "vitest run --config vitest.bun.config.ts"
+    "test:node": "vitest run"
   },
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -30,37 +29,25 @@
     },
     "./http": {
       "default": {
-        "import": "./dist/http/express/index.mjs",
-        "require": "./dist/http/express/index.js",
-        "types": "./dist/http/express/index.d.mts"
+        "import": "./dist/http/index.mjs",
+        "require": "./dist/http/index.js",
+        "types": "./dist/http/index.d.mts"
       }
     },
     "./stdio": {
-      "bun": {
-        "import": "./dist/stdio/bun/index.mjs",
-        "require": "./dist/stdio/bun/index.js",
-        "types": "./dist/stdio/bun/index.d.mts"
-      },
-      "node": {
-        "import": "./dist/stdio/node/index.mjs",
-        "require": "./dist/stdio/node/index.js",
-        "types": "./dist/stdio/node/index.d.mts"
-      },
-      "default": {
-        "import": "./dist/stdio/node/index.mjs",
-        "require": "./dist/stdio/node/index.js",
-        "types": "./dist/stdio/node/index.d.mts"
-      }
+      "import": "./dist/stdio/index.mjs",
+      "require": "./dist/stdio/index.js",
+      "types": "./dist/stdio/index.d.mts"
     },
     "./http/express": {
-      "import": "./dist/http/express/index.mjs",
-      "require": "./dist/http/express/index.js",
-      "types": "./dist/http/express/index.d.mts"
+      "import": "./dist/http/index.mjs",
+      "require": "./dist/http/index.js",
+      "types": "./dist/http/index.d.mts"
     },
     "./express": {
-      "import": "./dist/http/express/index.mjs",
-      "require": "./dist/http/express/index.js",
-      "types": "./dist/http/express/index.d.mts"
+      "import": "./dist/http/index.mjs",
+      "require": "./dist/http/index.js",
+      "types": "./dist/http/index.d.mts"
     },
     "./react-query": {
       "import": "./dist/react-query/index.mjs",
@@ -82,7 +69,6 @@
   "devDependencies": {
     "@testing-library/jest-dom": "^6.4.0",
     "@testing-library/react": "^15.0.0",
-    "@types/bun": "^1.1.6",
     "@types/express": "^4.17.0",
     "@types/node": "^22.15.18",
     "@types/react": "^19.1.4",
@@ -98,7 +84,6 @@
   },
   "keywords": [
     "express",
-    "bun",
     "react",
     "server-side-rendering",
     "ssr",

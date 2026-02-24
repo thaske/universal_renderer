@@ -28,23 +28,24 @@ bin/dev
 
 Then open `http://127.0.0.1:3000`.
 
-This demo uses `config.engine = :http` and runs a dedicated
-Node + Express SSR server via Vite middleware from `app/frontend/ssr/ssr.tsx`.
-SSR setup/render handlers are defined in `app/frontend/ssr/setup.tsx`.
+This demo uses:
+- `:http` engine in development/test (`app/frontend/ssr/ssr.tsx`)
+- `:stdio` engine in production (`app/frontend/ssr/stdio.tsx`)
 
-In development, `bin/dev` runs that Node+Express SSR server directly from
-`Procfile.dev`. For BunIo production workflows, the stdio SSR entrypoint
-remains `app/frontend/ssr/ssr.tsx`.
+SSR setup/render handlers are shared in `app/frontend/ssr/setup.tsx`.
 
-For production BunIo, Rails executes the Vite-built SSR bundle at
-`public/vite-ssr/ssr.js` (built from `app/frontend/ssr/ssr.tsx`).
+In development, `bin/dev` runs the Node+Express SSR server from
+`app/frontend/ssr/ssr.tsx` via `Procfile.dev`.
+
+In production, Rails executes the Vite-built stdio bundle at
+`public/vite-ssr/stdio.js` (built from `app/frontend/ssr/stdio.tsx`).
 
 It uses shared helpers from `universal-renderer/react-query` to:
 - keep query-cache seeding logic aligned between SSR and hydration
 
 ## Production build note
 
-When deploying with BunIo in production, make sure SSR bundle output exists:
+When deploying with Stdio in production, make sure SSR bundle output exists:
 
 ```bash
 bun run build

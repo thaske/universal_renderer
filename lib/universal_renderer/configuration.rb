@@ -3,9 +3,9 @@ module UniversalRenderer
     attr_accessor :ssr_url,
                   :timeout,
                   :ssr_stream_path,
-                  :bun_pool_size,
-                  :bun_timeout,
-                  :bun_cli_script
+                  :stdio_pool_size,
+                  :stdio_timeout,
+                  :stdio_cli_script
     attr_reader :engine, :engine_by_env
 
     def initialize
@@ -14,10 +14,10 @@ module UniversalRenderer
       @ssr_stream_path = ENV.fetch("SSR_STREAM_PATH", "/stream")
       self.engine = ENV.fetch("SSR_ENGINE", :http)
       self.engine_by_env = default_engine_by_env
-      @bun_pool_size = ENV.fetch("SSR_BUN_POOL_SIZE", 5).to_i
-      @bun_timeout = ENV.fetch("SSR_BUN_TIMEOUT", 5_000).to_i
-      @bun_cli_script =
-        ENV.fetch("SSR_BUN_CLI_SCRIPT", "app/frontend/ssr/ssr.ts")
+      @stdio_pool_size = ENV.fetch("SSR_STDIO_POOL_SIZE", 5).to_i
+      @stdio_timeout = ENV.fetch("SSR_STDIO_TIMEOUT", 5_000).to_i
+      @stdio_cli_script =
+        ENV.fetch("SSR_STDIO_CLI_SCRIPT", "app/frontend/ssr/ssr.ts")
     end
 
     def engine=(value)
@@ -34,7 +34,7 @@ module UniversalRenderer
       {
         development: :http,
         test: :http,
-        production: :bun_io
+        production: :stdio
       }
     end
 

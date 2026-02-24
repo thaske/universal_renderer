@@ -51,43 +51,43 @@ RSpec.describe "Multi-Engine Contract Integration", type: :integration do
     end
   end
 
-  describe "BUN_IO Engine" do
-    before(:all) { setup_integration_environment(engine: :bun_io) }
+  describe "STDIO Engine" do
+    before(:all) { setup_integration_environment(engine: :stdio) }
     after(:all) { teardown_integration_environment }
     
     before(:each) do
       UniversalRenderer::AdapterFactory.reset!
-      setup_bun_io_stubs
+      setup_stdio_stubs
     end
 
-    it_behaves_like "SSR contract compliance", :bun_io
+    it_behaves_like "SSR contract compliance", :stdio
     it_behaves_like "non-streaming adapter"
 
-    describe "BUN_IO-specific features" do
+    describe "STDIO-specific features" do
       it "uses the correct adapter" do
         adapter = UniversalRenderer::AdapterFactory.adapter
-        expect(adapter).to be_a(UniversalRenderer::Adapter::BunIo)
+        expect(adapter).to be_a(UniversalRenderer::Adapter::Stdio)
       end
 
       it "handles adapter configuration correctly" do
-        expect(UniversalRenderer.config.engine).to eq(:bun_io)
-        expect(UniversalRenderer.config.bun_pool_size).to eq(2)
-        expect(UniversalRenderer.config.bun_timeout).to eq(3000)
+        expect(UniversalRenderer.config.engine).to eq(:stdio)
+        expect(UniversalRenderer.config.stdio_pool_size).to eq(2)
+        expect(UniversalRenderer.config.stdio_timeout).to eq(3000)
       end
 
       it "processes rendering through stdio interface" do
         result =
-          test_bun_io_adapter(
-            url: "http://example.com/bun-io-test",
+          test_stdio_adapter(
+            url: "http://example.com/stdio-test",
             props: {
-              test_mode: "bun_io"
+              test_mode: "stdio"
             }
           )
 
         expect(result[:success]).to be true
         expect(result[:response]).to be_a(UniversalRenderer::SSR::Response)
-        expect(result[:response].head).to include("Test BUN_IO Response")
-        expect(result[:response].body).to include("BUN_IO rendered content")
+        expect(result[:response].head).to include("Test STDIO Response")
+        expect(result[:response].body).to include("STDIO rendered content")
       end
     end
   end
@@ -104,15 +104,15 @@ RSpec.describe "Multi-Engine Contract Integration", type: :integration do
 
       cleanup_ssr_servers
 
-      # Test BUN_IO engine
-      setup_integration_environment(engine: :bun_io)
+      # Test STDIO engine
+      setup_integration_environment(engine: :stdio)
       UniversalRenderer::AdapterFactory.reset!
-      setup_bun_io_stubs
+      setup_stdio_stubs
 
-      bun_io_result = test_bun_io_adapter
-      expect(bun_io_result[:response]).to be_a(UniversalRenderer::SSR::Response)
-      expect(bun_io_result[:response].head).to be_a(String)
-      expect(bun_io_result[:response].body).to be_a(String)
+      stdio_result = test_stdio_adapter
+      expect(stdio_result[:response]).to be_a(UniversalRenderer::SSR::Response)
+      expect(stdio_result[:response].head).to be_a(String)
+      expect(stdio_result[:response].body).to be_a(String)
     end
   end
 end

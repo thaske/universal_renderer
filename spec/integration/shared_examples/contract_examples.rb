@@ -19,8 +19,8 @@ RSpec.shared_examples "SSR contract compliance" do |engine_type|
             props: test_props
           )
       else
-        # For BUN_IO mode, test via the adapter directly
-        test_bun_io_adapter(
+        # For STDIO mode, test via the adapter directly
+        test_stdio_adapter(
             url: "http://example.com/test-page",
             props: test_props
           )
@@ -45,7 +45,7 @@ RSpec.shared_examples "SSR contract compliance" do |engine_type|
       result = if engine_type == :http
         test_ssr_endpoint(server_url, props: {})
       else
-        test_bun_io_adapter(props: {})
+        test_stdio_adapter(props: {})
                end
 
       expect(result[:success]).to be true
@@ -82,7 +82,7 @@ RSpec.shared_examples "SSR contract compliance" do |engine_type|
       result = if engine_type == :http
         test_ssr_endpoint(server_url, props: complex_props)
       else
-        test_bun_io_adapter(props: complex_props)
+        test_stdio_adapter(props: complex_props)
                end
 
       expect(result[:success]).to be true
@@ -94,7 +94,7 @@ RSpec.shared_examples "SSR contract compliance" do |engine_type|
       results = if engine_type == :http
         test_ruby_client_integration(server_url)
       else
-        test_ruby_client_integration_bun_io
+        test_ruby_client_integration_stdio
                 end
 base_result = results[:base_client]
 

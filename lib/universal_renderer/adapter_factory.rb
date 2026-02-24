@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "adapter/http"
-require_relative "adapter/bun_io"
+require_relative "adapter/stdio"
 
 module UniversalRenderer
   class AdapterFactory
@@ -17,8 +17,8 @@ module UniversalRenderer
         case engine
         when :http
           Adapter::Http.new
-        when :bun_io
-          Adapter::BunIo.new
+        when :stdio
+          Adapter::Stdio.new
         else
           Rails.logger.warn(
             "Unknown SSR engine '#{engine}'. Falling back to HTTP adapter.",
@@ -28,7 +28,7 @@ module UniversalRenderer
       end
 
       # Returns a singleton instance of the adapter
-      # This ensures we don't recreate BunIo process pools unnecessarily
+      # This ensures we don't recreate Stdio process pools unnecessarily
       def adapter
         @adapter ||= create_adapter
       end

@@ -1,24 +1,19 @@
 import { default as _setup } from "@/ssr/setup";
 import { head, transform } from "@/ssr/utils";
 import { renderToString } from "react-dom/server.node";
-import { createServer } from "../../../../../universal-renderer/src/http/express";
+import { createServer } from "../../../../../universal-renderer/src/http";
 import type { ViteDevServer } from "vite";
 
-const isProduction = process.env.NODE_ENV === "production";
 const port = Number(process.env.SSR_PORT ?? process.env.PORT);
 
 let vite: ViteDevServer | undefined;
 let setup: typeof _setup;
-if (isProduction) {
-  setup = (await import("@/ssr/setup")).default;
-} else {
-  const { createServer: createViteServer } = await import("vite");
-  vite = await createViteServer({
-    server: { middlewareMode: true },
-    appType: "custom",
-  });
-  setup = (await vite.ssrLoadModule("@/ssr/setup")).default;
-}
+const { createServer: createViteServer } = await import("vite");
+vite = await createViteServer({
+  server: { middlewareMode: true },
+  appType: "custom",
+});
+setup = (await vite.ssrLoadModule("@/ssr/setup")).default;
 
 const app = await createServer({
   middleware: vite?.middlewares,

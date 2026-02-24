@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vitest";
-
-// Import the module directly to test validation logic
 import type { NodeStdioOptions } from "./index";
 import { createRenderer } from "./index";
 
-describe("Node stdio renderer", () => {
+describe("stdio renderer", () => {
   describe("error handling", () => {
     it("should throw when setup callback is missing", async () => {
       const options = { render: async () => ({ body: "test" }) } as any;
@@ -26,7 +24,6 @@ describe("Node stdio renderer", () => {
         error: async () => {},
       };
 
-      // These should not throw during validation
       expect(() => {
         if (!options.setup) throw new Error("setup callback is required");
         if (!options.render) throw new Error("render callback is required");
@@ -59,7 +56,7 @@ describe("Node stdio renderer", () => {
       }
 
       const options: NodeStdioOptions<TestContext> = {
-        setup: async (url: string, props: any): Promise<TestContext> => ({
+        setup: async (_url: string, props: any): Promise<TestContext> => ({
           userId: props.userId || 1,
           theme: props.theme || "light",
         }),
@@ -67,9 +64,7 @@ describe("Node stdio renderer", () => {
           head: `<title>User ${context.userId}</title>`,
           body: `<div class="${context.theme}">Content</div>`,
         }),
-        cleanup: async (context: TestContext) => {
-          // Cleanup logic
-        },
+        cleanup: async (_context: TestContext) => {},
       };
 
       expect(typeof options.setup).toBe("function");

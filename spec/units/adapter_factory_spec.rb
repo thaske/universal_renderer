@@ -24,14 +24,14 @@ RSpec.describe UniversalRenderer::AdapterFactory do
       end
     end
 
-    context "when engine is :bun_io" do
+    context "when engine is :stdio" do
       before do
-        # Mock BunIo configuration options
+        # Mock Stdio configuration options
         allow(UniversalRenderer.config).to receive_messages(
-          engine: :bun_io,
-          bun_pool_size: 2,
-          bun_timeout: 3000,
-          bun_cli_script: "app/frontend/ssr/ssr.ts"
+          engine: :stdio,
+          stdio_pool_size: 2,
+          stdio_timeout: 3000,
+          stdio_cli_script: "app/frontend/ssr/ssr.ts"
         )
 
         # Mock file existence for CLI script
@@ -41,7 +41,7 @@ RSpec.describe UniversalRenderer::AdapterFactory do
           Pathname.new("/mock/rails/root")
         )
 
-        # Mock BunIo components to avoid actual process spawning
+        # Mock Stdio components to avoid actual process spawning
         allow(Open3).to receive(:popen3).and_return(
           [
             instance_double(IO),
@@ -55,9 +55,31 @@ RSpec.describe UniversalRenderer::AdapterFactory do
         allow(ConnectionPool).to receive(:new).and_return(pool_mock)
       end
 
-      it "returns a BunIo adapter" do
+      it "returns a Stdio adapter" do
         adapter = described_class.create_adapter
-        expect(adapter).to be_a(UniversalRenderer::Adapter::BunIo)
+        expect(adapter).to be_a(UniversalRenderer::Adapter::Stdio)
+      end
+    end
+
+    context "when engine is stdio" do
+      before do
+        allow(UniversalRenderer.config).to receive_messages(
+          engine: :stdio,
+          stdio_pool_size: 2,
+          stdio_timeout: 3000,
+          stdio_cli_script: "app/frontend/ssr/ssr.ts"
+        )
+        allow(File).to receive(:exist?).and_return(true)
+        allow(Rails).to receive(:root).and_return(
+          Pathname.new("/mock/rails/root")
+        )
+        pool_mock = instance_double(ConnectionPool)
+        allow(ConnectionPool).to receive(:new).and_return(pool_mock)
+      end
+
+      it "returns a Stdio adapter" do
+        adapter = described_class.create_adapter
+        expect(adapter).to be_a(UniversalRenderer::Adapter::Stdio)
       end
     end
 
@@ -78,7 +100,7 @@ RSpec.describe UniversalRenderer::AdapterFactory do
         allow(UniversalRenderer.config).to receive(:engine).and_return(:auto)
         allow(UniversalRenderer.config).to receive(:engine_by_env).and_return(
           "development" => :http,
-          "production" => :bun_io
+          "production" => :stdio
         )
       end
 
@@ -103,9 +125,9 @@ RSpec.describe UniversalRenderer::AdapterFactory do
           )
 
           allow(UniversalRenderer.config).to receive_messages(
-            bun_pool_size: 2,
-            bun_timeout: 3000,
-            bun_cli_script: "app/frontend/ssr/ssr.ts"
+            stdio_pool_size: 2,
+            stdio_timeout: 3000,
+            stdio_cli_script: "app/frontend/ssr/ssr.ts"
           )
           allow(File).to receive(:exist?).and_return(true)
           allow(Rails).to receive(:root).and_return(
@@ -116,10 +138,10 @@ RSpec.describe UniversalRenderer::AdapterFactory do
           allow(ConnectionPool).to receive(:new).and_return(pool_mock)
         end
 
-        it "resolves to BunIo adapter" do
-          expect(logger).to receive(:info).with(/resolved SSR engine 'bun_io'/)
+        it "resolves to Stdio adapter" do
+          expect(logger).to receive(:info).with(/resolved SSR engine 'stdio'/)
           adapter = described_class.create_adapter
-          expect(adapter).to be_a(UniversalRenderer::Adapter::BunIo)
+          expect(adapter).to be_a(UniversalRenderer::Adapter::Stdio)
         end
       end
 

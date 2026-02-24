@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import React from "react";
-import type { ExpressServerOptions } from "../universal-renderer/src/http/express";
-import { createServer as createExpressServer } from "../universal-renderer/src/http/express";
+import type { ExpressServerOptions } from "../universal-renderer/src/http";
+import { createServer as createExpressServer } from "../universal-renderer/src/http";
 
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";

@@ -4,10 +4,15 @@
   "scripts": {
     "dev": "vite dev",
     "ssr:dev:http": "tsx app/frontend/ssr/ssr.tsx",
+    "ssr:dev:http:bundle": "vite build --ssr ssr/ssr.tsx && node public/vite-ssr/ssr.js",
     "build:client": "vite build",
-    "build:ssr": "vite build --ssr",
+    "build:ssr:http": "vite build --ssr ssr/ssr.tsx",
+    "build:ssr:stdio": "vite build --ssr ssr/stdio.tsx",
+    "build:ssr": "bun run build:ssr:stdio",
     "build": "bun run build:client && bun run build:ssr",
-    "ssr": "bun run public/vite-ssr/ssr.js"
+    "ssr:http": "bun run public/vite-ssr/ssr.js",
+    "ssr:stdio": "bun run public/vite-ssr/stdio.js",
+    "ssr": "bun run ssr:stdio"
   },
   "dependencies": {
     "@dr.pogodin/react-helmet": "^3.0.6",

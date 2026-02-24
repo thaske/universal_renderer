@@ -28,15 +28,15 @@ module ClientIntegrationTester
     results
   end
 
-  # Tests Ruby gem client integration with BUN_IO engine
+  # Tests Ruby gem client integration with STDIO engine
   #
-  # @return [Hash] Test results for Ruby client integration with BUN_IO
-  def test_ruby_client_integration_bun_io
+  # @return [Hash] Test results for Ruby client integration with STDIO
+  def test_ruby_client_integration_stdio
     results = {}
 
     begin
-      # Test via adapter factory (which should use BUN_IO)
-      results[:base_client] = test_base_client_integration_bun_io
+      # Test via adapter factory (which should use STDIO)
+      results[:base_client] = test_base_client_integration_stdio
     rescue StandardError => e
       results[:base_client] = {
         success: false,
@@ -48,12 +48,12 @@ module ClientIntegrationTester
     results
   end
 
-  # Tests BUN_IO adapter directly
+  # Tests STDIO adapter directly
   #
   # @param url [String] URL to render
   # @param props [Hash] Props for rendering
   # @return [Hash] Test results
-  def test_bun_io_adapter(url: "http://example.com/test", props: {})
+  def test_stdio_adapter(url: "http://example.com/test", props: {})
     
       adapter = UniversalRenderer::AdapterFactory.adapter
       response = adapter.call(url, props)
@@ -61,7 +61,7 @@ module ClientIntegrationTester
       {
         success: !response.nil?,
         response: response,
-        status: 200 # BUN_IO doesn't have HTTP status codes, simulate success
+        status: 200 # STDIO doesn't have HTTP status codes, simulate success
       }
     rescue StandardError => e
       { success: false, error: e.message, error_class: e.class.name }
@@ -70,12 +70,12 @@ module ClientIntegrationTester
 
   private
 
-  # Tests the base client integration with BUN_IO engine
-  def test_base_client_integration_bun_io
+  # Tests the base client integration with STDIO engine
+  def test_base_client_integration_stdio
     test_url = "http://example.com/integration-test"
     test_props = {
       user_id: 123,
-      page_title: "Integration Test BUN_IO",
+      page_title: "Integration Test STDIO",
       nested: {
         data: "value"
       }

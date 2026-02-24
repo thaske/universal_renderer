@@ -7,12 +7,12 @@ require "connection_pool"
 
 module UniversalRenderer
   module Adapter
-    class BunIo < Base
+    class Stdio < Base
       def initialize
         super
-        @pool_size = UniversalRenderer.config.bun_pool_size
-        @timeout = UniversalRenderer.config.bun_timeout
-        @cli_script = UniversalRenderer.config.bun_cli_script
+        @pool_size = UniversalRenderer.config.stdio_pool_size
+        @timeout = UniversalRenderer.config.stdio_timeout
+        @cli_script = UniversalRenderer.config.stdio_cli_script
         @process_pool = nil
         setup
       end
@@ -25,17 +25,15 @@ module UniversalRenderer
             payload = { url:, props: }
 
             Rails.logger.info(
-              "BunIo rendering: #{payload[:url]} with props keys: #{payload[:props].keys}"
+              "Stdio rendering: #{payload[:url]} with props keys: #{payload[:props].keys}"
             )
 
             result = process.render(payload[:url], payload[:props])
 
-            # Convert result to SSR::Response format
-            # Assuming Bun process returns HTML string, we need to parse or structure it
+            # Convert result to SSR::Response format.
             return nil unless result.is_a?(Hash)
 
-            # The Bun process should return JSON with head, body, and body_attrs
-            # This matches the same format as the HTTP adapter expects
+            # The stdio process should return JSON with head/body/body_attrs.
             UniversalRenderer::SSR::Response.new(
               head: result["head"] || result[:head],
               body:
@@ -46,16 +44,16 @@ module UniversalRenderer
           end
         rescue StandardError => e
           Rails.logger.error(
-            "BunIo SSR execution failed: #{e.class.name} - #{e.message} (URL: #{url}) - #{e.backtrace.join("\n")}"
+            "Stdio SSR execution failed: #{e.class.name} - #{e.message} (URL: #{url}) - #{e.backtrace.join("\n")}"
           )
           nil
         end
       end
 
       def stream(_url, _props, _template, _response)
-        # Streaming is not supported with stdio Bun processes via stdin/stdout
+        # Streaming is not supported with stdio request/response processes.
         Rails.logger.warn(
-          "BunIo adapter does not support streaming SSR. Use HTTP adapter for streaming."
+          "Stdio adapter does not support streaming SSR. Use HTTP adapter for streaming."
         )
         false
       end
@@ -71,8 +69,8 @@ module UniversalRenderer
         cli_script_path = Rails.root.join(@cli_script)
         unless File.exist?(cli_script_path)
           Rails.logger.error(
-            "BunIo CLI script not found at #{cli_script_path}. " \
-              "Please ensure the Bun CLI script is available."
+            "Stdio CLI script not found at #{cli_script_path}. " \
+              "Please ensure the SSR CLI script is available."
           )
           return
         end
@@ -80,15 +78,15 @@ module UniversalRenderer
         begin
           @process_pool =
             ConnectionPool.new(size: @pool_size, timeout: 5) do
-              UniversalRenderer::StdioBunProcess.new(@cli_script)
+              UniversalRenderer::StdioProcess.new(@cli_script)
             end
 
           Rails.logger.info(
-            "Universal Renderer BunIo process pool (#{@pool_size}) initialized"
+            "Universal Renderer Stdio process pool (#{@pool_size}) initialized"
           )
         rescue StandardError => e
           Rails.logger.error(
-            "Failed to initialize BunIo process pool: " \
+            "Failed to initialize Stdio process pool: " \
               "#{e.class.name} - #{e.message} - #{e.backtrace.join("\n")}"
           )
         end
@@ -101,15 +99,15 @@ module UniversalRenderer
     end
   end
 
-  # Stdio Bun process wrapper
-  class StdioBunProcess
+  # Stdio process wrapper
+  class StdioProcess
     def initialize(cli_script)
-      @stdin, @stdout, @stderr, @wait_thr = Open3.popen3("bun", cli_script)
+      @stdin, @stdout, @stderr, @wait_thr = Open3.popen3("node", cli_script)
       @mutex = Mutex.new
     end
 
     # Render a component by name with the given props hash.
-    # Returns the JSON response with head, body, and body_attrs from the Bun runtime.
+    # Returns the JSON response with head, body, and body_attrs.
     def render(url, props)
       payload = JSON.generate({ url:, props: })
       @mutex.synchronize do
