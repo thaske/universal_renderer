@@ -20,11 +20,11 @@ export type RenderOutput = {
   body: string;
 
   /**
-   * Additional attributes to be applied to the body element.
-   * Useful for adding classes, data attributes, or other body-level attributes.
-   * @example "class='dark-theme' data-page='home'"
+   * Additional attributes to be applied to the body element, as a
+   * name→value map. Serialized to the Ruby side as the `body_attrs` hash.
+   * @example { class: "dark-theme", "data-page": "home" }
    */
-  bodyAttrs?: string;
+  bodyAttrs?: Record<string, string>;
 };
 
 /**

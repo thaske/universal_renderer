@@ -32,9 +32,9 @@ module UniversalRenderer
 
     def default_engine_by_env
       {
-        development: :http,
-        test: :http,
-        production: :stdio
+        "development" => :http,
+        "test" => :http,
+        "production" => :stdio
       }
     end
 

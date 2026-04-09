@@ -1,4 +1,4 @@
-import type { RenderOutput, SSRHandlerOptions } from "../types";
+import type { SSRHandlerOptions } from "../types";
 
 /**
  * Options for the stdio renderer which communicates over stdin/stdout.
@@ -56,10 +56,10 @@ export async function createRenderer<
       context = await setup(payload.url, payload.props ?? {});
       const output = await render(context);
 
-      const response: RenderOutput = {
+      const response = {
         head: output.head ?? "",
         body: output.body,
-        bodyAttrs: output.bodyAttrs ?? "",
+        body_attrs: output.bodyAttrs ?? {},
       };
 
       console.log(JSON.stringify(response));
@@ -67,7 +67,7 @@ export async function createRenderer<
       console.error("[universal-renderer] Render error", err);
       await onError?.(err);
       console.log(
-        JSON.stringify({ head: "", body: "", bodyAttrs: "", error: err.message }),
+        JSON.stringify({ head: "", body: "", body_attrs: {}, error: err.message }),
       );
     } finally {
       if (context && cleanup) {

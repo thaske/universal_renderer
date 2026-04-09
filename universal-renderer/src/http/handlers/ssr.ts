@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
-import type { RenderOutput, SSRHandlerOptions } from "../../types";
+import type { SSRHandlerOptions } from "../../types";
 import { HttpError } from "./error";
 
 /**
@@ -33,9 +33,13 @@ export function createSSRHandler<TContext extends Record<string, any>>(
       }
 
       context = await options.setup(url, props);
-      const result: RenderOutput = await options.render(context);
+      const result = await options.render(context);
 
-      res.json(result);
+      res.json({
+        head: result.head ?? "",
+        body: result.body,
+        body_attrs: result.bodyAttrs ?? {},
+      });
     } catch (error) {
       return next(error);
     } finally {

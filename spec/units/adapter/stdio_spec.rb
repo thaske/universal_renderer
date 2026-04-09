@@ -28,7 +28,7 @@ RSpec.describe UniversalRenderer::Adapter::Stdio do
 
         # Mock ConnectionPool and StdioProcess
         allow(ConnectionPool).to receive(:new).and_return(double("pool"))
-        allow(UniversalRenderer::StdioProcess).to receive(:new).and_return(
+        allow(UniversalRenderer::Adapter::StdioProcess).to receive(:new).and_return(
           double("process"),
         )
       end
@@ -70,7 +70,7 @@ RSpec.describe UniversalRenderer::Adapter::Stdio do
     let(:props) { { "component" => "TestComponent", "title" => "Test" } }
 
     context "when process pool is available" do
-      let(:process_mock) { instance_double(UniversalRenderer::StdioProcess) }
+      let(:process_mock) { instance_double(UniversalRenderer::Adapter::StdioProcess) }
       let(:pool_mock) { instance_double(ConnectionPool) }
 
       before do
@@ -79,7 +79,7 @@ RSpec.describe UniversalRenderer::Adapter::Stdio do
         ).and_return(true)
 
         allow(ConnectionPool).to receive(:new).and_return(pool_mock)
-        allow(UniversalRenderer::StdioProcess).to receive(:new).and_return(
+        allow(UniversalRenderer::Adapter::StdioProcess).to receive(:new).and_return(
           process_mock,
         )
         allow(pool_mock).to receive(:with).and_yield(process_mock)
@@ -153,7 +153,7 @@ RSpec.describe UniversalRenderer::Adapter::Stdio do
   end
 end
 
-RSpec.describe UniversalRenderer::StdioProcess do
+RSpec.describe UniversalRenderer::Adapter::StdioProcess do
   let(:cli_script) { "app/frontend/ssr/ssr.ts" }
   let(:stdin_mock) { instance_double(IO) }
   let(:stdout_mock) { instance_double(IO) }
@@ -167,13 +167,20 @@ RSpec.describe UniversalRenderer::StdioProcess do
 
     allow(stdin_mock).to receive(:puts)
     allow(stdin_mock).to receive(:flush)
+    allow(stdin_mock).to receive(:sync=)
     allow(stdout_mock).to receive(:readline)
+    allow(stdout_mock).to receive(:wait_readable).and_return(stdout_mock)
+    allow(stderr_mock).to receive(:each_line)
     allow(stderr_mock).to receive(:close)
     allow(stdin_mock).to receive(:close)
     allow(stdout_mock).to receive(:close)
     allow(stdin_mock).to receive(:closed?).and_return(false)
     allow(stdout_mock).to receive(:closed?).and_return(false)
     allow(stderr_mock).to receive(:closed?).and_return(false)
+    allow(wait_thr_mock).to receive(:alive?).and_return(true)
+    allow(wait_thr_mock).to receive(:join)
+    allow(Process).to receive(:kill)
+    allow(Thread).to receive(:new).and_return(instance_double(Thread, :name= => nil, kill: nil, respond_to?: true))
   end
 
   describe "#initialize" do
