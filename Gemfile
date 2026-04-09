@@ -17,6 +17,7 @@ group :development do
   gem "webmock", "~> 3.18"
 
   gem "prettier_print", "~> 1.2"
+  gem "parallel", "< 2.0"
   gem "rubocop", "~> 1.60"
   gem "rubocop-factory_bot", "~> 2.25"
   gem "rubocop-rails", "~> 2.23"

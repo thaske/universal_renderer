@@ -33,7 +33,7 @@ cat << EOF >> $GITHUB_STEP_SUMMARY
 ## 🔧 Matrix Testing
 
 - **Ruby versions**: 3.2, 3.3
-- **Bun versions**: 1.2.1, 1.2.7, latest
+- **Node.js versions**: 18, 20, 22
 
 ## 📋 Test Types Executed
 
