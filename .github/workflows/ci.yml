@@ -64,12 +64,7 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install workspace dependencies with Bun
-        # Remove the darwin-generated package-lock.json so bun resolves
-        # platform-specific optional deps (rolldown/rollup linux-x64-gnu
-        # bindings) fresh on the Linux runner.
-        run: |
-          rm -f package-lock.json
-          bun install
+        run: bun install
 
       - name: Create tmp directory for test results
         run: mkdir -p tmp
@@ -109,12 +104,7 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install workspace dependencies with Bun
-        # Remove the darwin-generated package-lock.json so bun resolves
-        # platform-specific optional deps (rolldown/rollup linux-x64-gnu
-        # bindings) fresh on the Linux runner.
-        run: |
-          rm -f package-lock.json
-          bun install
+        run: bun install
 
       - name: Create tmp directory for test results
         run: mkdir -p tmp
