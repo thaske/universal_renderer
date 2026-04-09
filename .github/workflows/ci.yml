@@ -70,7 +70,10 @@ jobs:
         run: bun install
 
       - name: Ensure rolldown linux-x64-gnu native binding is installed
-        run: bun add --dev --no-save @rolldown/binding-linux-x64-gnu
+        run: |
+          ROLLDOWN_VERSION=$(node -p "require('./node_modules/rolldown/package.json').version")
+          echo "Installing @rolldown/binding-linux-x64-gnu@${ROLLDOWN_VERSION}"
+          bun add --dev --no-save "@rolldown/binding-linux-x64-gnu@${ROLLDOWN_VERSION}"
 
       - name: Create tmp directory for test results
         run: mkdir -p tmp
@@ -113,7 +116,10 @@ jobs:
         run: bun install
 
       - name: Ensure rolldown linux-x64-gnu native binding is installed
-        run: bun add --dev --no-save @rolldown/binding-linux-x64-gnu
+        run: |
+          ROLLDOWN_VERSION=$(node -p "require('./node_modules/rolldown/package.json').version")
+          echo "Installing @rolldown/binding-linux-x64-gnu@${ROLLDOWN_VERSION}"
+          bun add --dev --no-save "@rolldown/binding-linux-x64-gnu@${ROLLDOWN_VERSION}"
 
       - name: Create tmp directory for test results
         run: mkdir -p tmp
