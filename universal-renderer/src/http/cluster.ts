@@ -1,6 +1,6 @@
+import type express from "express";
 import cluster from "node:cluster";
 import { availableParallelism } from "node:os";
-import type express from "express";
 
 export type ClusterOptions = {
   port?: number;

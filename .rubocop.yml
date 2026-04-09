@@ -36,6 +36,9 @@ Metrics/CyclomaticComplexity:
 Metrics/PerceivedComplexity:
   Max: 10
 
+Metrics/ModuleLength::
+  Enabled: false
+
 Naming/PredicateName:
   Enabled: false
 

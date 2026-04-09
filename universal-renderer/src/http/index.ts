@@ -5,6 +5,7 @@ export type {
   SSRHandlerOptions,
   StreamHandlerOptions,
 } from "../types";
+export { startCluster } from "./cluster";
 export { createErrorHandler } from "./handlers/error";
 export { createHealthHandler } from "./handlers/health";
 export { createSSRHandler } from "./handlers/ssr";
@@ -16,4 +17,3 @@ export type {
   ExpressSSRHandlerOptions,
   ExpressStreamHandlerOptions,
 } from "./types";
-export { startCluster } from "./cluster";

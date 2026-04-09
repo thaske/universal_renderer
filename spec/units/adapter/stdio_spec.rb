@@ -177,8 +177,8 @@ RSpec.describe UniversalRenderer::StdioProcess do
   end
 
   describe "#initialize" do
-    it "starts a Bun process with the CLI script" do
-      expect(Open3).to receive(:popen3).with("bun", cli_script)
+    it "starts a Node process with the CLI script" do
+      expect(Open3).to receive(:popen3).with("node", cli_script)
       described_class.new(cli_script)
     end
   end

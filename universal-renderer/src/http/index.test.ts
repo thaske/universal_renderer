@@ -62,22 +62,25 @@ describe("Express createServer", () => {
 
     try {
       // Wait a bit for server to start
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       // Test health endpoint
       const healthRes = await fetch(`http://127.0.0.1:${port}/health`);
       expect(healthRes.status).toBe(200);
-      const healthJson = await healthRes.json() as { status: string };
+      const healthJson = (await healthRes.json()) as { status: string };
       expect(healthJson.status).toBe("OK");
 
       // Test SSR endpoint
       const ssrRes = await fetch(`http://127.0.0.1:${port}/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: "/test", props: { message: "Hello Express" } }),
+        body: JSON.stringify({
+          url: "/test",
+          props: { message: "Hello Express" },
+        }),
       });
       expect(ssrRes.status).toBe(200);
-      const ssrJson = await ssrRes.json() as { head: string; body: string };
+      const ssrJson = (await ssrRes.json()) as { head: string; body: string };
       expect(ssrJson.head).toBe("<title>Express express-context</title>");
       expect(ssrJson.body).toBe("<div>Express SSR Test</div>");
     } finally {

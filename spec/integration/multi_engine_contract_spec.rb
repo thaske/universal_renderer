@@ -54,7 +54,7 @@ RSpec.describe "Multi-Engine Contract Integration", type: :integration do
   describe "STDIO Engine" do
     before(:all) { setup_integration_environment(engine: :stdio) }
     after(:all) { teardown_integration_environment }
-    
+
     before(:each) do
       UniversalRenderer::AdapterFactory.reset!
       setup_stdio_stubs

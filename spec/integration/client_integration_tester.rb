@@ -54,18 +54,16 @@ module ClientIntegrationTester
   # @param props [Hash] Props for rendering
   # @return [Hash] Test results
   def test_stdio_adapter(url: "http://example.com/test", props: {})
-    
-      adapter = UniversalRenderer::AdapterFactory.adapter
-      response = adapter.call(url, props)
+    adapter = UniversalRenderer::AdapterFactory.adapter
+    response = adapter.call(url, props)
 
-      {
-        success: !response.nil?,
-        response: response,
-        status: 200 # STDIO doesn't have HTTP status codes, simulate success
-      }
-    rescue StandardError => e
-      { success: false, error: e.message, error_class: e.class.name }
-    
+    {
+      success: !response.nil?,
+      response: response,
+      status: 200 # STDIO doesn't have HTTP status codes, simulate success
+    }
+  rescue StandardError => e
+    { success: false, error: e.message, error_class: e.class.name }
   end
 
   private
