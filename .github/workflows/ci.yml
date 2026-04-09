@@ -67,13 +67,12 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install workspace dependencies with Bun
-        run: bun install
-
-      - name: Ensure rolldown linux-x64-gnu native binding is installed
+        # Remove the darwin-generated package-lock.json so bun resolves
+        # platform-specific optional deps (rolldown/rollup linux-x64-gnu
+        # bindings) fresh on the Linux runner.
         run: |
-          ROLLDOWN_VERSION=$(node -p "require('./node_modules/rolldown/package.json').version")
-          echo "Installing @rolldown/binding-linux-x64-gnu@${ROLLDOWN_VERSION}"
-          bun add --dev --no-save "@rolldown/binding-linux-x64-gnu@${ROLLDOWN_VERSION}"
+          rm -f package-lock.json
+          bun install
 
       - name: Create tmp directory for test results
         run: mkdir -p tmp
@@ -113,13 +112,12 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install workspace dependencies with Bun
-        run: bun install
-
-      - name: Ensure rolldown linux-x64-gnu native binding is installed
+        # Remove the darwin-generated package-lock.json so bun resolves
+        # platform-specific optional deps (rolldown/rollup linux-x64-gnu
+        # bindings) fresh on the Linux runner.
         run: |
-          ROLLDOWN_VERSION=$(node -p "require('./node_modules/rolldown/package.json').version")
-          echo "Installing @rolldown/binding-linux-x64-gnu@${ROLLDOWN_VERSION}"
-          bun add --dev --no-save "@rolldown/binding-linux-x64-gnu@${ROLLDOWN_VERSION}"
+          rm -f package-lock.json
+          bun install
 
       - name: Create tmp directory for test results
         run: mkdir -p tmp
