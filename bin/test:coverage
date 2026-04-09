@@ -11,9 +11,7 @@ COVERAGE=true bundle exec rspec
 
 echo ""
 echo "2️⃣ Running NPM package tests with coverage..."
-cd universal-renderer
-bun test --coverage
-cd ..
+npm run test:coverage --workspace universal-renderer
 
 echo ""
 echo "📋 Coverage Summary:"

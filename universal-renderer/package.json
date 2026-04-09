@@ -16,7 +16,6 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:bun": "vitest run",
     "test:node": "vitest run"
   },
   "main": "./dist/index.js",

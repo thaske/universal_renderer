@@ -16,8 +16,7 @@ case $TEST_TYPE in
     ;;
   "npm")
     echo "🔍 Watching NPM package files..."
-    cd universal-renderer
-    bun test --watch
+    npm run test:watch --workspace universal-renderer
     ;;
   "all")
     echo "🔍 Watching all files (requires multiple terminals)..."

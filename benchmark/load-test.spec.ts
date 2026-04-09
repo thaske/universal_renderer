@@ -38,8 +38,7 @@ async function launchServer(variant: ServerVariant): Promise<ChildProcess> {
     String(variant.port),
   ];
 
-  const runtime = "bun";
-  const serverProcess = spawn(runtime, args, {
+  const serverProcess = spawn(process.execPath, ["--import", "tsx", ...args], {
     stdio: ["ignore", "pipe", "pipe"],
     detached: true,
   });

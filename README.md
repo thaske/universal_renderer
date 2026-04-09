@@ -45,8 +45,8 @@ Configure in `config/initializers/universal_renderer.rb`:
 ```ruby
 UniversalRenderer.configure do |config|
   # Choose your SSR engine:
-  # :http           - External Node.js/Bun server (default, supports streaming)
-  # :stdio         - Stdio Bun processes via Open3 (no streaming, no external server)
+  # :http           - External Node.js server (default, supports streaming)
+  # :stdio          - Stdio Node.js processes via Open3 (no streaming, no external server)
   # :auto           - Resolve by Rails env (dev/test: :http, production: :stdio)
   config.engine = :http
   # config.engine = :auto
@@ -69,7 +69,7 @@ UniversalRenderer supports three SSR engine modes:
 
 ### HTTP Engine (Default)
 
-The HTTP engine forwards SSR requests to an external Node.js or Bun server. This is the default and recommended approach for most applications.
+The HTTP engine forwards SSR requests to an external Node.js server. This is the default and recommended approach for most applications.
 
 **Pros:**
 
@@ -86,7 +86,7 @@ The HTTP engine forwards SSR requests to an external Node.js or Bun server. This
 
 ### Stdio Engine
 
-The Stdio engine maintains a pool of stdio Bun processes and communicates with them via stdin/stdout for server-side rendering.
+The Stdio engine maintains a pool of stdio Node.js processes and communicates with them via stdin/stdout for server-side rendering.
 
 **Pros:**
 
@@ -98,11 +98,8 @@ The Stdio engine maintains a pool of stdio Bun processes and communicates with t
 **Cons:**
 
 - No streaming support
-- Limited JavaScript ecosystem (no npm packages)
-- Memory overhead per V8 context
+- Memory overhead per long-lived process
 - Not suitable for complex JavaScript applications
-
-To use BunPersistent, set `config.engine = :bun_persistent` and create a Bun CLI script that can handle JSON input/output for rendering React components.
 
 ### Auto Engine Selection (`:auto`)
 
@@ -119,7 +116,7 @@ You can customize this via `config.engine_by_env`.
 When `:auto` resolves to `:stdio` (typically production), ensure your deploy pipeline builds the SSR script configured by `SSR_STDIO_CLI_SCRIPT` (or `config.stdio_cli_script`) before boot:
 
 ```bash
-bun run build:ssr
+npm run build:ssr
 ```
 
 ## Basic Usage
@@ -200,8 +197,6 @@ To set up the SSR server for your Rails application:
    $ npm install universal-renderer
    # or
    $ yarn add universal-renderer
-   # or
-   $ bun add universal-renderer
    ```
 
 2. Create a `setup` function at `app/frontend/ssr/setup.ts`:
@@ -317,15 +312,15 @@ To set up the SSR server for your Rails application:
    ssr: bin/vite ssr
    ```
 
-## Setting Up BunPersistent Engine
+## Setting Up Stdio Engine
 
-If you prefer to use the BunPersistent engine instead of an external server:
+If you prefer to use the stdio engine instead of an external HTTP server:
 
 1. Configure the engine in your initializer:
 
    ```ruby
    # config/initializers/universal_renderer.rb
-   UniversalRenderer.configure { |config| config.engine = :bun_persistent }
+   UniversalRenderer.configure { |config| config.engine = :stdio }
    ```
 
 2. Create a persistent CLI script (e.g., `src/cli_persistent.js`):
@@ -428,9 +423,9 @@ If you prefer to use the BunPersistent engine instead of an external server:
 
 4. Bundle your React components into the SSR bundle file using your preferred bundler (Webpack, Vite, etc.)
 
-5. Restart your Rails application - no external server needed!
+5. Restart your Rails application - no external server needed.
 
-**Note:** The BunPersistent engine requires that you create a persistent CLI script that can handle JSON input/output and have Bun installed on your system. The persistent processes communicate via stdin/stdout, so your CLI script should read JSON from stdin and write JSON responses to stdout with `head`, `body`, and `body_attrs` fields (same format as the HTTP adapter).
+**Note:** The stdio engine requires a persistent CLI script that can handle JSON input/output and run under Node.js. The persistent processes communicate via stdin/stdout, so your CLI script should read JSON from stdin and write JSON responses to stdout with `head`, `body`, and `body_attrs` fields (same format as the HTTP adapter).
 
 ## Development
 

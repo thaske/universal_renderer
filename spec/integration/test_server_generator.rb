@@ -18,10 +18,10 @@ module IntegrationHelpers
     end
 
     # Writes the necessary files for a test SSR server
-    def self.write_files(server_dir, port:, hostname:, runtime: "bun", **config)
+    def self.write_files(server_dir, port:, hostname:, **config)
       write_package_json(server_dir)
       write_server_file(server_dir, port: port, hostname: hostname, **config)
-      install_dependencies(server_dir, runtime: runtime)
+      install_dependencies(server_dir)
     end
 
     # Writes package.json with correct path to universal-renderer
@@ -104,32 +104,7 @@ module IntegrationHelpers
     end
 
     # Installs NPM dependencies in the server directory
-    def self.install_dependencies(server_dir, runtime:)
-      case runtime.to_s
-      when "node"
-        install_with_npm(server_dir)
-      else
-        install_with_bun(server_dir)
-      end
-    end
-
-    def self.install_with_bun(server_dir)
-      result =
-        system(
-          "bun",
-          "install",
-          chdir: server_dir,
-          out: File::NULL,
-          err: %i[child out]
-        )
-
-      return if result
-
-      error_output = `cd #{server_dir} && bun install 2>&1`
-      raise "Failed to install dependencies for test server in #{server_dir}. Error: #{error_output}"
-    end
-
-    def self.install_with_npm(server_dir)
+    def self.install_dependencies(server_dir)
       result =
         system(
           "npm",

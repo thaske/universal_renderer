@@ -1,8 +1,8 @@
 {
   "scripts": {
     "benchmark": "playwright test benchmark/load-test.spec.ts",
-    "analyze": "bun run benchmark/analyze-results.ts",
-    "serve": "bunx serve"
+    "analyze": "node --import tsx benchmark/analyze-results.ts",
+    "serve": "serve"
   },
   "dependencies": {
     "@prettier/plugin-ruby": "^4.0.4",
@@ -16,6 +16,8 @@
     "@playwright/test": "^1.59.1",
     "@types/yargs": "^17.0.35",
     "get-port": "^7.2.0",
+    "serve": "^14.2.5",
+    "tsx": "^4.20.5",
     "yargs": "^17.7.2"
   }
 }

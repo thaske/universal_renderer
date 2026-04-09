@@ -20,7 +20,7 @@ class HomeController < ApplicationController
     )
     add_query_data(
       ["demo-message"],
-      "React Query says: Hello from Rails + Vite + Bun + React"
+      "React Query says: Hello from Rails + Vite + Node + React"
     )
     add_query_data(
       ["demo-metrics"],

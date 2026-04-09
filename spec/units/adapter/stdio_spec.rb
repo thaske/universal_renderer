@@ -105,7 +105,7 @@ RSpec.describe UniversalRenderer::Adapter::Stdio do
 
       it "handles rendering errors gracefully" do
         allow(process_mock).to receive(:render).and_raise(
-          StandardError.new("Bun Error"),
+          StandardError.new("Node Error"),
         )
 
         expect(Rails.logger).to receive(:error).with(

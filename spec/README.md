@@ -47,13 +47,13 @@ bundle exec rspec --format documentation
 cd universal-renderer
 
 # Run all Vitest tests
-bun run test
+npm test
 
 # Run tests in watch mode
-bun run test:watch
+npm run test:watch
 
 # Run tests with coverage
-bun run test:coverage
+npm run test:coverage
 ```
 
 ## Test Organization
@@ -117,7 +117,7 @@ end
 ### NPM Package Tests
 
 - Use Vitest with JSDOM environment for component tests
-- Mock Bun server APIs for unit tests
+- Mock Node and Express interactions for unit tests
 - Test individual functions/modules in isolation
 - Use React Testing Library for component testing
 

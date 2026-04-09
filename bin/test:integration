@@ -34,11 +34,16 @@ end
 def check_prerequisites
   colored_puts "🔍 Checking prerequisites...", Colors::BLUE
 
-  # Check if Bun is installed
-  unless system("which bun > /dev/null 2>&1")
-    colored_puts "❌ Bun is not installed. Please install Bun first:",
+  # Check if Node.js and npm are installed
+  unless system("which node > /dev/null 2>&1")
+    colored_puts "❌ Node.js is not installed. Please install Node.js first.",
                  Colors::RED
-    colored_puts "   curl -fsSL https://bun.sh/install | bash", Colors::YELLOW
+    exit 1
+  end
+
+  unless system("which npm > /dev/null 2>&1")
+    colored_puts "❌ npm is not installed. Please install npm first.",
+                 Colors::RED
     exit 1
   end
 
@@ -47,7 +52,7 @@ def check_prerequisites
     colored_puts "❌ universal-renderer NPM package not built. Building now...",
                  Colors::YELLOW
     run_command(
-      "cd universal-renderer && bun run build",
+      "npm run build --workspace universal-renderer",
       "Building NPM package"
     )
   end

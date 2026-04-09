@@ -4,15 +4,15 @@
   "scripts": {
     "dev": "vite dev",
     "ssr:dev:http": "tsx app/frontend/ssr/ssr.tsx",
-    "ssr:dev:http:bundle": "vite build --ssr ssr/ssr.tsx && node public/vite-ssr/ssr.js",
+    "ssr:dev:http:bundle": "VITE_RUBY_SSR_ENTRYPOINT='~/ssr/ssr.tsx' vite build --ssr && node public/vite-ssr/ssr.js",
     "build:client": "vite build",
-    "build:ssr:http": "vite build --ssr ssr/ssr.tsx",
-    "build:ssr:stdio": "vite build --ssr ssr/stdio.tsx",
-    "build:ssr": "bun run build:ssr:stdio",
-    "build": "bun run build:client && bun run build:ssr",
-    "ssr:http": "bun run public/vite-ssr/ssr.js",
-    "ssr:stdio": "bun run public/vite-ssr/stdio.js",
-    "ssr": "bun run ssr:stdio"
+    "build:ssr:http": "VITE_RUBY_SSR_ENTRYPOINT='~/ssr/ssr.tsx' vite build --ssr",
+    "build:ssr:stdio": "VITE_RUBY_SSR_ENTRYPOINT='~/ssr/stdio.tsx' vite build --ssr",
+    "build:ssr": "npm run build:ssr:stdio",
+    "build": "npm run build:client && npm run build:ssr",
+    "ssr:http": "node public/vite-ssr/ssr.js",
+    "ssr:stdio": "node public/vite-ssr/stdio.js",
+    "ssr": "node public/vite-ssr/stdio.js"
   },
   "dependencies": {
     "@dr.pogodin/react-helmet": "^3.0.6",

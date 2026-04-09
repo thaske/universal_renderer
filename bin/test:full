@@ -13,13 +13,10 @@ fi
 
 echo ""
 echo "2️⃣ Running NPM package tests..."
-cd universal-renderer
-if bun run test; then
+if npm test --workspace universal-renderer; then
   echo "✅ NPM tests passed"
-  cd ..
 else
   echo "❌ NPM tests failed"
-  cd ..
   exit 1
 fi
 

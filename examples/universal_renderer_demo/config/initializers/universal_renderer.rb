@@ -1,9 +1,9 @@
 UniversalRenderer.configure do |c|
-  # Use HTTP SSR server in development/test, and Bun stdio in production.
+  # Use HTTP SSR server in development/test, and Node stdio in production.
   c.engine = Rails.env.production? ? :stdio : :http
 
   # HTTP Engine Configuration (when engine = :http)
-  # In development/test, Procfile.dev starts the Node+Express Vite middleware
+  # In development/test, Procfile.dev starts the Express SSR server
   # SSR server from app/frontend/ssr/ssr.tsx.
   c.ssr_url = ENV.fetch("SSR_SERVER_URL", "http://localhost:5200")
   c.timeout = 3
@@ -16,6 +16,6 @@ UniversalRenderer.configure do |c|
   c.stdio_timeout = 5_000
   c.stdio_cli_script = "public/vite-ssr/stdio.js"
 
-  # NOTE: When using Stdio, ensure you have a stdio CLI script that can handle
+  # NOTE: When using Stdio, ensure you have a Node-executable stdio CLI script that can handle
   # JSON input/output with head/body/body_attrs response format.
 end
