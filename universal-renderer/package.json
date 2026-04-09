@@ -24,36 +24,34 @@
   "types": "./dist/index.d.mts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs",
-      "require": "./dist/index.js",
-      "types": "./dist/index.d.mts"
+      "require": "./dist/index.js"
     },
     "./http": {
-      "default": {
-        "import": "./dist/http/index.mjs",
-        "require": "./dist/http/index.js",
-        "types": "./dist/http/index.d.mts"
-      }
+      "types": "./dist/http/index.d.mts",
+      "import": "./dist/http/index.mjs",
+      "require": "./dist/http/index.js"
     },
     "./stdio": {
+      "types": "./dist/stdio/index.d.mts",
       "import": "./dist/stdio/index.mjs",
-      "require": "./dist/stdio/index.js",
-      "types": "./dist/stdio/index.d.mts"
+      "require": "./dist/stdio/index.js"
     },
     "./http/express": {
+      "types": "./dist/http/index.d.mts",
       "import": "./dist/http/index.mjs",
-      "require": "./dist/http/index.js",
-      "types": "./dist/http/index.d.mts"
+      "require": "./dist/http/index.js"
     },
     "./express": {
+      "types": "./dist/http/index.d.mts",
       "import": "./dist/http/index.mjs",
-      "require": "./dist/http/index.js",
-      "types": "./dist/http/index.d.mts"
+      "require": "./dist/http/index.js"
     },
     "./react-query": {
+      "types": "./dist/react-query/index.d.mts",
       "import": "./dist/react-query/index.mjs",
-      "require": "./dist/react-query/index.js",
-      "types": "./dist/react-query/index.d.mts"
+      "require": "./dist/react-query/index.js"
     }
   },
   "files": [
