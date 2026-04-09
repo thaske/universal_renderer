@@ -63,11 +63,7 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
-      - name: Install workspace dependencies with Bun
-        run: bun install
-
-      - name: Install universal-renderer node deps via npm (bun optionalDependencies workaround for native bindings)
-        working-directory: universal-renderer
+      - name: Install workspace dependencies with npm (bun optionalDependencies workaround for rolldown/rollup native bindings)
         run: npm install --no-save --no-package-lock
 
       - name: Create tmp directory for test results
@@ -107,11 +103,7 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
-      - name: Install workspace dependencies with Bun
-        run: bun install
-
-      - name: Install universal-renderer node deps via npm (bun optionalDependencies workaround for native bindings)
-        working-directory: universal-renderer
+      - name: Install workspace dependencies with npm (bun optionalDependencies workaround for rolldown/rollup native bindings)
         run: npm install --no-save --no-package-lock
 
       - name: Create tmp directory for test results
