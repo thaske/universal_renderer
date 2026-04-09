@@ -67,8 +67,10 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install workspace dependencies with Bun
-        working-directory: universal-renderer
         run: bun install
+
+      - name: Ensure rolldown linux-x64-gnu native binding is installed
+        run: bun add --dev --no-save @rolldown/binding-linux-x64-gnu
 
       - name: Create tmp directory for test results
         run: mkdir -p tmp
@@ -108,8 +110,10 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install workspace dependencies with Bun
-        working-directory: universal-renderer
         run: bun install
+
+      - name: Ensure rolldown linux-x64-gnu native binding is installed
+        run: bun add --dev --no-save @rolldown/binding-linux-x64-gnu
 
       - name: Create tmp directory for test results
         run: mkdir -p tmp
