@@ -170,6 +170,7 @@ RSpec.describe UniversalRenderer::Adapter::Stdio::StdioProcess do
     allow(stdin_mock).to receive(:sync=)
     allow(stdout_mock).to receive(:readline)
     allow(stdout_mock).to receive(:wait_readable).and_return(stdout_mock)
+    allow(stdout_mock).to receive(:read_nonblock)
     allow(stderr_mock).to receive(:each_line)
     allow(stderr_mock).to receive(:close)
     allow(stdin_mock).to receive(:close)
@@ -209,7 +210,7 @@ RSpec.describe UniversalRenderer::Adapter::Stdio::StdioProcess do
 
       expect(stdin_mock).to receive(:puts).with(expected_payload)
       expect(stdin_mock).to receive(:flush)
-      expect(stdout_mock).to receive(:readline).and_return(expected_response)
+      expect(stdout_mock).to receive(:read_nonblock).with(4096, exception: false).and_return("#{expected_response}\n")
 
       result = process.render(url, props)
       expect(result).to eq(

@@ -66,9 +66,9 @@ jobs:
       - name: Install workspace dependencies with Bun
         run: bun install
 
-      - name: Install rolldown native binding via npm (bun optionalDependencies workaround)
+      - name: Install universal-renderer node deps via npm (bun optionalDependencies workaround for native bindings)
         working-directory: universal-renderer
-        run: npm install --no-save --no-package-lock rolldown
+        run: npm install --no-save --no-package-lock
 
       - name: Create tmp directory for test results
         run: mkdir -p tmp
@@ -110,9 +110,9 @@ jobs:
       - name: Install workspace dependencies with Bun
         run: bun install
 
-      - name: Install rolldown native binding via npm (bun optionalDependencies workaround)
+      - name: Install universal-renderer node deps via npm (bun optionalDependencies workaround for native bindings)
         working-directory: universal-renderer
-        run: npm install --no-save --no-package-lock rolldown
+        run: npm install --no-save --no-package-lock
 
       - name: Create tmp directory for test results
         run: mkdir -p tmp
