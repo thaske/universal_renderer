@@ -15,7 +15,7 @@ module IntegrationHelpers
     DEFAULT_PORT = 9876
     DEFAULT_TIMEOUT = ENV["CI"] ? 60 : 20 # Longer timeout in CI environments
 
-    # Spawns a real SSR server process using Node.js and the universal-renderer NPM package
+    # Spawns a real SSR server process using Bun and the universal-renderer workspace package
     #
     # @param port [Integer] The port to run the server on
     # @param hostname [String] The hostname to bind to
@@ -41,7 +41,7 @@ module IntegrationHelpers
       )
 
       # Spawn the SSR process
-      command = ["node", "server.mjs"]
+      command = ["bun", "server.mjs"]
 
       process =
         Process.spawn(

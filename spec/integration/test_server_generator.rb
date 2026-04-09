@@ -103,11 +103,11 @@ module IntegrationHelpers
       JAVASCRIPT
     end
 
-    # Installs NPM dependencies in the server directory
+    # Installs Bun-managed dependencies in the server directory
     def self.install_dependencies(server_dir)
       result =
         system(
-          "npm",
+          "bun",
           "install",
           chdir: server_dir,
           out: File::NULL,
@@ -116,7 +116,7 @@ module IntegrationHelpers
 
       return if result
 
-      error_output = `cd #{server_dir} && npm install 2>&1`
+      error_output = `cd #{server_dir} && bun install 2>&1`
       raise "Failed to install dependencies for test server in #{server_dir}. Error: #{error_output}"
     end
   end

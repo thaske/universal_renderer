@@ -24,7 +24,7 @@ spec/
 # Fast Ruby tests only (recommended for development)
 ./bin/test
 
-# All tests (Ruby + NPM)
+# All tests (Ruby + Bun)
 ./bin/test:full
 ```
 
@@ -41,19 +41,19 @@ bundle exec rspec spec/units/configuration_spec.rb
 bundle exec rspec --format documentation
 ```
 
-### NPM Package Tests
+### Bun Package Tests
 
 ```bash
 cd universal-renderer
 
 # Run all Vitest tests
-npm test
+bun run test
 
 # Run tests in watch mode
-npm run test:watch
+bun run test:watch
 
 # Run tests with coverage
-npm run test:coverage
+bun run test:coverage
 ```
 
 ## Test Organization
@@ -91,7 +91,7 @@ end
 
 ### Integration Tests (`spec/integration/`)
 
-- Test communication between Ruby gem and NPM package
+- Test communication between Ruby gem and Bun-managed package
 - Spawn real SSR servers for testing
 - End-to-end request flows
 
@@ -114,7 +114,7 @@ end
 - Mock external dependencies with `webmock`
 - Use `FactoryBot` for complex object creation
 
-### NPM Package Tests
+### Bun Package Tests
 
 - Use Vitest with JSDOM environment for component tests
 - Mock Node and Express interactions for unit tests
@@ -148,7 +148,7 @@ Tests run automatically on GitHub Actions for:
 
 - Ruby 3.1, 3.2, 3.3
 - RuboCop linting
-- Both Ruby and NPM test suites
+- Both Ruby and Bun test suites
 - Test helper script validation
 
 See `.github/workflows/ci.yml` for the complete CI configuration.

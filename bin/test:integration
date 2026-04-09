@@ -34,28 +34,18 @@ end
 def check_prerequisites
   colored_puts "🔍 Checking prerequisites...", Colors::BLUE
 
-  # Check if Node.js and npm are installed
-  unless system("which node > /dev/null 2>&1")
-    colored_puts "❌ Node.js is not installed. Please install Node.js first.",
+  unless system("which bun > /dev/null 2>&1")
+    colored_puts "❌ Bun is not installed. Please install Bun first.",
                  Colors::RED
     exit 1
   end
 
-  unless system("which npm > /dev/null 2>&1")
-    colored_puts "❌ npm is not installed. Please install npm first.",
-                 Colors::RED
-    exit 1
-  end
-
-  # Check if universal-renderer NPM package is built
-  unless File.exist?("universal-renderer/dist/index.js")
-    colored_puts "❌ universal-renderer NPM package not built. Building now...",
-                 Colors::YELLOW
-    run_command(
-      "npm run build --workspace universal-renderer",
-      "Building NPM package"
-    )
-  end
+  colored_puts "🔧 Building universal-renderer workspace package with Bun...",
+               Colors::BLUE
+  run_command(
+    "bun run --filter universal-renderer build",
+    "Building workspace package"
+  )
 
   colored_puts "✅ Prerequisites checked", Colors::GREEN
 end
@@ -75,7 +65,7 @@ def main
   colored_puts "\n🎉 Integration tests completed successfully!", Colors::GREEN
   colored_puts "\n📊 Integration Test Summary:", Colors::BLUE
   colored_puts "   • HTTP contract validation: ✅ Passed"
-  colored_puts "   • Ruby gem ↔ NPM package communication: ✅ Passed"
+  colored_puts "   • Ruby gem ↔ Bun package communication: ✅ Passed"
   colored_puts "   • Error scenario handling: ✅ Passed"
 end
 

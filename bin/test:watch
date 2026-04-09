@@ -14,26 +14,26 @@ case $TEST_TYPE in
     echo "🔍 Watching Ruby gem files..."
     bundle exec guard
     ;;
-  "npm")
-    echo "🔍 Watching NPM package files..."
-    npm run test:watch --workspace universal-renderer
+  "bun")
+    echo "🔍 Watching Bun package files..."
+    bun run --filter universal-renderer test:watch
     ;;
   "all")
     echo "🔍 Watching all files (requires multiple terminals)..."
     echo ""
     echo "Run these commands in separate terminals:"
     echo "  Terminal 1: bin/test:watch ruby"
-    echo "  Terminal 2: bin/test:watch npm"
+    echo "  Terminal 2: bin/test:watch bun"
     ;;
   *)
     echo "❌ Unknown test type: $TEST_TYPE"
     echo ""
-    echo "Usage: bin/test:watch [ruby|npm|all]"
+    echo "Usage: bin/test:watch [ruby|bun|all]"
     echo ""
     echo "Examples:"
     echo "  bin/test:watch         # Watch Ruby tests (default)"
     echo "  bin/test:watch ruby    # Watch Ruby tests"
-    echo "  bin/test:watch npm     # Watch NPM tests"
+    echo "  bin/test:watch bun     # Watch Bun tests"
     echo "  bin/test:watch all     # Instructions for watching all"
     exit 1
     ;;
