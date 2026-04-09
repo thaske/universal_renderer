@@ -4,15 +4,15 @@
   "scripts": {
     "dev": "vite dev",
     "ssr:dev:http": "tsx app/frontend/ssr/ssr.tsx",
-    "ssr:dev:http:bundle": "VITE_RUBY_SSR_ENTRYPOINT='~/ssr/ssr.tsx' vite build --ssr && node public/vite-ssr/ssr.js",
+    "ssr:dev:http:bundle": "mkdir -p public/vite-ssr-http && VITE_RUBY_SSR_ENTRYPOINT='~/ssr/ssr.tsx' vite build --ssr && mv public/vite-ssr/ssr.js public/vite-ssr-http/ssr.js && if [ -f public/vite-ssr/ssr.js.map ]; then mv public/vite-ssr/ssr.js.map public/vite-ssr-http/ssr.js.map; fi && node public/vite-ssr-http/ssr.js",
     "build:client": "vite build",
-    "build:ssr:http": "VITE_RUBY_SSR_ENTRYPOINT='~/ssr/ssr.tsx' vite build --ssr",
-    "build:ssr:stdio": "VITE_RUBY_SSR_ENTRYPOINT='~/ssr/stdio.tsx' vite build --ssr",
+    "build:ssr:http": "mkdir -p public/vite-ssr-http && VITE_RUBY_SSR_ENTRYPOINT='~/ssr/ssr.tsx' vite build --ssr && mv public/vite-ssr/ssr.js public/vite-ssr-http/ssr.js && if [ -f public/vite-ssr/ssr.js.map ]; then mv public/vite-ssr/ssr.js.map public/vite-ssr-http/ssr.js.map; fi",
+    "build:ssr:stdio": "mkdir -p public/vite-ssr-stdio && VITE_RUBY_SSR_ENTRYPOINT='~/ssr/stdio.tsx' vite build --ssr && mv public/vite-ssr/ssr.js public/vite-ssr-stdio/ssr.js && if [ -f public/vite-ssr/ssr.js.map ]; then mv public/vite-ssr/ssr.js.map public/vite-ssr-stdio/ssr.js.map; fi",
     "build:ssr": "npm run build:ssr:stdio",
     "build": "npm run build:client && npm run build:ssr",
-    "ssr:http": "node public/vite-ssr/ssr.js",
-    "ssr:stdio": "bun public/vite-ssr/stdio.js",
-    "ssr": "bun public/vite-ssr/stdio.js"
+    "ssr:http": "node public/vite-ssr-http/ssr.js",
+    "ssr:stdio": "bun public/vite-ssr-stdio/ssr.js",
+    "ssr": "bun public/vite-ssr-stdio/ssr.js"
   },
   "dependencies": {
     "@dr.pogodin/react-helmet": "^3.0.6",

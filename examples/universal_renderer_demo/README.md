@@ -42,8 +42,13 @@ In development, `bin/dev` runs the Node+Express SSR server from
 `app/frontend/ssr/ssr.tsx` via `Procfile.dev`.
 
 In production, Rails executes the Vite-built stdio bundle at
-`public/vite-ssr/stdio.js` with Bun (built from
+`public/vite-ssr-stdio/ssr.js` with Bun (built from
 `app/frontend/ssr/stdio.tsx`).
+
+Do not point `c.stdio_cli_script` at the HTTP bundle. In this demo that bundle is
+`public/vite-ssr-http/ssr.js`, and it will
+try to bind a port instead of reading render
+requests from stdin.
 
 It uses shared helpers from `universal-renderer/react-query` to:
 - keep query-cache seeding logic aligned between SSR and hydration
@@ -58,10 +63,17 @@ npm run build
 npm run build:ssr
 ```
 
+If you force `c.engine = :stdio` outside production, build the stdio bundle
+before booting Rails:
+
+```bash
+npm run build:ssr:stdio
+```
+
 To run the built stdio bundle directly, use:
 
 ```bash
-bun public/vite-ssr/stdio.js
+bun public/vite-ssr-stdio/ssr.js
 ```
 
 To test larger SSR payloads and more query seed data, use:

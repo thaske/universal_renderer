@@ -9,7 +9,7 @@ import { ServerStyleSheet } from "styled-components";
 import App from "@/App";
 
 type QueryData = {
-  key: string;
+  query_key: unknown[];
   data: any;
 };
 
@@ -19,10 +19,10 @@ function setup(url: string, props: any) {
   const sheet = new ServerStyleSheet();
 
   const queryClient = new QueryClient();
-  const { query_data } = props;
-  if (query_data) {
-    query_data.forEach(({ key, data }: QueryData) =>
-      queryClient.setQueryData(key, data)
+  const { react_query: reactQuery } = props;
+  if (reactQuery) {
+    reactQuery.forEach(({ query_key, data }: QueryData) =>
+      queryClient.setQueryData(query_key, data)
     );
   }
   const state = dehydrate(queryClient);
