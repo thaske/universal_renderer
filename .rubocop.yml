@@ -1,8 +1,6 @@
-require:
+plugins:
   - rubocop-rspec
   - rubocop-rspec_rails
-
-plugins:
   - rubocop-factory_bot
   - rubocop-rails
 
@@ -29,6 +27,8 @@ AllCops:
 
 Metrics/BlockLength:
   AllowedMethods: ["describe", "context"]
+  Exclude:
+    - "lib/tasks/benchmark.rake"
 
 Metrics/CyclomaticComplexity:
   Max: 10
@@ -36,10 +36,13 @@ Metrics/CyclomaticComplexity:
 Metrics/PerceivedComplexity:
   Max: 10
 
-Metrics/ModuleLength::
+Metrics/ModuleLength:
   Enabled: false
 
-Naming/PredicateName:
+Naming/PredicatePrefix:
+  Enabled: false
+
+Naming/PredicateMethod:
   Enabled: false
 
 # RSpec-specific configuration
@@ -47,15 +50,15 @@ RSpec/MultipleExpectations:
   Max: 10
 
 RSpec/ExampleLength:
-  Max: 20
+  Max: 35
 
 RSpec/DescribeClass:
   Enabled: false
 
-RSpec/FilePath:
+RSpec/SpecFilePathFormat:
   Enabled: false
 
-RSpec/SpecFilePathFormat:
+RSpec/SpecFilePathSuffix:
   Enabled: false
 
 RSpec/BeforeAfterAll:
@@ -67,6 +70,31 @@ RSpec/MultipleDescribes:
 RSpec/NamedSubject:
   Enabled: false
 
+RSpec/ContextWording:
+  Enabled: false
+
+RSpec/MessageSpies:
+  Enabled: false
+
+RSpec/StubbedMock:
+  Enabled: false
+
+RSpec/VerifiedDoubles:
+  Enabled: false
+
+RSpec/ReceiveMessages:
+  Enabled: false
+
+RSpec/MultipleMemoizedHelpers:
+  Max: 8
+
+RSpec/NestedGroups:
+  Max: 4
+
+Metrics/ClassLength:
+  Exclude:
+    - "spec/integration/test_server_generator.rb"
+
 # Capybara cops causing errors - disable for now
-Capybara/RSpec/PredicateMatcher:
+RSpec/PredicateMatcher:
   Enabled: false

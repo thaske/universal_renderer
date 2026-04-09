@@ -7,10 +7,9 @@
     "moduleDetection": "force",
     "jsx": "react-jsx",
     "allowJs": true,
-    "downlevelIteration": true,
 
     // Module Configuration
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "allowSyntheticDefaultImports": true,
@@ -27,10 +26,6 @@
 
     // Project Structure & Paths
     "rootDir": "./src",
-    "baseUrl": "./",
-    "paths": {
-      "@/*": ["src/*"]
-    },
     "composite": false,
 
     // Strictness & Code Quality
@@ -46,7 +41,7 @@
     "noUnusedParameters": false,
     "noPropertyAccessFromIndexSignature": false
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "src/**/*.d.ts", "src/*.d.ts"],
   "exclude": [
     "**/*.test.ts",
     "**/*.test.tsx",

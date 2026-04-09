@@ -55,18 +55,13 @@ module UniversalRenderer
 
       # Allow Warden and other authentication mechanisms to complete first
       # This prevents interference with authentication throws like :warden
-      begin
-        if ssr_streaming?
-          success = render_ssr_stream(*, **)
-          super unless success
-        else
-          fetch_ssr
-          Rails.logger.info("universal_renderer render: #{@ssr}")
-          super
-        end
-      rescue UncaughtThrowError => e
-        # Re-raise UncaughtThrowError to preserve Warden's authentication flow
-        raise e
+      if ssr_streaming?
+        success = render_ssr_stream(*, **)
+        super unless success
+      else
+        fetch_ssr
+        Rails.logger.info("universal_renderer render: #{@ssr}")
+        super
       end
     end
 
@@ -84,32 +79,27 @@ module UniversalRenderer
         return false
       end
 
-      begin
-        full_layout = render_to_string(*, **)
-        current_props = (@universal_renderer_props || {}).dup
+      full_layout = render_to_string(*, **)
+      current_props = (@universal_renderer_props || {}).dup
 
-        streaming_succeeded =
-          adapter.stream(
-            request.original_url,
-            current_props,
-            full_layout,
-            response
-          )
+      streaming_succeeded =
+        adapter.stream(
+          request.original_url,
+          current_props,
+          full_layout,
+          response
+        )
 
-        # SSR streaming failed or was not possible (e.g. server down, config missing).
-        if streaming_succeeded
-          response.stream.close unless response.stream.closed?
-          true
-        else
-          Rails.logger.error(
-            "SSR stream fallback: " \
-              "Streaming failed, proceeding with standard rendering."
-          )
-          false
-        end
-      rescue UncaughtThrowError => e
-        # Re-raise UncaughtThrowError to preserve Warden's authentication flow
-        raise e
+      # SSR streaming failed or was not possible (e.g. server down, config missing).
+      if streaming_succeeded
+        response.stream.close unless response.stream.closed?
+        true
+      else
+        Rails.logger.error(
+          "SSR stream fallback: " \
+            "Streaming failed, proceeding with standard rendering."
+        )
+        false
       end
     end
 
@@ -128,7 +118,7 @@ module UniversalRenderer
 
       # Only skip if we're in the middle of an active Warden throw/catch mechanism
       # This is more specific and allows SSR for public pages with unauthenticated users
-      if defined?(Warden) && request.env["warden"]&.message&.present?
+      if defined?(Warden) && request.env["warden"]&.message.present?
         return true
       end
 

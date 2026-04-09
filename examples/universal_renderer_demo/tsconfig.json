@@ -1,9 +1,8 @@
 {
   "compilerOptions": {
-    "baseUrl": "app/frontend/",
     "paths": {
-      "@/*": ["*"],
-      "~/*": ["*"]
+      "@/*": ["./app/frontend/*"],
+      "~/*": ["./app/frontend/*"]
     },
     "target": "ESNext",
     "useDefineForClassFields": true,

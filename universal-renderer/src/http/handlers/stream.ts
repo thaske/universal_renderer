@@ -84,11 +84,11 @@ export function createStreamHandler<TContext extends Record<string, any>>(
           if (context) options.cleanup?.(context);
         });
       },
-      onShellError(error) {
+      onShellError(error: unknown) {
         console.error("[SSR] Shell error:", error);
         if (!res.headersSent) next(error);
       },
-      onError(error) {
+      onError(error: unknown) {
         console.error("[SSR] Stream error:", error);
         if (!res.headersSent) next(error);
       },

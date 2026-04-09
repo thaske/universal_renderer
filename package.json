@@ -6,16 +6,16 @@
   },
   "dependencies": {
     "@prettier/plugin-ruby": "^4.0.4",
-    "prettier": "^3.5.3"
+    "prettier": "^3.8.1"
   },
   "private": true,
   "workspaces": [
     "universal-renderer"
   ],
   "devDependencies": {
-    "@playwright/test": "^1.52.0",
-    "@types/yargs": "^17.0.33",
-    "get-port": "^7.1.0",
+    "@playwright/test": "^1.59.1",
+    "@types/yargs": "^17.0.35",
+    "get-port": "^7.2.0",
     "yargs": "^17.7.2"
   }
 }

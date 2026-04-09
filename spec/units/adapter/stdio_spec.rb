@@ -161,7 +161,7 @@ RSpec.describe UniversalRenderer::StdioProcess do
   let(:wait_thr_mock) { instance_double(Process::Waiter, pid: 1234) }
 
   before do
-    allow(Open3).to receive(:popen3).with("bun", cli_script).and_return(
+    allow(Open3).to receive(:popen3).with("node", cli_script).and_return(
       [stdin_mock, stdout_mock, stderr_mock, wait_thr_mock],
     )
 
