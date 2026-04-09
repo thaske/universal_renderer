@@ -97,6 +97,3 @@ export async function createRenderer<
   }
 }
 
-// Backwards-compat alias (to be removed in next major)
-export const createStdioRenderer = createRenderer;
-export const _selectedBackend = "bun";

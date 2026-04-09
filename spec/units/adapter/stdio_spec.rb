@@ -28,7 +28,7 @@ RSpec.describe UniversalRenderer::Adapter::Stdio do
 
         # Mock ConnectionPool and StdioProcess
         allow(ConnectionPool).to receive(:new).and_return(double("pool"))
-        allow(UniversalRenderer::Adapter::StdioProcess).to receive(:new).and_return(
+        allow(UniversalRenderer::Adapter::Stdio::StdioProcess).to receive(:new).and_return(
           double("process"),
         )
       end
@@ -70,7 +70,7 @@ RSpec.describe UniversalRenderer::Adapter::Stdio do
     let(:props) { { "component" => "TestComponent", "title" => "Test" } }
 
     context "when process pool is available" do
-      let(:process_mock) { instance_double(UniversalRenderer::Adapter::StdioProcess) }
+      let(:process_mock) { instance_double(UniversalRenderer::Adapter::Stdio::StdioProcess) }
       let(:pool_mock) { instance_double(ConnectionPool) }
 
       before do
@@ -79,7 +79,7 @@ RSpec.describe UniversalRenderer::Adapter::Stdio do
         ).and_return(true)
 
         allow(ConnectionPool).to receive(:new).and_return(pool_mock)
-        allow(UniversalRenderer::Adapter::StdioProcess).to receive(:new).and_return(
+        allow(UniversalRenderer::Adapter::Stdio::StdioProcess).to receive(:new).and_return(
           process_mock,
         )
         allow(pool_mock).to receive(:with).and_yield(process_mock)
@@ -153,7 +153,7 @@ RSpec.describe UniversalRenderer::Adapter::Stdio do
   end
 end
 
-RSpec.describe UniversalRenderer::Adapter::StdioProcess do
+RSpec.describe UniversalRenderer::Adapter::Stdio::StdioProcess do
   let(:cli_script) { "app/frontend/ssr/ssr.ts" }
   let(:stdin_mock) { instance_double(IO) }
   let(:stdout_mock) { instance_double(IO) }

@@ -76,7 +76,7 @@ module IntegrationEnvironment
     ).and_return(true)
 
     # Create a mock process that returns canned responses
-    mock_bun_process = instance_double(UniversalRenderer::Adapter::StdioProcess)
+    mock_bun_process = instance_double(UniversalRenderer::Adapter::Stdio::StdioProcess)
     allow(mock_bun_process).to receive(:render).and_return(
       {
         "head" => "<title>Test STDIO Response</title>",
@@ -90,7 +90,7 @@ module IntegrationEnvironment
     allow(mock_pool).to receive(:with).and_yield(mock_bun_process)
 
     allow(ConnectionPool).to receive(:new).and_return(mock_pool)
-    allow(UniversalRenderer::Adapter::StdioProcess).to receive(:new).and_return(
+    allow(UniversalRenderer::Adapter::Stdio::StdioProcess).to receive(:new).and_return(
       mock_bun_process
     )
   end
