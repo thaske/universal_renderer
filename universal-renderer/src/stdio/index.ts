@@ -1,4 +1,3 @@
-import readline from "readline";
 import type { RenderOutput, SSRHandlerOptions } from "../types";
 
 /**
@@ -13,8 +12,7 @@ export type StdioOptions<
   error?: (err: Error) => void | Promise<void>;
 };
 
-// Backwards-compatible alias.
-export type NodeStdioOptions<
+export type BunStdioOptions<
   TContext extends Record<string, any> = Record<string, any>,
 > = StdioOptions<TContext>;
 
@@ -24,19 +22,20 @@ export type NodeStdioOptions<
  *
  * The payload **must** follow the structure `{ url: string, props?: object }`.
  * The response follows `RenderOutput` – `{ head?: string, body: string, bodyAttrs?: string }`.
+ *
+ * This helper is intended to interoperate with the Ruby stdio adapter, which
+ * maintains a small pool of Bun processes and communicates via stdin/stdout.
  */
 export async function createRenderer<
   TContext extends Record<string, any> = Record<string, any>,
->(options: StdioOptions<TContext>): Promise<void> {
+>(options: BunStdioOptions<TContext>): Promise<void> {
   const { setup, render, cleanup, error: onError } = options;
 
   if (!setup) throw new Error("setup callback is required");
   if (!render) throw new Error("render callback is required");
 
-  const rl = readline.createInterface({
-    input: process.stdin,
-    crlfDelay: Infinity,
-  });
+  const decoder = new TextDecoder();
+  let buffer = "";
 
   async function handleLine(line = ""): Promise<void> {
     const trimmed = line.trim();
@@ -63,12 +62,12 @@ export async function createRenderer<
         bodyAttrs: output.bodyAttrs ?? "",
       };
 
-      process.stdout.write(`${JSON.stringify(response)}\n`);
+      console.log(JSON.stringify(response));
     } catch (err: any) {
       console.error("[universal-renderer] Render error", err);
       await onError?.(err);
-      process.stdout.write(
-        `${JSON.stringify({ head: "", body: "", bodyAttrs: "", error: err.message })}\n`,
+      console.log(
+        JSON.stringify({ head: "", body: "", bodyAttrs: "", error: err.message }),
       );
     } finally {
       if (context && cleanup) {
@@ -82,11 +81,22 @@ export async function createRenderer<
     }
   }
 
-  for await (const line of rl) {
-    await handleLine(line as string);
+  for await (const chunk of Bun.stdin.stream()) {
+    buffer += decoder.decode(chunk);
+
+    let index: number;
+    while ((index = buffer.indexOf("\n")) !== -1) {
+      const line = buffer.slice(0, index);
+      buffer = buffer.slice(index + 1);
+      await handleLine(line);
+    }
+  }
+
+  if (buffer.length > 0) {
+    await handleLine(buffer);
   }
 }
 
 // Backwards-compat alias (to be removed in next major)
 export const createStdioRenderer = createRenderer;
-export const _selectedBackend = "node";
+export const _selectedBackend = "bun";

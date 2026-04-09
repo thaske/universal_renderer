@@ -19,7 +19,7 @@ bundle install
 npm install
 ```
 
-This demo uses npm for package scripts and Vite builds, and Node.js for the
+This demo uses npm for package scripts and Vite builds, and Bun for the
 production stdio SSR process.
 
 ## Run the demo
@@ -42,7 +42,7 @@ In development, `bin/dev` runs the Node+Express SSR server from
 `app/frontend/ssr/ssr.tsx` via `Procfile.dev`.
 
 In production, Rails executes the Vite-built stdio bundle at
-`public/vite-ssr/stdio.js` with Node (built from
+`public/vite-ssr/stdio.js` with Bun (built from
 `app/frontend/ssr/stdio.tsx`).
 
 It uses shared helpers from `universal-renderer/react-query` to:
@@ -61,7 +61,7 @@ npm run build:ssr
 To run the built stdio bundle directly, use:
 
 ```bash
-node public/vite-ssr/stdio.js
+bun public/vite-ssr/stdio.js
 ```
 
 To test larger SSR payloads and more query seed data, use:

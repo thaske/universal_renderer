@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { NodeStdioOptions } from "./index";
+import type { BunStdioOptions } from "./index";
 import { createRenderer } from "./index";
 
 describe("stdio renderer", () => {
@@ -17,7 +17,7 @@ describe("stdio renderer", () => {
 
   describe("validation", () => {
     it("should accept valid options without throwing during validation", () => {
-      const options: NodeStdioOptions = {
+      const options: BunStdioOptions = {
         setup: async () => ({ test: "context" }),
         render: async () => ({ body: "test", head: "title" }),
         cleanup: async () => {},
@@ -36,7 +36,7 @@ describe("stdio renderer", () => {
     });
 
     it("should handle minimal valid options", () => {
-      const options: NodeStdioOptions = {
+      const options: BunStdioOptions = {
         setup: async () => ({}),
         render: async () => ({ body: "minimal" }),
       };
@@ -55,7 +55,7 @@ describe("stdio renderer", () => {
         theme: string;
       }
 
-      const options: NodeStdioOptions<TestContext> = {
+      const options: BunStdioOptions<TestContext> = {
         setup: async (_url: string, props: any): Promise<TestContext> => ({
           userId: props.userId || 1,
           theme: props.theme || "light",

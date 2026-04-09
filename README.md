@@ -46,7 +46,7 @@ Configure in `config/initializers/universal_renderer.rb`:
 UniversalRenderer.configure do |config|
   # Choose your SSR engine:
   # :http           - External Node.js server (default, supports streaming)
-  # :stdio          - Stdio Node.js processes via Open3 (no streaming, no external server)
+  # :stdio          - Stdio Bun processes via Open3 (no streaming, no external server)
   # :auto           - Resolve by Rails env (dev/test: :http, production: :stdio)
   config.engine = :http
   # config.engine = :auto
@@ -86,7 +86,7 @@ The HTTP engine forwards SSR requests to an external Node.js server. This is the
 
 ### Stdio Engine
 
-The Stdio engine maintains a pool of stdio Node.js processes and communicates with them via stdin/stdout for server-side rendering.
+The Stdio engine maintains a pool of stdio Bun processes and communicates with them via stdin/stdout for server-side rendering.
 
 **Pros:**
 
@@ -113,11 +113,9 @@ Default mapping:
 
 You can customize this via `config.engine_by_env`.
 
-When `:auto` resolves to `:stdio` (typically production), ensure your deploy pipeline builds the SSR script configured by `SSR_STDIO_CLI_SCRIPT` (or `config.stdio_cli_script`) before boot:
-
-```bash
-npm run build:ssr
-```
+When `:auto` resolves to `:stdio` (typically production), ensure Bun and the configured
+stdio script are available before boot. The script can be a `.ts` / `.tsx` entrypoint or
+a prebuilt bundle.
 
 ## Basic Usage
 
@@ -323,55 +321,19 @@ If you prefer to use the stdio engine instead of an external HTTP server:
    UniversalRenderer.configure { |config| config.engine = :stdio }
    ```
 
-2. Create a persistent CLI script (e.g., `src/cli_persistent.js`):
+2. Create a persistent CLI script (e.g., `app/frontend/ssr/stdio.tsx`):
 
-   ```javascript
-   // src/cli_persistent.js
-   import { createReadStream } from "fs";
-   import { createInterface } from "readline";
+   ```tsx
+   import { renderToString } from "react-dom/server.node";
+   import { createRenderer } from "universal-renderer/stdio";
 
-   // Your React components and rendering logic here
-   import { renderToString } from "react-dom/server";
-   import React from "react";
-   import YourAppComponent from "./YourAppComponent"; // Your components
+   import setup from "@/ssr/setup";
 
-   const rl = createInterface({
-     input: process.stdin,
-     output: process.stdout,
-     terminal: false,
-   });
-
-   rl.on("line", (line) => {
-     try {
-       const { component, props } = JSON.parse(line);
-
-       // Map component names to actual components
-       const components = {
-         YourAppComponent: YourAppComponent,
-         // Add more components as needed
-       };
-
-       const Component = components[component] || YourAppComponent;
-       const element = React.createElement(Component, props);
-       const body = renderToString(element);
-
-       // Return the same format as HTTP adapter expects
-       const response = {
-         head: `<title>${props.title || "Your App"}</title>`,
-         body: body,
-         body_attrs: {},
-       };
-
-       console.log(JSON.stringify(response));
-     } catch (error) {
-       // Error handling
-       const errorResponse = {
-         head: "<title>SSR Error</title>",
-         body: `<div>Error: ${error.message}</div>`,
-         body_attrs: {},
-       };
-       console.log(JSON.stringify(errorResponse));
-     }
+   await createRenderer({
+     setup,
+     render: ({ app }) => ({
+       body: renderToString(app),
+     }),
    });
    ```
 
@@ -425,7 +387,7 @@ If you prefer to use the stdio engine instead of an external HTTP server:
 
 5. Restart your Rails application - no external server needed.
 
-**Note:** The stdio engine requires a persistent CLI script that can handle JSON input/output and run under Node.js. The persistent processes communicate via stdin/stdout, so your CLI script should read JSON from stdin and write JSON responses to stdout with `head`, `body`, and `body_attrs` fields (same format as the HTTP adapter).
+**Note:** The stdio engine requires a persistent CLI script that can handle JSON input/output and run under Bun. The persistent processes communicate via stdin/stdout, so your CLI script should read JSON from stdin and write JSON responses to stdout with `head`, `body`, and `body_attrs` fields (same format as the HTTP adapter).
 
 ## Development
 

@@ -66,7 +66,7 @@ namespace :universal_renderer do
       puts "  Calls per second: #{(iterations / stdio_time.real).round(2)}"
     rescue StandardError => e
       puts "  Error: #{e.message}"
-      puts "  (Make sure stdio CLI script is available and Node.js is installed)"
+      puts "  (Make sure stdio CLI script is available and Bun is installed)"
     ensure
       # Restore original engine
       UniversalRenderer.config.engine = original_engine
@@ -78,7 +78,7 @@ namespace :universal_renderer do
     puts
     puts "Notes:"
     puts "- HTTP adapter requires external Node.js server"
-    puts "- Stdio adapter requires a stdio CLI script and Node.js"
+    puts "- Stdio adapter requires a stdio CLI script and Bun"
     puts "- Performance may vary based on JavaScript complexity"
     puts "- Stdio eliminates network overhead but has process communication overhead"
   end

@@ -1,7 +1,7 @@
 UniversalRenderer.configure do |c|
   # Choose your SSR engine:
   # :http           - External Node.js server (default, supports streaming)
-  # :stdio          - Stdio processes via Open3 (no streaming, but no external server needed)
+  # :stdio          - Stdio Bun processes via Open3 (no streaming, but no external server needed)
   # :auto           - Resolve engine by Rails environment (dev/test: :http, production: :stdio)
   c.engine = :http
   # Example:
@@ -20,6 +20,6 @@ UniversalRenderer.configure do |c|
   c.stdio_timeout = 5_000
   c.stdio_cli_script = "app/frontend/ssr/ssr.tsx"
 
-  # NOTE: When using Stdio, ensure you have a stdio CLI script that can handle
+  # NOTE: When using Stdio, ensure you have a Bun-executable stdio CLI script that can handle
   # JSON input/output with head/body/body_attrs response format.
 end

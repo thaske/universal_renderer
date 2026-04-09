@@ -1,5 +1,5 @@
 UniversalRenderer.configure do |c|
-  # Use HTTP SSR server in development/test, and Node stdio in production.
+  # Use HTTP SSR server in development/test, and Bun stdio in production.
   c.engine = Rails.env.production? ? :stdio : :http
 
   # HTTP Engine Configuration (when engine = :http)
@@ -16,6 +16,6 @@ UniversalRenderer.configure do |c|
   c.stdio_timeout = 5_000
   c.stdio_cli_script = "public/vite-ssr/stdio.js"
 
-  # NOTE: When using Stdio, ensure you have a Node-executable stdio CLI script that can handle
+  # NOTE: When using Stdio, ensure you have a Bun-executable stdio CLI script that can handle
   # JSON input/output with head/body/body_attrs response format.
 end

@@ -102,7 +102,7 @@ module UniversalRenderer
   # Stdio process wrapper
   class StdioProcess
     def initialize(cli_script)
-      @stdin, @stdout, @stderr, @wait_thr = Open3.popen3("node", cli_script)
+      @stdin, @stdout, @stderr, @wait_thr = Open3.popen3("bun", cli_script)
       @mutex = Mutex.new
     end
 

@@ -2,7 +2,7 @@
 
 SSR micro-server that pairs with the `universal_renderer` Ruby gem.
 
-• **Runtime support** – Express HTTP + Node stdio support.
+• **Runtime support** – Express HTTP + Bun stdio support.
 • **Framework-agnostic** – just start a server and hand it JSX/HTML.
 • **Simple API** – minimal configuration, maximum flexibility.
 
