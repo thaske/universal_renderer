@@ -5,8 +5,7 @@ This app is a minimal integration example for the `universal_renderer` gem.
 It uses:
 - Ruby on Rails
 - `vite_rails`
-- npm
-- Node.js
+- Bun
 - React
 - `styled-components`
 - `@tanstack/react-query`
@@ -16,11 +15,11 @@ It uses:
 
 ```bash
 bundle install
-npm install
+bun install
 ```
 
-This demo uses npm for package scripts and Vite builds, and Bun for the
-production stdio SSR process.
+This demo uses Bun for package management, Vite scripts, and both HTTP and
+stdio SSR processes.
 
 ## Run the demo
 
@@ -38,7 +37,7 @@ This demo uses:
 
 SSR setup/render handlers are shared in `app/frontend/ssr/setup.tsx`.
 
-In development, `bin/dev` runs the Node+Express SSR server from
+In development, `bin/dev` runs the Bun+Express SSR server directly from
 `app/frontend/ssr/ssr.tsx` via `Procfile.dev`.
 
 In production, Rails executes the Vite-built stdio bundle at
@@ -58,16 +57,16 @@ It uses shared helpers from `universal-renderer/react-query` to:
 When deploying with Stdio in production, make sure SSR bundle output exists:
 
 ```bash
-npm run build
+bun run build
 # or at minimum:
-npm run build:ssr
+bun run build:ssr
 ```
 
 If you force `c.engine = :stdio` outside production, build the stdio bundle
 before booting Rails:
 
 ```bash
-npm run build:ssr:stdio
+bun run build:ssr:stdio
 ```
 
 To run the built stdio bundle directly, use:

@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+mkdir -p public/vite-ssr-stdio
+VITE_RUBY_SSR_ENTRYPOINT='~/ssr/stdio.tsx' bunx vite build --ssr
+cp public/vite-ssr/ssr.js public/vite-ssr-stdio/ssr.js
+
+if [ -f public/vite-ssr/ssr.js.map ]; then
+  cp public/vite-ssr/ssr.js.map public/vite-ssr-stdio/ssr.js.map
+fi
