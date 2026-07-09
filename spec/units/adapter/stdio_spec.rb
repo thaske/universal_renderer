@@ -115,6 +115,24 @@ RSpec.describe UniversalRenderer::Adapter::Stdio do
         result = adapter.call(url, props)
         expect(result).to be_nil
       end
+
+      it "returns nil when the child reports a render error" do
+        allow(process_mock).to receive(:render).and_return(
+          {
+            "head" => "",
+            "body" => "",
+            "body_attrs" => {},
+            "error" => "boom",
+          },
+        )
+
+        expect(Rails.logger).to receive(:error).with(
+          /Stdio SSR render failed.*boom/,
+        )
+
+        result = adapter.call(url, props)
+        expect(result).to be_nil
+      end
     end
 
     context "when process pool is not available" do
@@ -165,8 +183,8 @@ RSpec.describe UniversalRenderer::Adapter::Stdio::StdioProcess do
       [stdin_mock, stdout_mock, stderr_mock, wait_thr_mock],
     )
 
-    allow(stdin_mock).to receive(:puts)
-    allow(stdin_mock).to receive(:flush)
+    allow(stdin_mock).to receive(:write_nonblock) { |data, **| data.bytesize }
+    allow(stdin_mock).to receive(:wait_writable).and_return(stdin_mock)
     allow(stdin_mock).to receive(:sync=)
     allow(stdout_mock).to receive(:readline)
     allow(stdout_mock).to receive(:wait_readable).and_return(stdout_mock)
@@ -208,8 +226,10 @@ RSpec.describe UniversalRenderer::Adapter::Stdio::StdioProcess do
           },
         )
 
-      expect(stdin_mock).to receive(:puts).with(expected_payload)
-      expect(stdin_mock).to receive(:flush)
+      expect(stdin_mock).to receive(:write_nonblock).with(
+        "#{expected_payload}\n",
+        exception: false,
+      ) { |data, **| data.bytesize }
       expect(stdout_mock).to receive(:read_nonblock).with(4096, exception: false).and_return("#{expected_response}\n")
 
       result = process.render(url, props)
@@ -221,6 +241,16 @@ RSpec.describe UniversalRenderer::Adapter::Stdio::StdioProcess do
           },
         },
       )
+    end
+
+    it "closes the process on a non-JSON response line so the pipe cannot desync" do
+      allow(stdout_mock).to receive(:read_nonblock).with(4096, exception: false).and_return("stray stdout noise\n")
+
+      expect(stdin_mock).to receive(:close)
+      expect(stdout_mock).to receive(:close)
+      expect(stderr_mock).to receive(:close)
+
+      expect { process.render(url, props) }.to raise_error(JSON::ParserError)
     end
   end
 

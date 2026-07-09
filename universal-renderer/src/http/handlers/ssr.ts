@@ -6,7 +6,7 @@ import { HttpError } from "./error";
  * Creates a Server-Side Rendering route handler for Express.
  *
  * This handler expects POST requests with `{ url: string, props?: any }` and
- * returns JSON responses with `{ head?: string, body: string, bodyAttrs?: string }`.
+ * returns JSON responses with `{ head: string, body: string, body_attrs: object }`.
  *
  * @template TContext - The type of context object used throughout the rendering pipeline
  * @param options - Configuration options for SSR

@@ -28,10 +28,18 @@ module UniversalRenderer
           result = process.render(url, props)
           return nil unless result.is_a?(Hash)
 
+          result = result.deep_symbolize_keys
+          if result[:error].present?
+            Rails.logger.error(
+              "Stdio SSR render failed (URL: #{url}): #{result[:error]}"
+            )
+            return nil
+          end
+
           UniversalRenderer::SSR::Response.new(
-            head: result["head"],
-            body: result["body"],
-            body_attrs: result["body_attrs"] || {}
+            head: result[:head],
+            body: result[:body],
+            body_attrs: result[:body_attrs]
           )
         end
       rescue StandardError => e
@@ -68,7 +76,7 @@ module UniversalRenderer
           timeout_ms = @timeout
           script = cli_script_path.to_s
           @process_pool =
-            ConnectionPool.new(size: @pool_size, timeout: 5) do
+            ConnectionPool.new(size: @pool_size, timeout: timeout_ms / 1000.0) do
               StdioProcess.new(
                 script,
                 timeout_ms: timeout_ms
@@ -92,8 +100,8 @@ module UniversalRenderer
 
       # Long-lived Bun process wrapper. One instance per ConnectionPool slot;
       # the pool guarantees exclusive checkout so no internal locking is needed.
-      # On I/O error, timeout, or unexpected child exit, the underlying process
-      # is transparently respawned so the pool slot remains usable.
+      # On I/O error, timeout, protocol desync, or unexpected child exit, the
+      # underlying process is respawned so the pool slot remains usable.
       class StdioProcess
         def initialize(cli_script, timeout_ms: 5_000)
           @cli_script = cli_script
@@ -107,13 +115,15 @@ module UniversalRenderer
           spawn! unless alive?
 
           payload = JSON.generate({ url: url, props: props })
-          @stdin.puts(payload)
-          @stdin.flush
+          write_line_with_deadline(payload)
 
           raw = read_line_with_deadline
           JSON.parse(raw)
-        rescue Timeout::Error, Errno::EPIPE, IOError => e
-          # IOError covers EOFError and closed-stream errors.
+        rescue Timeout::Error, Errno::EPIPE, IOError, JSON::ParserError => e
+          # IOError covers EOFError and closed-stream errors. A parse failure
+          # means the protocol stream is desynchronized (e.g. a stray stdout
+          # write in the child); leftover bytes in the pipe would be served as
+          # the next request's response, so the process must be replaced too.
           close
           raise e
         end
@@ -133,6 +143,28 @@ module UniversalRenderer
         end
 
         private
+
+        # Write a newline-terminated request under the same wall-clock deadline
+        # as reads. A blocking write could otherwise stall a server thread
+        # indefinitely when the payload exceeds the pipe buffer and the child
+        # has wedged without exiting.
+        def write_line_with_deadline(payload)
+          deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + @timeout
+          data = payload + "\n"
+          until data.empty?
+            remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+            raise Timeout::Error, "Stdio write timed out after #{@timeout}s" if remaining <= 0
+
+            written = @stdin.write_nonblock(data, exception: false)
+            if written == :wait_writable
+              unless @stdin.wait_writable(remaining)
+                raise Timeout::Error, "Stdio write timed out after #{@timeout}s"
+              end
+            else
+              data = data.byteslice(written..)
+            end
+          end
+        end
 
         # Read a single newline-terminated line from @stdout, enforcing a wall-clock
         # deadline across multiple partial reads. wait_readable alone only guarantees
