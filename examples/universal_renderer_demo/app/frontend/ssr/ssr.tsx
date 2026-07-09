@@ -1,7 +1,7 @@
 import { default as _setup } from "@/ssr/setup";
 import { head, transform } from "@/ssr/utils";
 import { renderToString } from "react-dom/server.node";
-import { createServer } from "../../../../../universal-renderer/src/http";
+import type { createServer as createHttpServer } from "universal-renderer/http";
 import type { ViteDevServer } from "vite";
 
 const port = Number(process.env.SSR_PORT ?? process.env.PORT);
@@ -14,6 +14,10 @@ vite = await createViteServer({
   appType: "custom",
 });
 setup = (await vite.ssrLoadModule("@/ssr/setup")).default;
+const { createServer }: { createServer: typeof createHttpServer } =
+  (await vite.ssrLoadModule("universal-renderer/http")) as {
+    createServer: typeof createHttpServer;
+  };
 
 const app = await createServer({
   middleware: vite?.middlewares,

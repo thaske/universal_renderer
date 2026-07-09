@@ -1,7 +1,7 @@
 import setup from "@/ssr/setup";
 import { head, transform } from "@/ssr/utils";
 import { renderToString } from "react-dom/server.node";
-import { createRenderer } from "../../../../../universal-renderer/src/stdio";
+import { createRenderer } from "universal-renderer/stdio";
 
 await createRenderer({
   setup,
