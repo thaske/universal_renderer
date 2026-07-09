@@ -6,6 +6,15 @@ module UniversalRenderer
 
     included do
       helper UniversalRenderer::SSR::Helpers
+
+      # Distinct from the `enable_ssr` DSL method: reading a class_attribute
+      # named `enable_ssr` on a class that never opted in would invoke the DSL
+      # (arming SSR as a side effect) instead of returning false.
+      class_attribute :ssr_enabled, instance_writer: false, default: false
+      class_attribute :ssr_streaming_preference,
+                      instance_writer: false,
+                      default: nil
+
       before_action :initialize_props, unless: :skip_universal_renderer?
     end
 
@@ -17,10 +26,7 @@ module UniversalRenderer
 
     class_methods do
       def enable_ssr(options = {})
-        class_attribute :enable_ssr, instance_writer: false
-        self.enable_ssr = true
-
-        class_attribute :ssr_streaming_preference, instance_writer: false
+        self.ssr_enabled = true
         self.ssr_streaming_preference = options[:streaming]
 
         include UniversalRenderer::Renderable::Streaming if options[:streaming]
@@ -46,11 +52,11 @@ module UniversalRenderer
     end
 
     def ssr_streaming?
-      self.class.try(:ssr_streaming_preference)
+      self.class.ssr_streaming_preference
     end
 
     def render(*, **)
-      return super unless self.class.enable_ssr
+      return super unless self.class.ssr_enabled
       return super unless request.format.html?
 
       # Allow Warden and other authentication mechanisms to complete first
@@ -60,7 +66,6 @@ module UniversalRenderer
         super unless success
       else
         fetch_ssr
-        Rails.logger.info("universal_renderer render: #{@ssr}")
         super
       end
     end
@@ -111,7 +116,7 @@ module UniversalRenderer
     # This helps prevent interference with authentication flows like Warden
     def skip_universal_renderer?
       # Skip if SSR is not enabled for this controller
-      return true unless self.class.enable_ssr
+      return true unless self.class.ssr_enabled
 
       # Skip for non-HTML requests
       return true unless request.format.html?
