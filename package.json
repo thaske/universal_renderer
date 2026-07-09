@@ -1,8 +1,7 @@
 {
   "private": true,
   "workspaces": [
-    "universal-renderer",
-    "benchmark"
+    "universal-renderer"
   ],
   "dependencies": {
     "@prettier/plugin-ruby": "^4.0.4",

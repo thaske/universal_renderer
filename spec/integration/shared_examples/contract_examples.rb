@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.shared_examples "SSR contract compliance" do |engine_type|
+RSpec.shared_examples "SSR contract compliance" do
   describe "SSR rendering" do
     it "accepts valid SSR requests and returns proper JSON structure" do
       test_props = {
@@ -12,52 +12,24 @@ RSpec.shared_examples "SSR contract compliance" do |engine_type|
         array_data: [1, 2, 3]
       }
 
-      result =
-        if engine_type == :http
-          test_ssr_endpoint(
-            server_url,
-            url: "http://example.com/test-page",
-            props: test_props
-          )
-        else
-          # For STDIO mode, test via the adapter directly
-          test_stdio_adapter(
-            url: "http://example.com/test-page",
-            props: test_props
-          )
-        end
+      result = test_ssr_endpoint(
+        server_url,
+        url: "http://example.com/test-page",
+        props: test_props
+      )
 
       expect(result[:success]).to be true
-      expect(result[:status]).to eq 200 if engine_type == :http
-
-      if engine_type == :http
-        expect(result[:json]).to include(head: be_a(String), body: be_a(String))
-      else
-        expect(result[:response]).to be_a(UniversalRenderer::SSR::Response)
-        expect(result[:response].head).to be_a(String)
-        expect(result[:response].body).to be_a(String)
-      end
+      expect(result[:status]).to eq 200
+      expect(result[:json]).to include(head: be_a(String), body: be_a(String))
     end
 
     it "handles empty props correctly" do
-      result =
-        if engine_type == :http
-          test_ssr_endpoint(server_url, props: {})
-        else
-          test_stdio_adapter(props: {})
-        end
+      result = test_ssr_endpoint(server_url, props: {})
 
       expect(result[:success]).to be true
-
-      if engine_type == :http
-        expect(result[:json]).to be_a(Hash)
-        expect(result[:json]).to have_key(:head)
-        expect(result[:json]).to have_key(:body)
-      else
-        expect(result[:response]).to be_a(UniversalRenderer::SSR::Response)
-        expect(result[:response].head).to be_a(String)
-        expect(result[:response].body).to be_a(String)
-      end
+      expect(result[:json]).to be_a(Hash)
+      expect(result[:json]).to have_key(:head)
+      expect(result[:json]).to have_key(:body)
     end
 
     it "processes complex nested data structures" do
@@ -78,12 +50,7 @@ RSpec.shared_examples "SSR contract compliance" do |engine_type|
         }
       }
 
-      result =
-        if engine_type == :http
-          test_ssr_endpoint(server_url, props: complex_props)
-        else
-          test_stdio_adapter(props: complex_props)
-        end
+      result = test_ssr_endpoint(server_url, props: complex_props)
 
       expect(result[:success]).to be true
     end
@@ -91,12 +58,7 @@ RSpec.shared_examples "SSR contract compliance" do |engine_type|
 
   describe "Ruby client integration" do
     it "integrates properly with UniversalRenderer::Client::Base" do
-      results =
-        if engine_type == :http
-          test_ruby_client_integration(server_url)
-        else
-          test_ruby_client_integration_stdio
-        end
+      results = test_ruby_client_integration(server_url)
       base_result = results[:base_client]
 
       expect(base_result[:success]).to be true
@@ -165,33 +127,6 @@ RSpec.shared_examples "streaming SSR support" do
       expect(stream_result[:success]).to be true
       expect(stream_result[:stream_closed]).to be true
       expect(stream_result[:stream_content]).to be_a(StringIO)
-    end
-  end
-end
-
-RSpec.shared_examples "stdio streaming support" do
-  describe "streaming" do
-    let(:stream_io) { StringIO.new }
-    let(:response) do
-      stream = stream_io
-      stream_double = double("stream")
-      allow(stream_double).to receive(:write) { |chunk| stream.write(chunk) }
-      allow(stream_double).to receive(:closed?).and_return(false)
-      allow(stream_double).to receive(:close)
-      double("response", stream: stream_double)
-    end
-
-    it "supports streaming" do
-      adapter = UniversalRenderer::AdapterFactory.adapter
-      expect(adapter.supports_streaming?).to be true
-    end
-
-    it "relays streamed chunks into the response stream" do
-      adapter = UniversalRenderer::AdapterFactory.adapter
-      result = adapter.stream("http://example.com/x", {}, "template", response)
-
-      expect(result).to be true
-      expect(stream_io.string).to eq("<html>chunk-1chunk-2</html>")
     end
   end
 end
