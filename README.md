@@ -43,27 +43,40 @@ UniversalRenderer helps you forward rendering requests to external SSR services,
 Configure in `config/initializers/universal_renderer.rb`:
 
 ```ruby
-UniversalRenderer.configure do |config|
-  # Choose your SSR engine:
-  # :http           - External Node.js server (default)
-  # :stdio          - Stdio Bun processes via Open3 (no external server)
-  # Both engines support blocking and streaming SSR.
-  config.engine = :http
+UniversalRenderer.configure do |c|
+  # Choose your SSR adapter:
+  # :http  - External Node.js/Bun server (default, recommended for production)
+  # :stdio - EXPERIMENTAL. Stdio Bun processes via Open3 (no external server)
+  # Both adapters support blocking and streaming SSR.
+  c.adapter = :http
   # HTTP is recommended for most applications, including production.
-  # Choose :stdio only when you want embedded SSR instead of a separate service.
+  # Choose :stdio only for embedded SSR; it is experimental and not
+  # recommended for production.
 
-  # HTTP Engine Configuration (when engine = :http)
-  config.ssr_url = "http://localhost:3001"
-  config.timeout = 3
-  config.http_pool_size = 5 # persistent Net::HTTP connections per SSR origin
+  # HTTP adapter configuration (when adapter = :http)
+  c.url = "http://localhost:3001"
+  c.timeout = 3
+  c.stream_path = "/stream"
+  c.http.pool_size = 5 # persistent Net::HTTP connections per SSR origin
 
-  # HTTP configuration can also use environment variables:
-  # SSR_HTTP_POOL_SIZE (default: 5)
+  # --- Stdio adapter (EXPERIMENTAL, when adapter = :stdio) -------------
+  # c.stdio.pool_size = 5
+  # c.stdio.timeout_ms = 5_000
+  # c.stdio.cli_script = "app/frontend/ssr/stdio.tsx"
+end
+```
 
-  # Stdio configuration is handled via environment variables:
-  # SSR_STDIO_POOL_SIZE (default: 5)
-  # SSR_STDIO_TIMEOUT (default: 5000ms)
-  # SSR_STDIO_CLI_SCRIPT (default: "app/frontend/ssr/stdio.tsx")
+The gem itself never reads environment variables; it only exposes the plain
+configuration attributes above with sensible defaults. Binding those values to
+`ENV` is entirely up to you, in your own initializer, using whatever keys you
+like. If you want a convention, the suggested env-var prefix is
+`UNIVERSAL_RENDERER_*` (e.g. `UNIVERSAL_RENDERER_URL`):
+
+```ruby
+UniversalRenderer.configure do |c|
+  c.url = ENV.fetch("UNIVERSAL_RENDERER_URL", "http://localhost:3001")
+  c.timeout = ENV.fetch("UNIVERSAL_RENDERER_TIMEOUT", 3).to_i
+  # ...
 end
 ```
 
@@ -84,15 +97,16 @@ UniversalRenderer.logger = Logger.new("log/universal_renderer.log")
 ```
 
 Setting it back to `nil` restores the default tagged `Rails.logger`.
-```
 
-## SSR Engines
+````
 
-UniversalRenderer supports two SSR engine modes:
+## SSR Adapters
 
-### HTTP Engine (Default)
+UniversalRenderer supports two SSR adapter modes:
 
-The HTTP engine forwards SSR requests to an external Node.js server. This is the default and recommended approach for most applications.
+### HTTP Adapter (Default)
+
+The HTTP adapter forwards SSR requests to an external Node.js/Bun server. This is the default and recommended approach for most applications, including production.
 
 **Pros:**
 
@@ -107,9 +121,11 @@ The HTTP engine forwards SSR requests to an external Node.js server. This is the
 - HTTP serialization overhead for each request, though persistent connections are reused
 - Additional infrastructure complexity
 
-### Stdio Engine
+### Stdio Adapter (Experimental)
 
-The Stdio engine maintains a pool of stdio Bun processes and communicates with them via stdin/stdout for server-side rendering.
+> **Warning:** The stdio adapter is **experimental** and less battle-tested than the HTTP adapter. It is not recommended for production. Use it only when you need embedded SSR inside the Rails process and accept the operational trade-offs.
+
+The stdio adapter maintains a pool of stdio Bun processes and communicates with them via stdin/stdout for server-side rendering. It is lazily loaded: the stdio adapter code is only required when `config.adapter = :stdio` is set, so it never affects the default (HTTP) boot path.
 
 **Pros:**
 
@@ -123,15 +139,17 @@ The Stdio engine maintains a pool of stdio Bun processes and communicates with t
 
 - Memory overhead per long-lived process
 - Not suitable for complex JavaScript applications
+- Experimental; not recommended for production
 
-### Selecting the engine per environment
+### Selecting the adapter per environment
 
 HTTP is the safest default for most environments, including production, because it
 keeps the SSR runtime separately observable, restartable, and scalable. Choose
-`:stdio` when you explicitly want embedded SSR inside the Rails deployment and
-are comfortable sizing and operating the Bun process pool with the Rails app.
+`:stdio` only when you explicitly want embedded SSR inside the Rails deployment,
+are comfortable sizing and operating the Bun process pool with the Rails app, and
+accept that this adapter is experimental.
 
-If production uses `:stdio`, ensure Bun and the configured stdio script are available
+If you do use `:stdio`, ensure Bun and the configured stdio script are available
 before boot. The script can be a `.ts` / `.tsx` entrypoint or a prebuilt bundle.
 
 ## Basic Usage
@@ -151,7 +169,7 @@ enable_ssr
 
 # Streaming SSR (only use if you need fast TTFB)
 enable_ssr streaming: true
-```
+````
 
 ```ruby
 class ProductsController < ApplicationController
@@ -327,15 +345,15 @@ To set up the SSR server for your Rails application:
    ssr: bin/vite ssr
    ```
 
-## Setting Up Stdio Engine
+## Setting Up the Stdio Adapter (Experimental)
 
-If you prefer to use the stdio engine instead of an external HTTP server:
+If you prefer to use the stdio adapter instead of an external HTTP server (experimental, not recommended for production):
 
-1. Configure the engine in your initializer:
+1. Configure the adapter in your initializer:
 
    ```ruby
    # config/initializers/universal_renderer.rb
-   UniversalRenderer.configure { |config| config.engine = :stdio }
+   UniversalRenderer.configure { |config| config.adapter = :stdio }
    ```
 
 2. Create a persistent CLI script (e.g., `app/frontend/ssr/stdio.tsx`):

@@ -1,28 +1,52 @@
-module UniversalRenderer
-  class Configuration
-    attr_accessor :ssr_url,
-                  :timeout,
-                  :ssr_stream_path,
-                  :http_pool_size,
-                  :stdio_pool_size,
-                  :stdio_timeout,
-                  :stdio_cli_script
-    attr_reader :engine
+# frozen_string_literal: true
 
-    def initialize
-      @ssr_url = ENV.fetch("SSR_SERVER_URL", nil)
-      @timeout = (ENV["SSR_TIMEOUT"] || 3).to_i
-      @ssr_stream_path = ENV.fetch("SSR_STREAM_PATH", "/stream")
-      @http_pool_size = ENV.fetch("SSR_HTTP_POOL_SIZE", 5).to_i
-      self.engine = ENV.fetch("SSR_ENGINE", :http)
-      @stdio_pool_size = ENV.fetch("SSR_STDIO_POOL_SIZE", 5).to_i
-      @stdio_timeout = ENV.fetch("SSR_STDIO_TIMEOUT", 5_000).to_i
-      @stdio_cli_script =
-        ENV.fetch("SSR_STDIO_CLI_SCRIPT", "app/frontend/ssr/stdio.tsx")
+module UniversalRenderer
+  # Configuration for UniversalRenderer.
+  #
+  # This object holds plain Ruby defaults only. It never reads environment
+  # variables itself; binding configuration to ENV is the host application's
+  # responsibility, done in the initializer (see the generated
+  # config/initializers/universal_renderer.rb). The documented env-var
+  # convention is the `UNIVERSAL_RENDERER_*` prefix.
+  class Configuration
+    # HTTP adapter options. Applies only when `config.adapter == :http`.
+    class Http
+      attr_accessor :pool_size
+
+      def initialize
+        @pool_size = 5
+      end
     end
 
-    def engine=(value)
-      @engine = value.to_s.downcase.to_sym
+    # Stdio adapter options. Applies only when `config.adapter == :stdio`.
+    #
+    # NOTE: The stdio adapter is experimental and less battle-tested than the
+    # HTTP adapter. It is intended for embedded, single-process deployments and
+    # is not recommended for production.
+    class Stdio
+      attr_accessor :pool_size, :timeout_ms, :cli_script
+
+      def initialize
+        @pool_size = 5
+        @timeout_ms = 5_000
+        @cli_script = "app/frontend/ssr/stdio.tsx"
+      end
+    end
+
+    attr_accessor :url, :timeout, :stream_path
+    attr_reader :adapter, :http, :stdio
+
+    def initialize
+      @adapter = :http
+      @url = nil
+      @timeout = 3
+      @stream_path = "/stream"
+      @http = Http.new
+      @stdio = Stdio.new
+    end
+
+    def adapter=(value)
+      @adapter = value.to_s.downcase.to_sym
     end
   end
 end

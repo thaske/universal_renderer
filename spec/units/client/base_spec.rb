@@ -5,9 +5,9 @@ require "rails_helper"
 RSpec.describe UniversalRenderer::Client::Base do
   before do
     UniversalRenderer::Client::HttpPool.reset!
-    UniversalRenderer.config.ssr_url = "http://ssr.example.test/render"
+    UniversalRenderer.config.url = "http://ssr.example.test/render"
     UniversalRenderer.config.timeout = 3
-    UniversalRenderer.config.http_pool_size = 1
+    UniversalRenderer.config.http.pool_size = 1
   end
 
   after { UniversalRenderer::Client::HttpPool.reset! }

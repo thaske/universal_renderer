@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Ruby Gem
+
+#### Changed (breaking)
+
+- Reworked configuration handling so `UniversalRenderer::Configuration` no
+  longer reads environment variables itself; it only exposes plain attributes
+  with sensible defaults. Binding those values to `ENV` is left entirely to
+  the host application. The suggested env-var convention is the
+  `UNIVERSAL_RENDERER_*` prefix (documented in the README); the `SSR_*` env
+  vars are no longer referenced anywhere in the gem.
+- Renamed `config.engine` to `config.adapter`.
+- Renamed `config.ssr_url` to `config.url`, `config.ssr_stream_path` to
+  `config.stream_path`.
+- Nested adapter-specific options under sub-objects: `config.http.pool_size`
+  (was `config.http_pool_size`), `config.stdio.pool_size` (was
+  `config.stdio_pool_size`), `config.stdio.timeout_ms` (was
+  `config.stdio_timeout`), and `config.stdio.cli_script` (was
+  `config.stdio_cli_script`).
+
+#### Changed
+
+- The stdio adapter is now **experimental** and is lazily loaded: it is only
+  required when `config.adapter = :stdio` is set, so it never affects the
+  default (HTTP) boot path. It is no longer recommended for production.
+
+### Documentation
+
+- README and install generator now lead with the HTTP adapter as the
+  production-recommended path; stdio is documented as experimental.
+
 ## 0.4.4 - 2025-06-29
 
 ### Ruby Gem

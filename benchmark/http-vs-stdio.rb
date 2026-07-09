@@ -44,7 +44,11 @@ ITERATIONS = Integer(ENV.fetch("ITERATIONS", "300"))
 WARMUP = Integer(ENV.fetch("WARMUP", "25"))
 RESULTS_DIR = File.expand_path("../tmp/reports", __dir__)
 RESULTS_FILE = File.join(RESULTS_DIR, "http-vs-stdio.json")
-STDIO_SCRIPT = ENV.fetch("SSR_STDIO_CLI_SCRIPT", "benchmark/stdio-renderer.ts")
+STDIO_SCRIPT =
+  ENV.fetch(
+    "UNIVERSAL_RENDERER_STDIO_CLI_SCRIPT",
+    "benchmark/stdio-renderer.ts"
+  )
 SCENARIOS =
   ENV
     .fetch("SCENARIOS", "basic,props-heavy,react-stack")
@@ -57,13 +61,14 @@ DEFAULT_ITEM_COUNTS = {
   "react-stack" => 125
 }.freeze
 
-UniversalRenderer.config.ssr_url = ENV.fetch("SSR_SERVER_URL")
-UniversalRenderer.config.timeout = Integer(ENV.fetch("SSR_TIMEOUT", "15"))
-UniversalRenderer.config.stdio_cli_script = STDIO_SCRIPT
-UniversalRenderer.config.stdio_timeout =
-  Integer(ENV.fetch("SSR_STDIO_TIMEOUT", "15000"))
-UniversalRenderer.config.stdio_pool_size =
-  Integer(ENV.fetch("SSR_STDIO_POOL_SIZE", "1"))
+UniversalRenderer.config.url = ENV.fetch("UNIVERSAL_RENDERER_URL")
+UniversalRenderer.config.timeout =
+  Integer(ENV.fetch("UNIVERSAL_RENDERER_TIMEOUT", "15"))
+UniversalRenderer.config.stdio.cli_script = STDIO_SCRIPT
+UniversalRenderer.config.stdio.timeout_ms =
+  Integer(ENV.fetch("UNIVERSAL_RENDERER_STDIO_TIMEOUT_MS", "15000"))
+UniversalRenderer.config.stdio.pool_size =
+  Integer(ENV.fetch("UNIVERSAL_RENDERER_STDIO_POOL_SIZE", "1"))
 
 def monotonic_ms
   Process.clock_gettime(Process::CLOCK_MONOTONIC) * 1000.0
@@ -213,8 +218,8 @@ def strip_runtime_objects(result)
 end
 
 puts "UniversalRenderer benchmark: HTTP vs Stdio"
-puts "iterations=#{ITERATIONS}, warmup=#{WARMUP}, scenarios=#{SCENARIOS.join(",")}, stdio_pool_size=#{UniversalRenderer.config.stdio_pool_size}"
-puts "http_url=#{UniversalRenderer.config.ssr_url}, stdio_script=#{UniversalRenderer.config.stdio_cli_script}"
+puts "iterations=#{ITERATIONS}, warmup=#{WARMUP}, scenarios=#{SCENARIOS.join(",")}, stdio_pool_size=#{UniversalRenderer.config.stdio.pool_size}"
+puts "http_url=#{UniversalRenderer.config.url}, stdio_script=#{UniversalRenderer.config.stdio.cli_script}"
 puts
 
 scenario_results =
@@ -224,11 +229,11 @@ scenario_results =
 
     puts "#{scenario} (items=#{props.fetch("items").length}, props=#{props_bytes} bytes)"
 
-    UniversalRenderer.config.engine = :http
+    UniversalRenderer.config.adapter = :http
     http_result = measure("HTTP", props)
     print_result("HTTP", http_result)
 
-    UniversalRenderer.config.engine = :stdio
+    UniversalRenderer.config.adapter = :stdio
     stdio_result = measure("Stdio", props)
     print_result("Stdio", stdio_result)
     shutdown_stdio(stdio_result.fetch("adapter"))
@@ -268,9 +273,9 @@ output = {
   "generated_at" => Time.now.utc.iso8601,
   "iterations" => ITERATIONS,
   "warmup" => WARMUP,
-  "http_url" => UniversalRenderer.config.ssr_url,
-  "stdio_script" => UniversalRenderer.config.stdio_cli_script,
-  "stdio_pool_size" => UniversalRenderer.config.stdio_pool_size,
+  "http_url" => UniversalRenderer.config.url,
+  "stdio_script" => UniversalRenderer.config.stdio.cli_script,
+  "stdio_pool_size" => UniversalRenderer.config.stdio.pool_size,
   "scenarios" => scenario_results
 }
 File.write(RESULTS_FILE, JSON.pretty_generate(output))

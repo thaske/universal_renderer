@@ -117,9 +117,9 @@ async function main() {
         stdio: "inherit",
         env: {
           ...globalThis.process.env,
-          SSR_SERVER_URL: `http://127.0.0.1:${port}/`,
-          SSR_STDIO_CLI_SCRIPT:
-            globalThis.process.env.SSR_STDIO_CLI_SCRIPT ??
+          UNIVERSAL_RENDERER_URL: `http://127.0.0.1:${port}/`,
+          UNIVERSAL_RENDERER_STDIO_CLI_SCRIPT:
+            globalThis.process.env.UNIVERSAL_RENDERER_STDIO_CLI_SCRIPT ??
             "benchmark/stdio-renderer.ts",
         },
       },

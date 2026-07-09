@@ -24,14 +24,14 @@ module UniversalRenderer
         unless Setup.ensure_ssr_server_url_configured?(config)
           UniversalRenderer.log do |log|
             log.warn(
-              "Stream: SSR URL (config.ssr_url) is not configured. Falling back."
+              "Stream: SSR URL (config.url) is not configured. Falling back."
             )
           end
           return false
         end
 
         stream_uri_obj = nil
-        full_ssr_url_for_log = config.ssr_url.to_s # For logging in case of early error
+        full_ssr_url_for_log = config.url.to_s # For logging in case of early error
 
         begin
           body = { url: url, props: props, template: template }
@@ -45,7 +45,7 @@ module UniversalRenderer
         rescue URI::InvalidURIError => e
           UniversalRenderer.log do |log|
             log.error(
-              "Stream: SSR stream failed due to invalid URI ('#{config.ssr_url}'): #{e.message}"
+              "Stream: SSR stream failed due to invalid URI ('#{config.url}'): #{e.message}"
             )
           end
           return false

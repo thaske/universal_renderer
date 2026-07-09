@@ -3,6 +3,7 @@
 This app is a minimal integration example for the `universal_renderer` gem.
 
 It uses:
+
 - Ruby on Rails
 - `vite_rails`
 - Bun
@@ -38,7 +39,7 @@ SSR setup/render handlers are shared in `app/frontend/ssr/setup.tsx`.
 
 The HTTP SSR server is run from `app/frontend/ssr/ssr.tsx` via `Procfile.dev`.
 For a production-style run, build and start `public/vite-ssr-http/ssr.js` with
-Bun and set `SSR_SERVER_URL` to its address.
+Bun and set `UNIVERSAL_RENDERER_URL` to its address.
 
 ## Production build note
 
@@ -57,6 +58,7 @@ bun public/vite-ssr-http/ssr.js
 ```
 
 To test larger SSR payloads and more query seed data, use:
+
 - `http://127.0.0.1:3000/?records=50&size_kb=16`
 - `http://127.0.0.1:3000/?records=500&size_kb=128`
 - `http://127.0.0.1:3000/?records=1000&size_kb=256`

@@ -25,7 +25,7 @@ module UniversalRenderer
       #   (HTTP 2xx). Returns `nil` when the request fails or the SSR service is
       #   unreachable.
       def self.call(url, props)
-        ssr_url = UniversalRenderer.config.ssr_url
+        ssr_url = UniversalRenderer.config.url
         return if ssr_url.blank?
 
         timeout = UniversalRenderer.config.timeout
