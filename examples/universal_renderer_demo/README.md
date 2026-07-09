@@ -49,9 +49,6 @@ Do not point `c.stdio_cli_script` at the HTTP bundle. In this demo that bundle i
 try to bind a port instead of reading render
 requests from stdin.
 
-It uses shared helpers from `universal-renderer/react-query` to:
-- keep query-cache seeding logic aligned between SSR and hydration
-
 ## Production build note
 
 When deploying with Stdio in production, make sure SSR bundle output exists:

@@ -54,7 +54,7 @@ module IntegrationHelpers
     # Generates the JavaScript content for the test server
     def self.generate_server_content(port:, hostname:, **_config)
       <<~JAVASCRIPT
-        import { createServer } from 'universal-renderer/express';
+        import { createServer } from 'universal-renderer/http';
         import React from 'react';
 
         // Test callbacks for integration testing

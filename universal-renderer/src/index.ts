@@ -5,7 +5,6 @@ export {
   createSSRHandler,
   createStreamHandler,
   createServer,
-  startCluster,
 } from "./http";
 export { createServer as default } from "./http";
 export type {

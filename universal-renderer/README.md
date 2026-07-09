@@ -76,17 +76,6 @@ Point the gem at `http://localhost:3001` and you're done.
 
 Universal Renderer supports Express HTTP and stdio runtimes.
 
-## React Query Helpers
-
-For React apps that seed React Query cache data consistently across SSR and hydration,
-you can use `universal-renderer/react-query`:
-
-```ts
-import {
-  hydrateQueryClientFromProps,
-} from "universal-renderer/react-query";
-```
-
 ### Options
 
 - `setup(url, props)` → `context` &mdash; prepare your app context.
