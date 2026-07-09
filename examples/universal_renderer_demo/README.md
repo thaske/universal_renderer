@@ -18,8 +18,8 @@ bundle install
 bun install
 ```
 
-This demo uses Bun for package management, Vite scripts, and both HTTP and
-stdio SSR processes.
+This demo uses Bun for package management, Vite scripts, and the external HTTP
+SSR process.
 
 ## Run the demo
 
@@ -31,45 +31,29 @@ bin/dev
 
 Then open `http://127.0.0.1:3000`.
 
-This demo uses:
-- `:http` engine in development/test (`app/frontend/ssr/ssr.tsx`)
-- `:stdio` engine in production (`app/frontend/ssr/stdio.tsx`)
+This demo uses the `:http` engine with streaming enabled. The Rails app sends
+render requests to the external SSR server at `http://localhost:5200`.
 
 SSR setup/render handlers are shared in `app/frontend/ssr/setup.tsx`.
 
-In development, `bin/dev` runs the Bun+Express SSR server directly from
-`app/frontend/ssr/ssr.tsx` via `Procfile.dev`.
-
-In production, Rails executes the Vite-built stdio bundle at
-`public/vite-ssr-stdio/ssr.js` with Bun (built from
-`app/frontend/ssr/stdio.tsx`).
-
-Do not point `c.stdio_cli_script` at the HTTP bundle. In this demo that bundle is
-`public/vite-ssr-http/ssr.js`, and it will
-try to bind a port instead of reading render
-requests from stdin.
+The HTTP SSR server is run from `app/frontend/ssr/ssr.tsx` via `Procfile.dev`.
+For a production-style run, build and start `public/vite-ssr-http/ssr.js` with
+Bun and set `SSR_SERVER_URL` to its address.
 
 ## Production build note
 
-When deploying with Stdio in production, make sure SSR bundle output exists:
+When deploying the HTTP SSR server, make sure the SSR bundle output exists:
 
 ```bash
 bun run build
 # or at minimum:
-bun run build:ssr
+bun run build:ssr:http
 ```
 
-If you force `c.engine = :stdio` outside production, build the stdio bundle
-before booting Rails:
+To run the built HTTP bundle directly, use:
 
 ```bash
-bun run build:ssr:stdio
-```
-
-To run the built stdio bundle directly, use:
-
-```bash
-bun public/vite-ssr-stdio/ssr.js
+bun public/vite-ssr-http/ssr.js
 ```
 
 To test larger SSR payloads and more query seed data, use:

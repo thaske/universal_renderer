@@ -9,11 +9,11 @@
     "build:client": "bunx vite build",
     "build:ssr:http": "./bin/build-ssr-http",
     "build:ssr:stdio": "./bin/build-ssr-stdio",
-    "build:ssr": "bun run build:ssr:stdio",
+    "build:ssr": "bun run build:ssr:http",
     "build": "bun run build:client && bun run build:ssr",
     "ssr:http": "bun public/vite-ssr-http/ssr.js",
     "ssr:stdio": "bun public/vite-ssr-stdio/ssr.js",
-    "ssr": "bun public/vite-ssr-stdio/ssr.js"
+    "ssr": "bun public/vite-ssr-http/ssr.js"
   },
   "dependencies": {
     "@dr.pogodin/react-helmet": "^3.0.6",
