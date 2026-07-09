@@ -45,9 +45,7 @@ module UniversalRenderer
 
         def reset!
           mutex.synchronize do
-            pools.each_value do |pool|
-              pool.shutdown { |http| close(http) }
-            end
+            pools.each_value { |pool| pool.shutdown { |http| close(http) } }
             pools.clear
           end
         end
@@ -74,18 +72,21 @@ module UniversalRenderer
           key = pool_key(uri, timeout)
 
           mutex.synchronize do
-            pools[key] ||= ConnectionPool.new(size: pool_size, timeout: timeout) do
-              build_connection(uri, timeout)
-            end
+            pools[key] ||= ConnectionPool.new(
+              size: pool_size,
+              timeout: timeout
+            ) { build_connection(uri, timeout) }
           end
         end
 
         def build_connection(uri, timeout)
-          Net::HTTP.new(uri.host, uri.port).tap do |http|
-            http.use_ssl = (uri.scheme == "https")
-            http.open_timeout = timeout
-            http.read_timeout = timeout
-          end
+          Net::HTTP
+            .new(uri.host, uri.port)
+            .tap do |http|
+              http.use_ssl = (uri.scheme == "https")
+              http.open_timeout = timeout
+              http.read_timeout = timeout
+            end
         end
 
         def ensure_started(http)
@@ -97,7 +98,7 @@ module UniversalRenderer
         end
 
         def pool_size
-          UniversalRenderer.config.http_pool_size
+          UniversalRenderer.config.http.pool_size
         end
 
         def pools

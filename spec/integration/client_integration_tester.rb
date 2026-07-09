@@ -11,8 +11,8 @@ module ClientIntegrationTester
     results = {}
 
     # Configure the gem to use our test server
-    original_ssr_url = UniversalRenderer.config.ssr_url
-    UniversalRenderer.config.ssr_url = base_url
+    original_ssr_url = UniversalRenderer.config.url
+    UniversalRenderer.config.url = base_url
 
     begin
       # Test UniversalRenderer::Client::Base
@@ -22,7 +22,7 @@ module ClientIntegrationTester
       results[:stream_client] = test_stream_client_integration
     ensure
       # Restore original configuration
-      UniversalRenderer.config.ssr_url = original_ssr_url
+      UniversalRenderer.config.url = original_ssr_url
     end
 
     results

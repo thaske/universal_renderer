@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "universal_renderer/adapter/stdio"
+
 RSpec.describe UniversalRenderer::AdapterFactory do
   let(:logger) do
     instance_double(Logger, error: nil, warn: nil, info: nil, debug: nil)
@@ -14,9 +16,9 @@ RSpec.describe UniversalRenderer::AdapterFactory do
   after { described_class.reset! }
 
   describe ".create_adapter" do
-    context "when engine is :http" do
+    context "when adapter is :http" do
       before do
-        allow(UniversalRenderer.config).to receive(:engine).and_return(:http)
+        allow(UniversalRenderer.config).to receive(:adapter).and_return(:http)
       end
 
       it "returns an HTTP adapter" do
@@ -25,14 +27,20 @@ RSpec.describe UniversalRenderer::AdapterFactory do
       end
     end
 
-    context "when engine is :stdio" do
+    context "when adapter is :stdio" do
+      let(:stdio_config) do
+        instance_double(
+          UniversalRenderer::Configuration::Stdio,
+          pool_size: 2,
+          timeout_ms: 3000,
+          cli_script: "app/frontend/ssr/ssr.ts"
+        )
+      end
+
       before do
-        # Mock Stdio configuration options
         allow(UniversalRenderer.config).to receive_messages(
-          engine: :stdio,
-          stdio_pool_size: 2,
-          stdio_timeout: 3000,
-          stdio_cli_script: "app/frontend/ssr/ssr.ts"
+          adapter: :stdio,
+          stdio: stdio_config
         )
 
         # Mock file existence for CLI script
@@ -62,35 +70,15 @@ RSpec.describe UniversalRenderer::AdapterFactory do
       end
     end
 
-    context "when engine is stdio" do
+    context "when adapter is unknown" do
       before do
-        allow(UniversalRenderer.config).to receive_messages(
-          engine: :stdio,
-          stdio_pool_size: 2,
-          stdio_timeout: 3000,
-          stdio_cli_script: "app/frontend/ssr/ssr.ts"
+        allow(UniversalRenderer.config).to receive(:adapter).and_return(
+          :unknown
         )
-        allow(File).to receive(:exist?).and_return(true)
-        allow(Rails).to receive(:root).and_return(
-          Pathname.new("/mock/rails/root")
-        )
-        pool_mock = instance_double(ConnectionPool)
-        allow(ConnectionPool).to receive(:new).and_return(pool_mock)
-      end
-
-      it "returns a Stdio adapter" do
-        adapter = described_class.create_adapter
-        expect(adapter).to be_a(UniversalRenderer::Adapter::Stdio)
-      end
-    end
-
-    context "when engine is unknown" do
-      before do
-        allow(UniversalRenderer.config).to receive(:engine).and_return(:unknown)
       end
 
       it "logs a warning and returns HTTP adapter" do
-        expect(logger).to receive(:warn).with(/Unknown SSR engine/)
+        expect(logger).to receive(:warn).with(/Unknown SSR adapter/)
         adapter = described_class.create_adapter
         expect(adapter).to be_a(UniversalRenderer::Adapter::Http)
       end
@@ -99,7 +87,7 @@ RSpec.describe UniversalRenderer::AdapterFactory do
 
   describe ".adapter" do
     before do
-      allow(UniversalRenderer.config).to receive(:engine).and_return(:http)
+      allow(UniversalRenderer.config).to receive(:adapter).and_return(:http)
     end
 
     it "returns a singleton instance" do
@@ -111,7 +99,7 @@ RSpec.describe UniversalRenderer::AdapterFactory do
 
   describe ".reset!" do
     before do
-      allow(UniversalRenderer.config).to receive(:engine).and_return(:http)
+      allow(UniversalRenderer.config).to receive(:adapter).and_return(:http)
     end
 
     it "clears the cached adapter" do

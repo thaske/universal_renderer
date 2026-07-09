@@ -70,9 +70,9 @@ RSpec.describe "Multi-Engine Contract Integration", type: :integration do
       end
 
       it "handles adapter configuration correctly" do
-        expect(UniversalRenderer.config.engine).to eq(:stdio)
-        expect(UniversalRenderer.config.stdio_pool_size).to eq(2)
-        expect(UniversalRenderer.config.stdio_timeout).to eq(3000)
+        expect(UniversalRenderer.config.adapter).to eq(:stdio)
+        expect(UniversalRenderer.config.stdio.pool_size).to eq(2)
+        expect(UniversalRenderer.config.stdio.timeout_ms).to eq(3000)
       end
 
       it "processes rendering through stdio interface" do

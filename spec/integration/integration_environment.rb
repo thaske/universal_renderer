@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "socket"
+require "universal_renderer/adapter/stdio"
 
 module IntegrationEnvironment
   # Sets up integration test environment
@@ -53,12 +54,12 @@ module IntegrationEnvironment
   def configure_universal_renderer_for_tests(engine: :http)
     UniversalRenderer.configure do |config|
       config.timeout = ENV["CI"] ? 15 : 5 # Longer timeout in CI
-      config.engine = engine
+      config.adapter = engine
 
       if %i[stdio].include?(engine)
-        config.stdio_pool_size = 2
-        config.stdio_timeout = 3000
-        config.stdio_cli_script = "spec/fixtures/test_ssr.ts"
+        config.stdio.pool_size = 2
+        config.stdio.timeout_ms = 3000
+        config.stdio.cli_script = "spec/fixtures/test_ssr.ts"
       end
     end
   end

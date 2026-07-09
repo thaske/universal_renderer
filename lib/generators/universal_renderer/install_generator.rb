@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module UniversalRenderer
   class InstallGenerator < Rails::Generators::Base
     source_root File.expand_path("templates", __dir__)
@@ -8,16 +10,10 @@ module UniversalRenderer
 
     def show_installation_notes
       say_status "info", "Universal Renderer installed successfully!"
-      say_status "note", "To use stdio (process pool):"
-      say_status "", "  1. Set config.engine = :stdio in your initializer"
+      say_status "note", "Next steps:"
       say_status "",
-                 "  2. Create a stdio CLI script (e.g., app/frontend/ssr/stdio.tsx)"
-      say_status "",
-                 "  3. Configure the CLI script path if using a custom location"
-      say_status "", "  4. Ensure Bun is installed and accessible"
-      say_status "note", "To use HTTP server (external Node.js):"
-      say_status "", "  1. Keep config.engine = :http (default)"
-      say_status "", "  2. Set SSR_SERVER_URL environment variable"
+                 "  1. Edit config/initializers/universal_renderer.rb to point at your SSR server"
+      say_status "", "  2. Ensure your Node.js/Bun SSR server is running"
     end
   end
 end

@@ -10,9 +10,10 @@ module UniversalRenderer
     class Stdio < Base
       def initialize
         super
-        @pool_size = UniversalRenderer.config.stdio_pool_size
-        @timeout = UniversalRenderer.config.stdio_timeout
-        @cli_script = UniversalRenderer.config.stdio_cli_script
+        stdio_config = UniversalRenderer.config.stdio
+        @pool_size = stdio_config.pool_size
+        @timeout = stdio_config.timeout_ms
+        @cli_script = stdio_config.cli_script
         @process_pool = nil
         setup
       end
@@ -76,9 +77,7 @@ module UniversalRenderer
         true
       rescue StandardError => e
         UniversalRenderer.log do |log|
-          log.error(
-            "Stdio SSR stream failed (URL: #{url}): #{e.full_message}"
-          )
+          log.error("Stdio SSR stream failed (URL: #{url}): #{e.full_message}")
         end
 
         # Once bytes have reached the response stream a fallback render would
@@ -119,9 +118,7 @@ module UniversalRenderer
             ) { StdioProcess.new(script, timeout_ms: timeout_ms) }
 
           UniversalRenderer.log do |log|
-            log.info(
-              "Stdio process pool (#{@pool_size}) initialized"
-            )
+            log.info("Stdio process pool (#{@pool_size}) initialized")
           end
         rescue StandardError => e
           UniversalRenderer.log do |log|

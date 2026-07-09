@@ -1,8 +1,12 @@
 require "rails_helper"
+require "universal_renderer/adapter/stdio"
 
 RSpec.describe UniversalRenderer::Adapter::Stdio do
   let(:cli_script) { "app/frontend/ssr/ssr.ts" }
   let(:config_mock) { instance_double(UniversalRenderer::Configuration) }
+  let(:stdio_config) do
+    instance_double(UniversalRenderer::Configuration::Stdio)
+  end
 
   before do
     # Mock Rails.root
@@ -10,16 +14,15 @@ RSpec.describe UniversalRenderer::Adapter::Stdio do
 
     # Mock UniversalRenderer logger
     allow(UniversalRenderer).to receive(:logger).and_return(Rails.logger)
-    allow(UniversalRenderer).to receive(:log) do |&block|
-      block.call(Rails.logger)
-    end
+    allow(UniversalRenderer).to receive(:log).and_yield(Rails.logger)
 
     # Mock UniversalRenderer.config
     allow(UniversalRenderer).to receive(:config).and_return(config_mock)
-    allow(config_mock).to receive_messages(
-      stdio_pool_size: 2,
-      stdio_timeout: 3000,
-      stdio_cli_script: cli_script
+    allow(config_mock).to receive(:stdio).and_return(stdio_config)
+    allow(stdio_config).to receive_messages(
+      pool_size: 2,
+      timeout_ms: 3000,
+      cli_script: cli_script
     )
   end
 

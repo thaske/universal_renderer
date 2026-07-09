@@ -9,109 +9,77 @@ RSpec.describe UniversalRenderer::Configuration do
     end
 
     it "sets default values" do
-      expect(subject.engine).to eq(:http)
+      expect(subject.adapter).to eq(:http)
+      expect(subject.url).to be_nil
       expect(subject.timeout).to eq(3)
-      expect(subject.stdio_cli_script).to eq("app/frontend/ssr/stdio.tsx")
-      expect(subject.http_pool_size).to eq(5)
-      expect(subject.stdio_pool_size).to eq(5)
-      expect(subject.stdio_timeout).to eq(5_000)
+      expect(subject.stream_path).to eq("/stream")
+      expect(subject.http).to be_a(described_class::Http)
+      expect(subject.stdio).to be_a(described_class::Stdio)
     end
 
-    it "reads engine from environment variable" do
-      original_env = ENV.fetch("SSR_ENGINE", nil)
-      ENV["SSR_ENGINE"] = "stdio"
-
+    it "does not read environment variables" do
+      # The Configuration object holds plain Ruby defaults only and must not
+      # consult ENV. Binding to ENV is the host application's responsibility.
+      stub_const("ENV", {})
       config = described_class.new
-      expect(config.engine).to eq(:stdio)
 
-      ENV["SSR_ENGINE"] = original_env
-    end
-
-    it "normalizes engine assignments" do
-      subject.engine = "STDIO"
-      expect(subject.engine).to eq(:stdio)
-    end
-
-    it "reads stdio_cli_script from environment variable" do
-      original_env = ENV.fetch("SSR_STDIO_CLI_SCRIPT", nil)
-      ENV["SSR_STDIO_CLI_SCRIPT"] = "custom/path/to/ssr.ts"
-
-      config = described_class.new
-      expect(config.stdio_cli_script).to eq("custom/path/to/ssr.ts")
-
-      ENV["SSR_STDIO_CLI_SCRIPT"] = original_env
-    end
-
-    it "reads http_pool_size from environment variable" do
-      original_env = ENV.fetch("SSR_HTTP_POOL_SIZE", nil)
-      ENV["SSR_HTTP_POOL_SIZE"] = "10"
-
-      config = described_class.new
-      expect(config.http_pool_size).to eq(10)
-
-      ENV["SSR_HTTP_POOL_SIZE"] = original_env
-    end
-
-    it "reads stdio_pool_size from environment variable" do
-      original_env = ENV.fetch("SSR_STDIO_POOL_SIZE", nil)
-      ENV["SSR_STDIO_POOL_SIZE"] = "10"
-
-      config = described_class.new
-      expect(config.stdio_pool_size).to eq(10)
-
-      ENV["SSR_STDIO_POOL_SIZE"] = original_env
-    end
-
-    it "reads stdio_timeout from environment variable" do
-      original_env = ENV.fetch("SSR_STDIO_TIMEOUT", nil)
-      ENV["SSR_STDIO_TIMEOUT"] = "8000"
-
-      config = described_class.new
-      expect(config.stdio_timeout).to eq(8000)
-
-      ENV["SSR_STDIO_TIMEOUT"] = original_env
+      expect(config.adapter).to eq(:http)
+      expect(config.timeout).to eq(3)
+      expect(config.http.pool_size).to eq(5)
+      expect(config.stdio.pool_size).to eq(5)
+      expect(config.stdio.timeout_ms).to eq(5_000)
+      expect(config.stdio.cli_script).to eq("app/frontend/ssr/stdio.tsx")
     end
   end
 
-  describe "configuration attributes" do
-    it "has an engine attribute" do
-      expect(subject).to respond_to(:engine)
-      expect(subject).to respond_to(:engine=)
+  describe "#adapter=" do
+    it "normalizes adapter assignments to a downcased symbol" do
+      subject.adapter = "STDIO"
+      expect(subject.adapter).to eq(:stdio)
     end
 
-    it "has an ssr_url attribute" do
-      expect(subject).to respond_to(:ssr_url)
-      expect(subject).to respond_to(:ssr_url=)
+    it "accepts symbol and string values" do
+      subject.adapter = :http
+      expect(subject.adapter).to eq(:http)
+
+      subject.adapter = "stdio"
+      expect(subject.adapter).to eq(:stdio)
+    end
+  end
+
+  describe "top-level attributes" do
+    it "has mutable url, timeout, and stream_path attributes" do
+      subject.url = "http://example.test"
+      subject.timeout = 10
+      subject.stream_path = "/render"
+
+      expect(subject.url).to eq("http://example.test")
+      expect(subject.timeout).to eq(10)
+      expect(subject.stream_path).to eq("/render")
+    end
+  end
+
+  describe "http sub-configuration" do
+    it "has a mutable pool_size" do
+      subject.http.pool_size = 10
+      expect(subject.http.pool_size).to eq(10)
+    end
+  end
+
+  describe "stdio sub-configuration" do
+    it "has mutable pool_size, timeout_ms, and cli_script" do
+      subject.stdio.pool_size = 10
+      subject.stdio.timeout_ms = 8_000
+      subject.stdio.cli_script = "custom/path/to/ssr.ts"
+
+      expect(subject.stdio.pool_size).to eq(10)
+      expect(subject.stdio.timeout_ms).to eq(8_000)
+      expect(subject.stdio.cli_script).to eq("custom/path/to/ssr.ts")
     end
 
-    it "has a timeout attribute" do
-      expect(subject).to respond_to(:timeout)
-      expect(subject).to respond_to(:timeout=)
-    end
-
-    it "has an ssr_stream_path attribute" do
-      expect(subject).to respond_to(:ssr_stream_path)
-      expect(subject).to respond_to(:ssr_stream_path=)
-    end
-
-    it "has an http_pool_size attribute" do
-      expect(subject).to respond_to(:http_pool_size)
-      expect(subject).to respond_to(:http_pool_size=)
-    end
-
-    it "has a stdio_cli_script attribute" do
-      expect(subject).to respond_to(:stdio_cli_script)
-      expect(subject).to respond_to(:stdio_cli_script=)
-    end
-
-    it "has a stdio_pool_size attribute" do
-      expect(subject).to respond_to(:stdio_pool_size)
-      expect(subject).to respond_to(:stdio_pool_size=)
-    end
-
-    it "has a stdio_timeout attribute" do
-      expect(subject).to respond_to(:stdio_timeout)
-      expect(subject).to respond_to(:stdio_timeout=)
+    it "shares a distinct instance per configuration" do
+      config = described_class.new
+      expect(config.stdio).not_to be(subject.stdio)
     end
   end
 end
