@@ -66,17 +66,19 @@ export function createStreamHandler<TContext extends Record<string, any>>(
         const [head, tail] = template.split(SSR_MARKERS.BODY);
 
         const finalHead = await streamCallbacks.head?.(context!);
-        if (finalHead) res.write(head.replace(SSR_MARKERS.HEAD, finalHead));
-        else res.write(head);
+        res.write(head.replace(SSR_MARKERS.HEAD, finalHead ?? ""));
 
         const stream = new PassThrough();
         const transform = streamCallbacks.transform?.(context!);
 
-        if (transform) stream.pipe(transform).pipe(res, { end: false });
-        else stream.pipe(res, { end: false });
+        // Watch the end of the pipeline, not the source: with a transform,
+        // the PassThrough can end while the transform still holds buffered
+        // output, and writing the tail then would interleave it into the body.
+        const output = transform ? stream.pipe(transform) : stream;
+        output.pipe(res, { end: false });
         pipe(stream);
 
-        stream.on("end", () => {
+        output.on("end", () => {
           res.end(tail);
         });
 
