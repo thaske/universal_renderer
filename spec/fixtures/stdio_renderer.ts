@@ -1,5 +1,6 @@
 // Minimal renderer used by spec/integration/stdio_pipe_spec.rb to exercise
 // the real stdin/stdout protocol against a live Bun child process.
+import { createElement } from "react";
 import { createRenderer } from "../../universal-renderer/src/stdio";
 
 await createRenderer({
@@ -16,5 +17,23 @@ await createRenderer({
       body: `<div>${props.content ?? url}</div>`,
       bodyAttrs: { "data-echo": "yes" },
     };
+  },
+
+  streamCallbacks: {
+    node: ({ props }) => {
+      if (props.stream_fail) {
+        return createElement(() => {
+          throw new Error("intentional stream failure");
+        });
+      }
+
+      return createElement(
+        "div",
+        { id: "stream" },
+        String(props.content ?? "streamed"),
+      );
+    },
+
+    head: ({ props }) => `<title>${props.title ?? "stream-fixture"}</title>`,
   },
 });

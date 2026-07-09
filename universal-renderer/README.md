@@ -74,7 +74,10 @@ Point the gem at `http://localhost:3001` and you're done.
 
 ## Framework Support
 
-Universal Renderer supports Express HTTP and stdio runtimes.
+Universal Renderer supports Express HTTP and stdio runtimes. Both support
+streaming SSR: pass `streamCallbacks` to `createServer` (HTTP) or
+`createRenderer` (stdio) and enable `enable_ssr streaming: true` in the Rails
+controller.
 
 ### Options
 

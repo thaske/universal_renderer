@@ -1,5 +1,5 @@
 import setup from "@/ssr/setup";
-import { head } from "@/ssr/utils";
+import { head, transform } from "@/ssr/utils";
 import { renderToString } from "react-dom/server.node";
 import { createRenderer } from "../../../../../universal-renderer/src/stdio";
 
@@ -22,5 +22,10 @@ await createRenderer({
 
   error: (err) => {
     console.error(`${err.message}\n${err.stack}`);
+  },
+
+  streamCallbacks: {
+    head,
+    transform,
   },
 });

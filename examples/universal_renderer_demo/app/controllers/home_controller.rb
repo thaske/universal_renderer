@@ -1,7 +1,7 @@
 class HomeController < ApplicationController
   include UniversalRenderer::Renderable
 
-  enable_ssr
+  enable_ssr streaming: true
 
   def index
     records = params.fetch(:records, "100").to_i.clamp(1, 2_000)

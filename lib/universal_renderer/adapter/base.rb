@@ -14,7 +14,7 @@ module UniversalRenderer
         raise NotImplementedError, "Subclasses must implement #call"
       end
 
-      # Performs streaming SSR (only supported by HTTP adapter)
+      # Performs streaming SSR
       # @param url [String] The URL of the page to render
       # @param props [Hash] Props to be passed for rendering
       # @param template [String] The HTML template to use for rendering

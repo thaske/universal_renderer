@@ -61,7 +61,7 @@ RSpec.describe "Multi-Engine Contract Integration", type: :integration do
     end
 
     it_behaves_like "SSR contract compliance", :stdio
-    it_behaves_like "non-streaming adapter"
+    it_behaves_like "stdio streaming support"
 
     describe "STDIO-specific features" do
       it "uses the correct adapter" do

@@ -49,15 +49,40 @@ module UniversalRenderer
         nil
       end
 
-      def stream(_url, _props, _template, _response)
-        Rails.logger.warn(
-          "Stdio adapter does not support streaming SSR. Use HTTP adapter for streaming."
+      def stream(url, props, template, response)
+        return false unless @process_pool
+
+        chunks_written = false
+
+        with_process do |process|
+          Rails.logger.debug do
+            "Stdio streaming: #{url} with props keys: #{props.keys}"
+          end
+
+          process.render_stream(url, props, template) do |chunk|
+            response.stream.write(chunk)
+            chunks_written = true
+          end
+        end
+
+        true
+      rescue StandardError => e
+        Rails.logger.error(
+          "Stdio SSR stream failed (URL: #{url}): #{e.full_message}"
         )
-        false
+
+        # Once bytes have reached the response stream a fallback render would
+        # append a second document to the same response, so close what we have
+        # and report success. A failure before any output allows a clean
+        # fallback to non-streaming rendering.
+        return false unless chunks_written
+
+        response.stream.close unless response.stream.closed?
+        true
       end
 
       def supports_streaming?
-        false
+        !@process_pool.nil?
       end
 
       private
@@ -102,7 +127,18 @@ module UniversalRenderer
       # the pool guarantees exclusive checkout so no internal locking is needed.
       # On I/O error, timeout, protocol desync, or unexpected child exit, the
       # underlying process is respawned so the pool slot remains usable.
-      class StdioProcess
+      class StdioProcess # rubocop:disable Metrics/ClassLength
+        # Raised when the child reports a render failure in-band via a
+        # terminal `{"error": ...}` frame. The protocol stream remains
+        # synchronized, so the process is not respawned.
+        class RenderError < StandardError
+        end
+
+        # Raised when the child emits a frame the streaming protocol does not
+        # define; the stream must be considered desynchronized.
+        class ProtocolError < StandardError
+        end
+
         def initialize(cli_script, timeout_ms: 5_000)
           @cli_script = cli_script
           @timeout = timeout_ms / 1000.0
@@ -124,6 +160,40 @@ module UniversalRenderer
           # means the protocol stream is desynchronized (e.g. a stray stdout
           # write in the child); leftover bytes in the pipe would be served as
           # the next request's response, so the process must be replaced too.
+          close
+          raise e
+        end
+
+        # Stream a page render, yielding each HTML chunk as the child emits
+        # it. The child answers with `{"chunk": ...}` frames terminated by
+        # `{"done": true}` on success or `{"error": ...}` on failure (raised
+        # as RenderError). The read deadline applies per frame, so a long
+        # render survives as long as the child never goes idle past the
+        # timeout.
+        def render_stream(url, props, template)
+          spawn! unless alive?
+
+          payload = JSON.generate({ url: url, props: props, template: template })
+          write_line_with_deadline(payload)
+
+          loop do
+            frame = JSON.parse(read_line_with_deadline)
+
+            if frame.key?("error")
+              raise RenderError, frame["error"]
+            elsif frame.key?("chunk") || frame.key?("done")
+              yield frame["chunk"] if frame["chunk"]
+              return true if frame["done"]
+            else
+              raise ProtocolError,
+                    "Unexpected stdio frame with keys: #{frame.keys.inspect}"
+            end
+          end
+        rescue Timeout::Error,
+               Errno::EPIPE,
+               IOError,
+               JSON::ParserError,
+               ProtocolError => e
           close
           raise e
         end
@@ -150,7 +220,7 @@ module UniversalRenderer
         # has wedged without exiting.
         def write_line_with_deadline(payload)
           deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + @timeout
-          data = payload + "\n"
+          data = "#{payload}\n"
           until data.empty?
             remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
             raise Timeout::Error, "Stdio write timed out after #{@timeout}s" if remaining <= 0
@@ -170,10 +240,19 @@ module UniversalRenderer
         # deadline across multiple partial reads. wait_readable alone only guarantees
         # the first byte is available; a child that writes a partial line and hangs
         # would otherwise block readline indefinitely.
+        #
+        # Bytes past the newline are kept in @read_buffer for the next call:
+        # during streaming several frames routinely arrive in one pipe read.
         def read_line_with_deadline
           deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + @timeout
-          buffer = +""
           loop do
+            nl = @read_buffer.index("\n")
+            if nl
+              line = @read_buffer.byteslice(0, nl)
+              @read_buffer = @read_buffer.byteslice((nl + 1)..)
+              return line
+            end
+
             remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
             raise Timeout::Error, "Stdio render timed out after #{@timeout}s" if remaining <= 0
 
@@ -187,9 +266,7 @@ module UniversalRenderer
             when nil
               raise EOFError, "Stdio child closed stdout"
             else
-              buffer << chunk
-              nl = buffer.index("\n")
-              return buffer.byteslice(0, nl) if nl
+              @read_buffer << chunk
             end
           end
         end
@@ -217,6 +294,9 @@ module UniversalRenderer
           close if @wait_thr
           @stdin, @stdout, @stderr, @wait_thr = Open3.popen3("bun", @cli_script)
           @stdin.sync = true
+          # Binary so String#index positions match byteslice offsets; chunks
+          # from read_nonblock arrive as ASCII-8BIT anyway.
+          @read_buffer = String.new(encoding: Encoding::BINARY)
           drain_stderr!
         end
 
