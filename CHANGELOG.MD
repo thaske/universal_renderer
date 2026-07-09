@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.5.1 (Ruby Gem) - 2026-07-09
+
+### Fixed
+
+- Load the SSR helpers and renderable concern before registering the Rails engine hook, preventing Rails boot failures when the gem is required by Bundler.
+
 ## 0.5.0 (Ruby Gem) / 0.6.0 (NPM Package) - 2026-07-09
 
 ### Ruby Gem
