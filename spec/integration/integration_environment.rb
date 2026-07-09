@@ -84,6 +84,13 @@ module IntegrationEnvironment
         "body_attrs" => {}
       }
     )
+    allow(mock_bun_process).to receive(:render_stream) do |_url, _props, _template, &block|
+      block.call("<html>")
+      block.call("chunk-1")
+      block.call("chunk-2")
+      block.call("</html>")
+      true
+    end
 
     # Mock the process pool
     mock_pool = instance_double(ConnectionPool)

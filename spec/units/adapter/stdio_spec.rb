@@ -151,22 +151,103 @@ RSpec.describe UniversalRenderer::Adapter::Stdio do
 
   describe "#stream" do
     let(:adapter) { described_class.new }
+    let(:url) { "http://example.com/test" }
+    let(:template) { "<html><!-- SSR_BODY --></html>" }
 
-    it "does not support streaming and returns false" do
-      expect(Rails.logger).to receive(:warn).with(
-        /Stdio adapter does not support streaming/,
-      )
+    def build_response(io)
+      stream_double = double("stream")
+      allow(stream_double).to receive(:write) { |chunk| io.write(chunk) }
+      allow(stream_double).to receive(:closed?).and_return(false)
+      allow(stream_double).to receive(:close)
+      double("response", stream: stream_double)
+    end
 
-      result = adapter.stream("url", {}, "template", double("response"))
-      expect(result).to be false
+    context "when process pool is available" do
+      let(:process_mock) { instance_double(UniversalRenderer::Adapter::Stdio::StdioProcess) }
+      let(:pool_mock) { instance_double(ConnectionPool) }
+
+      before do
+        allow(File).to receive(:exist?).with(
+          Pathname.new("/fake/rails/root").join(cli_script),
+        ).and_return(true)
+
+        allow(ConnectionPool).to receive(:new).and_return(pool_mock)
+        allow(UniversalRenderer::Adapter::Stdio::StdioProcess).to receive(:new).and_return(
+          process_mock,
+        )
+        allow(pool_mock).to receive(:with).and_yield(process_mock)
+      end
+
+      it "writes streamed chunks to the response and returns true" do
+        allow(process_mock).to receive(:render_stream) do |_url, _props, _template, &block|
+          block.call("<html>")
+          block.call("<div>streamed</div>")
+          block.call("</html>")
+          true
+        end
+
+        io = StringIO.new
+        result = adapter.stream(url, {}, template, build_response(io))
+
+        expect(result).to be true
+        expect(io.string).to eq("<html><div>streamed</div></html>")
+      end
+
+      it "returns false when the stream fails before any chunk is written" do
+        allow(process_mock).to receive(:render_stream).and_raise(
+          UniversalRenderer::Adapter::Stdio::StdioProcess::RenderError.new("boom"),
+        )
+
+        expect(Rails.logger).to receive(:error).with(/Stdio SSR stream failed/)
+
+        result = adapter.stream(url, {}, template, build_response(StringIO.new))
+        expect(result).to be false
+      end
+
+      it "closes the response and returns true when the stream fails mid-flight" do
+        allow(process_mock).to receive(:render_stream) do |_url, _props, _template, &block|
+          block.call("<html>")
+          raise Timeout::Error, "stalled"
+        end
+
+        expect(Rails.logger).to receive(:error).with(/Stdio SSR stream failed/)
+
+        io = StringIO.new
+        response = build_response(io)
+        expect(response.stream).to receive(:close)
+
+        result = adapter.stream(url, {}, template, response)
+        expect(result).to be true
+        expect(io.string).to eq("<html>")
+      end
+    end
+
+    context "when process pool is not available" do
+      it "returns false" do
+        result = adapter.stream(url, {}, template, build_response(StringIO.new))
+        expect(result).to be false
+      end
     end
   end
 
   describe "#supports_streaming?" do
-    let(:adapter) { described_class.new }
+    context "when process pool is available" do
+      before do
+        allow(File).to receive(:exist?).with(
+          Pathname.new("/fake/rails/root").join(cli_script),
+        ).and_return(true)
+        allow(ConnectionPool).to receive(:new).and_return(double("pool"))
+      end
 
-    it "returns false" do
-      expect(adapter.supports_streaming?).to be false
+      it "returns true" do
+        expect(described_class.new.supports_streaming?).to be true
+      end
+    end
+
+    context "when process pool is not available" do
+      it "returns false" do
+        expect(described_class.new.supports_streaming?).to be false
+      end
     end
   end
 end

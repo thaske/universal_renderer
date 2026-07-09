@@ -1,5 +1,6 @@
+import { createElement } from "react";
 import { describe, expect, it, vi } from "vitest";
-import { createLineHandler } from "./index";
+import { createLineHandler, createStreamLineHandler } from "./index";
 
 describe("stdio line handler", () => {
   it("throws when setup callback is missing", () => {
@@ -148,5 +149,141 @@ describe("stdio line handler", () => {
 
     expect(parsed.body).toBe("ok");
     expect(onError).toHaveBeenCalledOnce();
+  });
+});
+
+describe("stdio stream handler", () => {
+  const TEMPLATE =
+    "<html><head><!-- SSR_HEAD --></head><body><!-- SSR_BODY --></body></html>";
+
+  function makeHandler(overrides: Record<string, any> = {}) {
+    return createStreamLineHandler({
+      setup: (url: string, props: any) => ({ url, props }),
+      render: () => ({ body: "unused static path" }),
+      streamCallbacks: {
+        node: (context: any) => createElement("div", null, context.url),
+      },
+      ...overrides,
+    });
+  }
+
+  async function collectFrames(
+    handle: ReturnType<typeof makeHandler>,
+    payload: Record<string, any>,
+  ) {
+    const lines: string[] = [];
+    await handle(payload as any, (line) => lines.push(line));
+    return lines.map((line) => {
+      expect(line).not.toContain("\n");
+      return JSON.parse(line);
+    });
+  }
+
+  it("throws when streamCallbacks are missing", () => {
+    expect(() =>
+      createStreamLineHandler({
+        setup: () => ({}),
+        render: () => ({ body: "x" }),
+      }),
+    ).toThrow("streamCallbacks are required");
+  });
+
+  it("emits chunk frames terminated by a done frame", async () => {
+    const frames = await collectFrames(makeHandler(), {
+      url: "/page",
+      template: TEMPLATE,
+    });
+
+    expect(frames.at(-1)).toEqual({ done: true });
+    const html = frames
+      .filter((frame) => "chunk" in frame)
+      .map((frame) => frame.chunk)
+      .join("");
+    expect(html.startsWith("<html><head>")).toBe(true);
+    expect(html).toContain("<div>/page</div>");
+    expect(html.endsWith("</body></html>")).toBe(true);
+  });
+
+  it("replaces the head marker with the head callback output", async () => {
+    const handle = makeHandler({
+      streamCallbacks: {
+        node: () => createElement("p", null, "body"),
+        head: async () => "<title>streamed</title>",
+      },
+    });
+
+    const frames = await collectFrames(handle, {
+      url: "/",
+      template: TEMPLATE,
+    });
+
+    expect(frames[0].chunk).toBe("<html><head><title>streamed</title></head><body>");
+  });
+
+  it("falls back to context.app when no node callback is given", async () => {
+    const handle = makeHandler({
+      setup: () => ({ app: createElement("span", null, "from app") }),
+      streamCallbacks: {},
+    });
+
+    const frames = await collectFrames(handle, {
+      url: "/",
+      template: TEMPLATE,
+    });
+
+    const html = frames.map((frame) => frame.chunk ?? "").join("");
+    expect(html).toContain("<span>from app</span>");
+  });
+
+  it("emits a single error frame when the template lacks the body marker", async () => {
+    const onError = vi.fn();
+    const handle = makeHandler({ error: onError });
+
+    const frames = await collectFrames(handle, {
+      url: "/",
+      template: "<html></html>",
+    });
+
+    expect(frames).toHaveLength(1);
+    expect(frames[0].error).toMatch(/SSR_BODY/);
+    expect(onError).toHaveBeenCalledOnce();
+  });
+
+  it("emits a single error frame when the shell throws", async () => {
+    const Boom = () => {
+      throw new Error("shell boom");
+    };
+    const handle = makeHandler({
+      streamCallbacks: { node: () => createElement(Boom) },
+    });
+
+    const frames = await collectFrames(handle, {
+      url: "/",
+      template: TEMPLATE,
+    });
+
+    expect(frames).toHaveLength(1);
+    expect(frames[0].error).toBe("shell boom");
+  });
+
+  it("emits an error frame when url is missing", async () => {
+    const frames = await collectFrames(makeHandler(), {
+      template: TEMPLATE,
+    });
+
+    expect(frames).toHaveLength(1);
+    expect(frames[0].error).toMatch(/URL is required/);
+  });
+
+  it("runs cleanup after streaming completes", async () => {
+    const cleanup = vi.fn();
+    const handle = makeHandler({ cleanup });
+
+    await collectFrames(handle, { url: "/", template: TEMPLATE });
+
+    expect(cleanup).toHaveBeenCalledOnce();
+    expect(cleanup).toHaveBeenCalledWith(
+      expect.objectContaining({ url: "/" }),
+    );
   });
 });

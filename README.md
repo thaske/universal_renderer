@@ -45,8 +45,9 @@ Configure in `config/initializers/universal_renderer.rb`:
 ```ruby
 UniversalRenderer.configure do |config|
   # Choose your SSR engine:
-  # :http           - External Node.js server (default, supports streaming)
-  # :stdio          - Stdio Bun processes via Open3 (no streaming, no external server)
+  # :http           - External Node.js server (default)
+  # :stdio          - Stdio Bun processes via Open3 (no external server)
+  # Both engines support blocking and streaming SSR.
   config.engine = :http
   # To select per environment:
   # config.engine = Rails.env.production? ? :stdio : :http
@@ -93,10 +94,10 @@ The Stdio engine maintains a pool of stdio Bun processes and communicates with t
 - Eliminates network overhead
 - Simplified deployment
 - Better for simple SSR needs
+- Streaming SSR support (requires `streamCallbacks` in the stdio renderer)
 
 **Cons:**
 
-- No streaming support
 - Memory overhead per long-lived process
 - Not suitable for complex JavaScript applications
 

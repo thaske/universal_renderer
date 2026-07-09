@@ -42,4 +42,76 @@ RSpec.describe UniversalRenderer::Adapter::Stdio::StdioProcess do
     expect(result["error"]).to eq("intentional failure")
     expect(result["body"]).to eq("")
   end
+
+  describe "#render_stream" do
+    let(:template) do
+      "<html><head><!-- SSR_HEAD --></head>" \
+        "<body><!-- SSR_BODY --></body></html>"
+    end
+
+    it "streams template head, rendered chunks, and tail in order" do
+      chunks = []
+      result =
+        process.render_stream(
+          "http://example.com/stream",
+          { "content" => "streamed content" },
+          template
+        ) { |chunk| chunks << chunk }
+
+      html = chunks.join
+      expect(result).to be(true)
+      expect(chunks.length).to be >= 2
+      expect(html).to start_with("<html><head><title>stream-fixture</title>")
+      expect(html).to include("streamed content")
+      expect(html).to end_with("</body></html>")
+    end
+
+    it "raises RenderError when the shell fails, leaving the process usable" do
+      chunks = []
+      expect do
+        process.render_stream(
+          "http://example.com/stream-fail",
+          { "stream_fail" => true },
+          template
+        ) { |chunk| chunks << chunk }
+      end.to raise_error(described_class::RenderError, /intentional stream failure/)
+      expect(chunks).to be_empty
+
+      # The error frame is terminal, so the pipe is still synchronized.
+      result = process.render("http://example.com/after", { "content" => "ok" })
+      expect(result["body"]).to eq("<div>ok</div>")
+    end
+
+    it "raises RenderError when the template lacks the body marker" do
+      chunks = []
+      expect do
+        process.render_stream("http://example.com/x", {}, "<html></html>") do |chunk|
+          chunks << chunk
+        end
+      end.to raise_error(described_class::RenderError, /SSR_BODY/)
+      expect(chunks).to be_empty
+    end
+
+    it "interleaves streaming and static renders without desyncing" do
+      stream_html = []
+      process.render_stream(
+        "http://example.com/a",
+        { "content" => "first stream" },
+        template
+      ) { |chunk| stream_html << chunk }
+
+      static_result = process.render("http://example.com/b", { "content" => "static" })
+
+      second_stream = []
+      process.render_stream(
+        "http://example.com/c",
+        { "content" => "second stream" },
+        template
+      ) { |chunk| second_stream << chunk }
+
+      expect(stream_html.join).to include("first stream")
+      expect(static_result["body"]).to eq("<div>static</div>")
+      expect(second_stream.join).to include("second stream")
+    end
+  end
 end

@@ -168,17 +168,29 @@ RSpec.shared_examples "streaming SSR support" do
   end
 end
 
-RSpec.shared_examples "non-streaming adapter" do
-  describe "streaming limitations" do
-    it "does not support streaming" do
-      adapter = UniversalRenderer::AdapterFactory.adapter
-      expect(adapter.supports_streaming?).to be false
+RSpec.shared_examples "stdio streaming support" do
+  describe "streaming" do
+    let(:stream_io) { StringIO.new }
+    let(:response) do
+      stream = stream_io
+      stream_double = double("stream")
+      allow(stream_double).to receive(:write) { |chunk| stream.write(chunk) }
+      allow(stream_double).to receive(:closed?).and_return(false)
+      allow(stream_double).to receive(:close)
+      double("response", stream: stream_double)
     end
 
-    it "returns false when attempting to stream" do
+    it "supports streaming" do
       adapter = UniversalRenderer::AdapterFactory.adapter
-      result = adapter.stream("url", {}, "template", double("response"))
-      expect(result).to be false
+      expect(adapter.supports_streaming?).to be true
+    end
+
+    it "relays streamed chunks into the response stream" do
+      adapter = UniversalRenderer::AdapterFactory.adapter
+      result = adapter.stream("http://example.com/x", {}, "template", response)
+
+      expect(result).to be true
+      expect(stream_io.string).to eq("<html>chunk-1chunk-2</html>")
     end
   end
 end
