@@ -10,23 +10,18 @@ RSpec.describe UniversalRenderer::Configuration do
 
     it "sets default values" do
       expect(subject.engine).to eq(:http)
-      expect(subject.engine_by_env).to eq(
-        "development" => :http,
-        "test" => :http,
-        "production" => :stdio
-      )
       expect(subject.timeout).to eq(3)
-      expect(subject.stdio_cli_script).to eq("app/frontend/ssr/ssr.ts")
+      expect(subject.stdio_cli_script).to eq("app/frontend/ssr/stdio.tsx")
       expect(subject.stdio_pool_size).to eq(5)
       expect(subject.stdio_timeout).to eq(5_000)
     end
 
     it "reads engine from environment variable" do
       original_env = ENV.fetch("SSR_ENGINE", nil)
-      ENV["SSR_ENGINE"] = "auto"
+      ENV["SSR_ENGINE"] = "stdio"
 
       config = described_class.new
-      expect(config.engine).to eq(:auto)
+      expect(config.engine).to eq(:stdio)
 
       ENV["SSR_ENGINE"] = original_env
     end
@@ -34,14 +29,6 @@ RSpec.describe UniversalRenderer::Configuration do
     it "normalizes engine assignments" do
       subject.engine = "STDIO"
       expect(subject.engine).to eq(:stdio)
-    end
-
-    it "normalizes engine_by_env assignments" do
-      subject.engine_by_env = { development: "HTTP", "Production" => "STDIO" }
-      expect(subject.engine_by_env).to eq(
-        "development" => :http,
-        "production" => :stdio
-      )
     end
 
     it "reads stdio_cli_script from environment variable" do
@@ -109,11 +96,6 @@ RSpec.describe UniversalRenderer::Configuration do
     it "has a stdio_timeout attribute" do
       expect(subject).to respond_to(:stdio_timeout)
       expect(subject).to respond_to(:stdio_timeout=)
-    end
-
-    it "has an engine_by_env attribute" do
-      expect(subject).to respond_to(:engine_by_env)
-      expect(subject).to respond_to(:engine_by_env=)
     end
   end
 end

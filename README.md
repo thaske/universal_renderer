@@ -47,10 +47,9 @@ UniversalRenderer.configure do |config|
   # Choose your SSR engine:
   # :http           - External Node.js server (default, supports streaming)
   # :stdio          - Stdio Bun processes via Open3 (no streaming, no external server)
-  # :auto           - Resolve by Rails env (dev/test: :http, production: :stdio)
   config.engine = :http
-  # config.engine = :auto
-  # config.engine_by_env = { development: :http, test: :http, production: :stdio }
+  # To select per environment:
+  # config.engine = Rails.env.production? ? :stdio : :http
 
   # HTTP Engine Configuration (when engine = :http)
   config.ssr_url = "http://localhost:3001"
@@ -59,13 +58,13 @@ UniversalRenderer.configure do |config|
   # Stdio configuration is handled via environment variables:
   # SSR_STDIO_POOL_SIZE (default: 5)
   # SSR_STDIO_TIMEOUT (default: 5000ms)
-  # SSR_STDIO_CLI_SCRIPT (default: "app/frontend/ssr/ssr.ts")
+  # SSR_STDIO_CLI_SCRIPT (default: "app/frontend/ssr/stdio.tsx")
 end
 ```
 
 ## SSR Engines
 
-UniversalRenderer supports three SSR engine modes:
+UniversalRenderer supports two SSR engine modes:
 
 ### HTTP Engine (Default)
 
@@ -101,21 +100,16 @@ The Stdio engine maintains a pool of stdio Bun processes and communicates with t
 - Memory overhead per long-lived process
 - Not suitable for complex JavaScript applications
 
-### Auto Engine Selection (`:auto`)
+### Selecting the engine per environment
 
-Set `config.engine = :auto` to select the SSR adapter by Rails environment while keeping one controller/view integration path.
+A common setup is HTTP in development/test and Stdio in production:
 
-Default mapping:
+```ruby
+config.engine = Rails.env.production? ? :stdio : :http
+```
 
-- `development` => `:http`
-- `test` => `:http`
-- `production` => `:stdio`
-
-You can customize this via `config.engine_by_env`.
-
-When `:auto` resolves to `:stdio` (typically production), ensure Bun and the configured
-stdio script are available before boot. The script can be a `.ts` / `.tsx` entrypoint or
-a prebuilt bundle.
+When production uses `:stdio`, ensure Bun and the configured stdio script are available
+before boot. The script can be a `.ts` / `.tsx` entrypoint or a prebuilt bundle.
 
 ## Basic Usage
 
