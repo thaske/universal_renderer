@@ -1,7 +1,7 @@
 {
   "private": true,
   "type": "module",
-  "packageManager": "bun@1.3.5",
+  "packageManager": "bun@1.3.14",
   "scripts": {
     "dev": "bunx vite dev",
     "ssr:dev:http": "bun app/frontend/ssr/ssr.tsx",
@@ -16,21 +16,21 @@
     "ssr": "bun public/vite-ssr-http/ssr.js"
   },
   "dependencies": {
-    "@dr.pogodin/react-helmet": "^3.0.6",
+    "@dr.pogodin/react-helmet": "^3.2.2",
     "@tanstack/react-query": "^5.90.21",
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
     "react-query": "^3.39.3",
-    "react-router": "^7.13.1",
-    "styled-components": "^6.3.11",
+    "react-router": "^7.18.1",
+    "styled-components": "^6.4.3",
     "universal-renderer": "file:../../universal-renderer"
   },
   "devDependencies": {
-    "express": "^4.21.2",
-    "@types/react": "^19.2.14",
+    "express": "^4.22.2",
+    "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "typescript": "^5.9.3",
-    "vite": "^5.4.21",
+    "vite": "^6.4.3",
     "vite-plugin-ruby": "^5.1.3"
   }
 }

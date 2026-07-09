@@ -1,5 +1,5 @@
-import type { ExpressServerOptions } from "../universal-renderer/src/http";
-import { createServer as createExpressServer } from "../universal-renderer/src/http";
+import type { ExpressServerOptions } from "../../universal-renderer/src/http";
+import { createServer as createExpressServer } from "../../universal-renderer/src/http";
 import { renderBenchmarkPayload, type BenchmarkProps } from "./workload";
 
 import yargs from "yargs";
@@ -23,7 +23,8 @@ async function main() {
 
   const options: ExpressServerOptions<BenchmarkContext> = {
     setup: async (url, props) => ({ url, props: props as BenchmarkProps }),
-    render: async (context) => renderBenchmarkPayload(context.url, context.props),
+    render: async (context) =>
+      renderBenchmarkPayload(context.url, context.props),
     cleanup: async () => {
       // no-op; each workload handles its own per-render cleanup
     },

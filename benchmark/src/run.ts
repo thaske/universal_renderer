@@ -4,7 +4,7 @@ import getPort from "get-port";
 import http from "http";
 import path from "path";
 
-const ROOT = path.resolve(__dirname, "..");
+const ROOT = path.resolve(__dirname, "..", "..");
 const LOG_FILE = path.join(ROOT, "tmp", "benchmark-http-server.log");
 
 async function waitForHealth(port: number, process: ChildProcess) {
@@ -95,7 +95,7 @@ async function main() {
     [
       "--import",
       "tsx",
-      "benchmark/benchmark-server.ts",
+      "benchmark/src/benchmark-server.ts",
       "--port",
       String(port),
     ],
@@ -111,7 +111,7 @@ async function main() {
 
     const ruby = spawn(
       "bundle",
-      ["exec", "ruby", "benchmark/http-vs-stdio.rb"],
+      ["exec", "ruby", "benchmark/ruby/http-vs-stdio.rb"],
       {
         cwd: ROOT,
         stdio: "inherit",
@@ -120,7 +120,7 @@ async function main() {
           UNIVERSAL_RENDERER_URL: `http://127.0.0.1:${port}/`,
           UNIVERSAL_RENDERER_STDIO_CLI_SCRIPT:
             globalThis.process.env.UNIVERSAL_RENDERER_STDIO_CLI_SCRIPT ??
-            "benchmark/stdio-renderer.ts",
+            "benchmark/src/stdio-renderer.ts",
         },
       },
     );

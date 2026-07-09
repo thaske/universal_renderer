@@ -14,7 +14,7 @@ require "active_support/core_ext/object/blank"
 
 class << Rails
   def root
-    Pathname.new(File.expand_path("..", __dir__))
+    Pathname.new(File.expand_path("../..", __dir__))
   end
 
   def env
@@ -25,8 +25,8 @@ end
 Rails.logger = Logger.new($stderr)
 Rails.logger.level = ENV.fetch("BENCHMARK_LOG_LEVEL", "ERROR")
 
-require_relative "../lib/universal_renderer/configuration"
-require_relative "../lib/universal_renderer/ssr/response"
+require_relative "../../lib/universal_renderer/configuration"
+require_relative "../../lib/universal_renderer/ssr/response"
 
 module UniversalRenderer
   class << self
@@ -38,16 +38,16 @@ module UniversalRenderer
   end
 end
 
-require_relative "../lib/universal_renderer/adapter_factory"
+require_relative "../../lib/universal_renderer/adapter_factory"
 
 ITERATIONS = Integer(ENV.fetch("ITERATIONS", "300"))
 WARMUP = Integer(ENV.fetch("WARMUP", "25"))
-RESULTS_DIR = File.expand_path("../tmp/reports", __dir__)
+RESULTS_DIR = File.expand_path("../../tmp/reports", __dir__)
 RESULTS_FILE = File.join(RESULTS_DIR, "http-vs-stdio.json")
 STDIO_SCRIPT =
   ENV.fetch(
     "UNIVERSAL_RENDERER_STDIO_CLI_SCRIPT",
-    "benchmark/stdio-renderer.ts"
+    "benchmark/src/stdio-renderer.ts"
   )
 SCENARIOS =
   ENV
