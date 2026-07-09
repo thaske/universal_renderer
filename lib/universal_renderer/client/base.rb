@@ -50,20 +50,26 @@ module UniversalRenderer
               body_attrs: raw_data[:body_attrs]
             )
           else
-            Rails.logger.error(
-              "SSR fetch request to #{ssr_url} failed: #{response.code} - #{response.message} (URL: #{url})"
-            )
+            UniversalRenderer.log do |log|
+              log.error(
+                "SSR fetch request to #{ssr_url} failed: #{response.code} - #{response.message} (URL: #{url})"
+              )
+            end
             nil
           end
         rescue Net::OpenTimeout, Net::ReadTimeout => e
-          Rails.logger.error(
-            "SSR fetch request to #{ssr_url} timed out: #{e.class.name} - #{e.message} (URL: #{url})"
-          )
+          UniversalRenderer.log do |log|
+            log.error(
+              "SSR fetch request to #{ssr_url} timed out: #{e.class.name} - #{e.message} (URL: #{url})"
+            )
+          end
           nil
         rescue StandardError => e
-          Rails.logger.error(
-            "SSR fetch request to #{ssr_url} failed: #{e.class.name} - #{e.message} (URL: #{url})"
-          )
+          UniversalRenderer.log do |log|
+            log.error(
+              "SSR fetch request to #{ssr_url} failed: #{e.class.name} - #{e.message} (URL: #{url})"
+            )
+          end
           nil
         end
       end

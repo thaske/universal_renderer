@@ -77,10 +77,12 @@ module UniversalRenderer
 
       # Check if the current adapter supports streaming
       unless adapter.supports_streaming?
-        Rails.logger.warn(
-          "Current SSR adapter (#{adapter.class.name}) does not support streaming. " \
-            "Falling back to blocking SSR."
-        )
+        UniversalRenderer.log do |log|
+          log.warn(
+            "Current SSR adapter (#{adapter.class.name}) does not support streaming. " \
+              "Falling back to blocking SSR."
+          )
+        end
         return false
       end
 
@@ -100,10 +102,12 @@ module UniversalRenderer
         response.stream.close unless response.stream.closed?
         true
       else
-        Rails.logger.error(
-          "SSR stream fallback: " \
-            "Streaming failed, proceeding with standard rendering."
-        )
+        UniversalRenderer.log do |log|
+          log.error(
+            "SSR stream fallback: " \
+              "Streaming failed, proceeding with standard rendering."
+          )
+        end
         false
       end
     end

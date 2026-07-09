@@ -67,6 +67,25 @@ UniversalRenderer.configure do |config|
 end
 ```
 
+## Logging
+
+The gem logs through `UniversalRenderer.logger`, which defaults to the host
+application's `Rails.logger` wrapped in `ActiveSupport::TaggedLogging`. Every
+log line is automatically prefixed with `[UniversalRenderer]`, so you can
+distinguish the gem's output in a shared log stream without remembering a
+per-call prefix.
+
+You can replace the logger with any object responding to the standard
+`Logger` interface (useful for routing gem logs to a separate file, a
+different formatter, or a semantic-logging backend):
+
+```ruby
+UniversalRenderer.logger = Logger.new("log/universal_renderer.log")
+```
+
+Setting it back to `nil` restores the default tagged `Rails.logger`.
+```
+
 ## SSR Engines
 
 UniversalRenderer supports two SSR engine modes:

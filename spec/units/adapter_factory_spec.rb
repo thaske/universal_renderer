@@ -7,7 +7,8 @@ RSpec.describe UniversalRenderer::AdapterFactory do
 
   before do
     described_class.reset!
-    allow(Rails).to receive(:logger).and_return(logger)
+    allow(UniversalRenderer).to receive(:logger).and_return(logger)
+    allow(UniversalRenderer).to receive(:log).and_yield(logger)
   end
 
   after { described_class.reset! }
