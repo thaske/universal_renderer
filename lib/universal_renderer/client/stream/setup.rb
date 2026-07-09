@@ -1,3 +1,5 @@
+require_relative "../http_pool"
+
 module UniversalRenderer
   module Client
     class Stream
@@ -16,10 +18,7 @@ module UniversalRenderer
           parsed_ssr_url = URI.parse(config.ssr_url)
           stream_uri = URI.join(parsed_ssr_url, config.ssr_stream_path)
 
-          http = Net::HTTP.new(stream_uri.host, stream_uri.port)
-          http.use_ssl = (stream_uri.scheme == "https")
-          http.open_timeout = config.timeout
-          http.read_timeout = config.timeout
+          http = HttpPool.client(stream_uri, config.timeout)
 
           http_request =
             Net::HTTP::Post.new(

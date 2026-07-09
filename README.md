@@ -49,12 +49,16 @@ UniversalRenderer.configure do |config|
   # :stdio          - Stdio Bun processes via Open3 (no external server)
   # Both engines support blocking and streaming SSR.
   config.engine = :http
-  # To select per environment:
-  # config.engine = Rails.env.production? ? :stdio : :http
+  # HTTP is recommended for most applications, including production.
+  # Choose :stdio only when you want embedded SSR instead of a separate service.
 
   # HTTP Engine Configuration (when engine = :http)
   config.ssr_url = "http://localhost:3001"
   config.timeout = 3
+  config.http_pool_size = 5 # persistent Net::HTTP connections per SSR origin
+
+  # HTTP configuration can also use environment variables:
+  # SSR_HTTP_POOL_SIZE (default: 5)
 
   # Stdio configuration is handled via environment variables:
   # SSR_STDIO_POOL_SIZE (default: 5)
@@ -81,7 +85,7 @@ The HTTP engine forwards SSR requests to an external Node.js server. This is the
 **Cons:**
 
 - Requires external server setup
-- Network overhead for each request
+- HTTP serialization overhead for each request, though persistent connections are reused
 - Additional infrastructure complexity
 
 ### Stdio Engine
@@ -103,13 +107,12 @@ The Stdio engine maintains a pool of stdio Bun processes and communicates with t
 
 ### Selecting the engine per environment
 
-A common setup is HTTP in development/test and Stdio in production:
+HTTP is the safest default for most environments, including production, because it
+keeps the SSR runtime separately observable, restartable, and scalable. Choose
+`:stdio` when you explicitly want embedded SSR inside the Rails deployment and
+are comfortable sizing and operating the Bun process pool with the Rails app.
 
-```ruby
-config.engine = Rails.env.production? ? :stdio : :http
-```
-
-When production uses `:stdio`, ensure Bun and the configured stdio script are available
+If production uses `:stdio`, ensure Bun and the configured stdio script are available
 before boot. The script can be a `.ts` / `.tsx` entrypoint or a prebuilt bundle.
 
 ## Basic Usage
@@ -120,7 +123,7 @@ After installation, you can pass data to your SSR service using `add_prop` in yo
 
 UniversalRenderer supports two SSR modes:
 
-1. **Standard SSR** (default): Fetches complete HTML from the SSR service before rendering
+1. **Standard/blocking SSR** (default and recommended for most pages): Fetches complete HTML from the SSR service before rendering
 2. **Streaming SSR**: Streams HTML content as it's generated (requires ActionController::Live)
 
 ```ruby
