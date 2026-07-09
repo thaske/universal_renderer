@@ -3,6 +3,7 @@ module UniversalRenderer
     attr_accessor :ssr_url,
                   :timeout,
                   :ssr_stream_path,
+                  :http_pool_size,
                   :stdio_pool_size,
                   :stdio_timeout,
                   :stdio_cli_script
@@ -12,6 +13,7 @@ module UniversalRenderer
       @ssr_url = ENV.fetch("SSR_SERVER_URL", nil)
       @timeout = (ENV["SSR_TIMEOUT"] || 3).to_i
       @ssr_stream_path = ENV.fetch("SSR_STREAM_PATH", "/stream")
+      @http_pool_size = ENV.fetch("SSR_HTTP_POOL_SIZE", 5).to_i
       self.engine = ENV.fetch("SSR_ENGINE", :http)
       @stdio_pool_size = ENV.fetch("SSR_STDIO_POOL_SIZE", 5).to_i
       @stdio_timeout = ENV.fetch("SSR_STDIO_TIMEOUT", 5_000).to_i

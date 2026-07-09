@@ -3,6 +3,7 @@
 require "net/http"
 require "json"
 require "uri"
+require_relative "http_pool"
 
 module UniversalRenderer
   module Client
@@ -31,16 +32,11 @@ module UniversalRenderer
 
         begin
           uri = URI.parse(ssr_url)
-          http = Net::HTTP.new(uri.host, uri.port)
-          http.use_ssl = (uri.scheme == "https")
-          http.open_timeout = timeout
-          http.read_timeout = timeout
-
           request = Net::HTTP::Post.new(uri.request_uri)
           request.body = { url: url, props: props }.to_json
           request["Content-Type"] = "application/json"
 
-          response = http.request(request)
+          response = HttpPool.request(uri, timeout, request)
 
           if response.is_a?(Net::HTTPSuccess)
             raw_data = JSON.parse(response.body).deep_symbolize_keys

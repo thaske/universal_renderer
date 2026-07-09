@@ -12,6 +12,7 @@ RSpec.describe UniversalRenderer::Configuration do
       expect(subject.engine).to eq(:http)
       expect(subject.timeout).to eq(3)
       expect(subject.stdio_cli_script).to eq("app/frontend/ssr/stdio.tsx")
+      expect(subject.http_pool_size).to eq(5)
       expect(subject.stdio_pool_size).to eq(5)
       expect(subject.stdio_timeout).to eq(5_000)
     end
@@ -39,6 +40,16 @@ RSpec.describe UniversalRenderer::Configuration do
       expect(config.stdio_cli_script).to eq("custom/path/to/ssr.ts")
 
       ENV["SSR_STDIO_CLI_SCRIPT"] = original_env
+    end
+
+    it "reads http_pool_size from environment variable" do
+      original_env = ENV.fetch("SSR_HTTP_POOL_SIZE", nil)
+      ENV["SSR_HTTP_POOL_SIZE"] = "10"
+
+      config = described_class.new
+      expect(config.http_pool_size).to eq(10)
+
+      ENV["SSR_HTTP_POOL_SIZE"] = original_env
     end
 
     it "reads stdio_pool_size from environment variable" do
@@ -81,6 +92,11 @@ RSpec.describe UniversalRenderer::Configuration do
     it "has an ssr_stream_path attribute" do
       expect(subject).to respond_to(:ssr_stream_path)
       expect(subject).to respond_to(:ssr_stream_path=)
+    end
+
+    it "has an http_pool_size attribute" do
+      expect(subject).to respond_to(:http_pool_size)
+      expect(subject).to respond_to(:http_pool_size=)
     end
 
     it "has a stdio_cli_script attribute" do

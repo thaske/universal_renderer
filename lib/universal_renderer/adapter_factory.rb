@@ -36,6 +36,7 @@ module UniversalRenderer
       # Resets the adapter (useful for testing or configuration changes)
       def reset!
         @adapter = nil
+        UniversalRenderer::Client::HttpPool.reset!
       end
     end
   end
