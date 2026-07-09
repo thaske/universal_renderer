@@ -12,35 +12,39 @@ module UniversalRenderer
         )
           success = false
           chunks_written = false
+          upstream_connection = nil
 
-          http_client.request(http_post_request) do |node_res, upstream_connection|
-            if node_res.is_a?(Net::HTTPSuccess)
-              begin
+          begin
+            http_client.request(http_post_request) do |node_res, connection|
+              upstream_connection = connection
+
+              if node_res.is_a?(Net::HTTPSuccess)
                 node_res.read_body do |chunk|
-                  response.stream.write(chunk)
+                  # A stream write can fail after handing bytes to the response
+                  # buffer. Mark it first so the caller never falls back onto a
+                  # potentially partial response.
                   chunks_written = true
+                  response.stream.write(chunk)
                 end
                 success = true
-              rescue StandardError => e
+              else
                 Rails.logger.error(
-                  "Error during SSR data transfer or stream writing from #{stream_uri}: #{e.class.name} - #{e.message}"
+                  "SSR stream server at #{stream_uri} responded with #{node_res.code} #{node_res.message}."
                 )
-                # The upstream response body may be only partially consumed, so
-                # do not return this persistent connection to the reusable pool.
-                HttpPool.close(upstream_connection) if upstream_connection
-
-                # Once bytes have reached the response stream, fallback rendering
-                # would append a second document. Treat the stream as handled and
-                # close it; if nothing was written, allow the caller to fallback.
-                success = chunks_written
-              ensure
-                response.stream.close if success && !response.stream.closed?
               end
-            else
-              Rails.logger.error(
-                "SSR stream server at #{stream_uri} responded with #{node_res.code} #{node_res.message}."
-              )
             end
+          rescue StandardError => e
+            Rails.logger.error(
+              "Error during SSR data transfer or stream writing from #{stream_uri}: #{e.class.name} - #{e.message}"
+            )
+
+            # The response may be only partially consumed, so do not reuse the
+            # current persistent connection. Net::HTTP can also raise after its
+            # request block returns while it finalizes that response body.
+            HttpPool.close(upstream_connection) if upstream_connection
+            success = chunks_written
+          ensure
+            response.stream.close if success && !response.stream.closed?
           end
 
           success

@@ -74,6 +74,29 @@ RSpec.describe UniversalRenderer::Client::Stream::Execution do
     expect(upstream_connection).to have_received(:finish)
   end
 
+  it "returns true when Net::HTTP fails while finalizing a partial response" do
+    node_response = Net::HTTPOK.new("1.1", "200", "OK")
+    upstream_connection = instance_double(Net::HTTP, started?: true, finish: nil)
+    allow(node_response).to receive(:read_body).and_yield("<html>")
+    allow(http_client).to receive(:request)
+      .with(http_request) do |&block|
+        block.call(node_response, upstream_connection)
+        raise IOError, "upstream failed while finishing response"
+      end
+
+    result = described_class.perform_streaming(
+      http_client,
+      http_request,
+      response,
+      stream_uri
+    )
+
+    expect(result).to be true
+    expect(stream.body).to eq("<html>")
+    expect(stream).to be_closed
+    expect(upstream_connection).to have_received(:finish)
+  end
+
   it "returns false and leaves the stream open when transfer fails before writing chunks" do
     node_response = Net::HTTPOK.new("1.1", "200", "OK")
     allow(node_response).to receive(:read_body).and_raise(IOError, "upstream failed")
