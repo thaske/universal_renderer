@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "benchmark": "playwright test benchmark/load-test.spec.ts",
+    "benchmark": "node --import tsx benchmark/run.ts",
     "analyze": "node --import tsx benchmark/analyze-results.ts",
     "serve": "serve"
   },
@@ -13,10 +13,12 @@
     "universal-renderer"
   ],
   "devDependencies": {
-    "@playwright/test": "^1.59.1",
+    "@tanstack/react-query": "^5.101.2",
     "@types/yargs": "^17.0.35",
     "get-port": "^7.2.0",
+    "react-helmet-async": "^3.0.0",
     "serve": "^14.2.5",
+    "styled-components": "^6.4.3",
     "tsx": "^4.20.5",
     "yargs": "^17.7.2"
   }

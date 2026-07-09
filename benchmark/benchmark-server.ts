@@ -1,86 +1,38 @@
-import React from "react";
 import type { ExpressServerOptions } from "../universal-renderer/src/http";
 import { createServer as createExpressServer } from "../universal-renderer/src/http";
+import { renderBenchmarkPayload, type BenchmarkProps } from "./workload";
 
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 
-// Define the expected arguments
 const argv = yargs(hideBin(process.argv))
-  .option("ssr", {
-    type: "boolean",
-    default: true,
-    description: "Enable Server-Side Rendering",
-  })
-  .option("stream", {
-    type: "boolean",
-    default: false,
-    description: "Enable Streaming",
-  })
-  .option("server", {
-    choices: ["express"],
-    default: "express",
-    description: "Server implementation to use",
-  })
   .option("port", {
     type: "number",
     default: 3001,
-    description: "Port to run the server on",
+    description: "Port to run the HTTP SSR benchmark server on.",
   })
   .help().argv;
 
+interface BenchmarkContext extends Record<string, unknown> {
+  url: string;
+  props: BenchmarkProps;
+}
+
 async function main() {
-  const { ssr, stream, server: serverImpl, port } = await argv;
+  const { port } = await argv;
 
-  console.log(
-    `Starting server with: SSR=${ssr}, Stream=${stream}, Implementation=${serverImpl}, Port=${port}`,
-  );
-
-  const commonOptions = {
-    setup: async (url: string, props: any) => {
-      // Minimal setup for benchmarking
-      return { url, props, timestamp: new Date().toISOString() };
-    },
-    render: async (context: any) => {
-      // Minimal render for benchmarking
-      if (!ssr) {
-        // If SSR is off, return an empty body. Client-side rendering would take over.
-        return { head: "<title>Benchmark</title>", body: "" };
-      }
-      return {
-        head: `<title>Benchmark: ${context.url}</title>`,
-        body: `<h1>Hello from ${context.url}</h1><p>Rendered at: ${context.timestamp}</p>`,
-      };
-    },
-    cleanup: async (context: any) => {
-      // No-op cleanup for benchmark
+  const options: ExpressServerOptions<BenchmarkContext> = {
+    setup: async (url, props) => ({ url, props: props as BenchmarkProps }),
+    render: async (context) => renderBenchmarkPayload(context.url, context.props),
+    cleanup: async () => {
+      // no-op; each workload handles its own per-render cleanup
     },
   };
 
-  let streamCallbacks;
-  if (stream) {
-    streamCallbacks = {
-      node: (context: any) =>
-        React.createElement(
-          "div",
-          null,
-          `Streaming content for ${context.url}`,
-        ),
-      head: async (context: any) =>
-        `<meta name="stream-test" content="true" data-url="${context.url}">`,
-    };
-  }
-
-  if (serverImpl === "express") {
-    const options: ExpressServerOptions<any> = {
-      ...commonOptions,
-      ...(stream && { streamCallbacks }),
-    };
-    const app = await createExpressServer(options);
-    app.listen(port, () => {
-      console.log(`Express server running on http://localhost:${port}`);
-    });
-  }
+  const app = await createExpressServer(options);
+  app.listen(port, () => {
+    console.log(`HTTP benchmark server running on http://localhost:${port}`);
+  });
 }
 
 main().catch((err) => {
