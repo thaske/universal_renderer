@@ -1,7 +1,7 @@
 PATH
   remote: ../..
   specs:
-    universal_renderer (0.4.4)
+    universal_renderer (0.5.0)
       connection_pool (~> 2.4)
       loofah (~> 2.24)
       rails (>= 7.1, < 9.0)
@@ -314,7 +314,7 @@ CHECKSUMS
   timeout (0.6.0) sha256=6d722ad619f96ee383a0c557ec6eb8c4ecb08af3af62098a0be5057bf00de1af
   tsort (0.2.0) sha256=9650a793f6859a43b6641671278f79cfead60ac714148aabe4e3f0060480089f
   tzinfo (2.0.6) sha256=8daf828cc77bcf7d63b0e3bdb6caa47e2272dcfaf4fbfe46f8c3a9df087a829b
-  universal_renderer (0.4.4)
+  universal_renderer (0.5.0)
   uri (1.1.1) sha256=379fa58d27ffb1387eaada68c749d1426738bd0f654d812fcc07e7568f5c57c6
   useragent (0.16.11) sha256=700e6413ad4bb954bb63547fa098dddf7b0ebe75b40cc6f93b8d54255b173844
   vite_rails (3.0.20) sha256=582bf9aa3bc3b4d9b0a48c17862b4fa9bd17384ac597a57b7a38d2f95d96e682

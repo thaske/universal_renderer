@@ -7,35 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.5.0 (Ruby Gem) / 0.6.0 (NPM Package) - 2026-07-09
+
 ### Ruby Gem
+
+#### Added
+
+- Configurable, tagged logging through `UniversalRenderer.logger=`.
+- Persistent HTTP connection pooling with configurable `config.http.pool_size`.
+- `add_query_data`, `ssr_props`, and `ssr_props_json` helpers for hydration data.
 
 #### Changed (breaking)
 
-- Reworked configuration handling so `UniversalRenderer::Configuration` no
-  longer reads environment variables itself; it only exposes plain attributes
-  with sensible defaults. Binding those values to `ENV` is left entirely to
-  the host application. The suggested env-var convention is the
-  `UNIVERSAL_RENDERER_*` prefix (documented in the README); the `SSR_*` env
-  vars are no longer referenced anywhere in the gem.
-- Renamed `config.engine` to `config.adapter`.
-- Renamed `config.ssr_url` to `config.url`, `config.ssr_stream_path` to
+- Configuration no longer reads environment variables automatically. Configure
+  `url`, `timeout`, and `stream_path` explicitly in the host application.
+- Renamed `config.ssr_url` to `config.url` and `config.ssr_stream_path` to
   `config.stream_path`.
-- Nested adapter-specific options under sub-objects: `config.http.pool_size`
-  (was `config.http_pool_size`), `config.stdio.pool_size` (was
-  `config.stdio_pool_size`), `config.stdio.timeout_ms` (was
-  `config.stdio_timeout`), and `config.stdio.cli_script` (was
-  `config.stdio_cli_script`).
+- The runtime is HTTP-only; the unreleased stdio and multi-adapter abstractions
+  were removed before this release.
 
-#### Changed
+#### Fixed
 
-- The stdio adapter is now **experimental** and is lazily loaded: it is only
-  required when `config.adapter = :stdio` is set, so it never affects the
-  default (HTTP) boot path. It is no longer recommended for production.
+- Hardened streaming fallback and finalization handling, including safe
+  treatment of partial responses and persistent connection reuse.
+
+### NPM Package
+
+#### Added
+
+- CommonJS and ESM builds with generated TypeScript declarations.
+- The `universal-renderer/http` subpath export and HTTP handler factories.
+- Health checks, 404 responses, and configurable Express error handling.
+
+#### Changed (breaking)
+
+- `RenderOutput.bodyAttrs` is now a string-to-string map and is serialized as
+  `body_attrs` in the HTTP response.
+- HTTP-specific types are now namespaced under the HTTP entry point.
+- Updated React, Express, Vite, TypeScript, and build-tool peer/development
+  dependencies.
+
+#### Fixed
+
+- Stream transforms now finish before the trailing HTML template is written.
+- HTTP rendering and streaming errors now flow through Express error handling.
 
 ### Documentation
 
-- README and install generator now lead with the HTTP adapter as the
-  production-recommended path; stdio is documented as experimental.
+- Updated the Rails and SSR server setup examples for the HTTP-only runtime,
+  explicit configuration, streaming, and hydration data.
 
 ## 0.4.4 - 2025-06-29
 
