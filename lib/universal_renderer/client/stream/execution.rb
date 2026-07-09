@@ -28,15 +28,19 @@ module UniversalRenderer
                 end
                 success = true
               else
-                Rails.logger.error(
-                  "SSR stream server at #{stream_uri} responded with #{node_res.code} #{node_res.message}."
-                )
+                UniversalRenderer.log do |log|
+                  log.error(
+                    "SSR stream server at #{stream_uri} responded with #{node_res.code} #{node_res.message}."
+                  )
+                end
               end
             end
           rescue StandardError => e
-            Rails.logger.error(
-              "Error during SSR data transfer or stream writing from #{stream_uri}: #{e.class.name} - #{e.message}"
-            )
+            UniversalRenderer.log do |log|
+              log.error(
+                "Error during SSR data transfer or stream writing from #{stream_uri}: #{e.class.name} - #{e.message}"
+              )
+            end
 
             # The response may be only partially consumed, so do not reuse the
             # current persistent connection. Net::HTTP can also raise after its

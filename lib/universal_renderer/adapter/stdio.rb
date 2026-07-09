@@ -21,8 +21,10 @@ module UniversalRenderer
         return nil unless @process_pool
 
         with_process do |process|
-          Rails.logger.debug do
-            "Stdio rendering: #{url} with props keys: #{props.keys}"
+          UniversalRenderer.log do |log|
+            log.debug do
+              "Stdio rendering: #{url} with props keys: #{props.keys}"
+            end
           end
 
           result = process.render(url, props)
@@ -30,9 +32,11 @@ module UniversalRenderer
 
           result = result.deep_symbolize_keys
           if result[:error].present?
-            Rails.logger.error(
-              "Stdio SSR render failed (URL: #{url}): #{result[:error]}"
-            )
+            UniversalRenderer.log do |log|
+              log.error(
+                "Stdio SSR render failed (URL: #{url}): #{result[:error]}"
+              )
+            end
             return nil
           end
 
@@ -43,9 +47,11 @@ module UniversalRenderer
           )
         end
       rescue StandardError => e
-        Rails.logger.error(
-          "Stdio SSR execution failed (URL: #{url}): #{e.full_message}"
-        )
+        UniversalRenderer.log do |log|
+          log.error(
+            "Stdio SSR execution failed (URL: #{url}): #{e.full_message}"
+          )
+        end
         nil
       end
 
@@ -55,8 +61,10 @@ module UniversalRenderer
         chunks_written = false
 
         with_process do |process|
-          Rails.logger.debug do
-            "Stdio streaming: #{url} with props keys: #{props.keys}"
+          UniversalRenderer.log do |log|
+            log.debug do
+              "Stdio streaming: #{url} with props keys: #{props.keys}"
+            end
           end
 
           process.render_stream(url, props, template) do |chunk|
@@ -67,9 +75,11 @@ module UniversalRenderer
 
         true
       rescue StandardError => e
-        Rails.logger.error(
-          "Stdio SSR stream failed (URL: #{url}): #{e.full_message}"
-        )
+        UniversalRenderer.log do |log|
+          log.error(
+            "Stdio SSR stream failed (URL: #{url}): #{e.full_message}"
+          )
+        end
 
         # Once bytes have reached the response stream a fallback render would
         # append a second document to the same response, so close what we have
@@ -90,10 +100,12 @@ module UniversalRenderer
       def setup
         cli_script_path = Rails.root.join(@cli_script)
         unless File.exist?(cli_script_path)
-          Rails.logger.error(
-            "Stdio CLI script not found at #{cli_script_path}. " \
-              "Please ensure the SSR CLI script is available."
-          )
+          UniversalRenderer.log do |log|
+            log.error(
+              "Stdio CLI script not found at #{cli_script_path}. " \
+                "Please ensure the SSR CLI script is available."
+            )
+          end
           return
         end
 
@@ -106,13 +118,17 @@ module UniversalRenderer
               timeout: timeout_ms / 1000.0
             ) { StdioProcess.new(script, timeout_ms: timeout_ms) }
 
-          Rails.logger.info(
-            "Universal Renderer Stdio process pool (#{@pool_size}) initialized"
-          )
+          UniversalRenderer.log do |log|
+            log.info(
+              "Stdio process pool (#{@pool_size}) initialized"
+            )
+          end
         rescue StandardError => e
-          Rails.logger.error(
-            "Failed to initialize Stdio process pool: #{e.full_message}"
-          )
+          UniversalRenderer.log do |log|
+            log.error(
+              "Failed to initialize Stdio process pool: #{e.full_message}"
+            )
+          end
         end
       end
 
@@ -312,7 +328,9 @@ module UniversalRenderer
           @stderr_thread =
             Thread.new do
               stderr.each_line do |line|
-                Rails.logger.warn("[stdio-ssr] #{line.chomp}")
+                UniversalRenderer.log do |log|
+                  log.warn("stdio-ssr: #{line.chomp}")
+                end
               end
             rescue IOError
               # pipe closed

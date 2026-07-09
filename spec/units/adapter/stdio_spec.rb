@@ -8,10 +8,11 @@ RSpec.describe UniversalRenderer::Adapter::Stdio do
     # Mock Rails.root
     allow(Rails).to receive(:root).and_return(Pathname.new("/fake/rails/root"))
 
-    # Mock Rails.logger
-    allow(Rails.logger).to receive(:info)
-    allow(Rails.logger).to receive(:error)
-    allow(Rails.logger).to receive(:warn)
+    # Mock UniversalRenderer logger
+    allow(UniversalRenderer).to receive(:logger).and_return(Rails.logger)
+    allow(UniversalRenderer).to receive(:log) do |&block|
+      block.call(Rails.logger)
+    end
 
     # Mock UniversalRenderer.config
     allow(UniversalRenderer).to receive(:config).and_return(config_mock)
@@ -44,7 +45,7 @@ RSpec.describe UniversalRenderer::Adapter::Stdio do
 
       it "logs successful initialization" do
         expect(Rails.logger).to receive(:info).with(
-          "Universal Renderer Stdio process pool (2) initialized"
+          "Stdio process pool (2) initialized"
         )
 
         described_class.new

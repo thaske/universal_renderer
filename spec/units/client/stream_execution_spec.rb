@@ -31,6 +31,10 @@ RSpec.describe UniversalRenderer::Client::Stream::Execution do
   let(:response) { double("response", stream: stream) }
 
   before do
+    allow(UniversalRenderer).to receive(:logger).and_return(Rails.logger)
+    allow(UniversalRenderer).to receive(:log) do |&block|
+      block.call(Rails.logger)
+    end
     allow(Rails.logger).to receive(:error)
   end
 

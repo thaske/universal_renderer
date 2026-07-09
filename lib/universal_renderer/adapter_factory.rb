@@ -10,9 +10,11 @@ module UniversalRenderer
       # @return [UniversalRenderer::Adapter::Base] The configured adapter
       def create_adapter
         engine = UniversalRenderer.config.engine
-        Rails.logger.info(
-          "UniversalRenderer resolved SSR engine '#{engine}' for Rails env '#{Rails.env}'"
-        )
+        UniversalRenderer.log do |log|
+          log.info(
+            "Resolved SSR engine '#{engine}' for Rails env '#{Rails.env}'"
+          )
+        end
 
         case engine
         when :http
@@ -20,9 +22,11 @@ module UniversalRenderer
         when :stdio
           Adapter::Stdio.new
         else
-          Rails.logger.warn(
-            "Unknown SSR engine '#{engine}'. Falling back to HTTP adapter."
-          )
+          UniversalRenderer.log do |log|
+            log.warn(
+              "Unknown SSR engine '#{engine}'. Falling back to HTTP adapter."
+            )
+          end
           Adapter::Http.new
         end
       end
