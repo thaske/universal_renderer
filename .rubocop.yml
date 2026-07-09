@@ -27,8 +27,6 @@ AllCops:
 
 Metrics/BlockLength:
   AllowedMethods: ["describe", "context"]
-  Exclude:
-    - "lib/tasks/benchmark.rake"
 
 Metrics/CyclomaticComplexity:
   Max: 10

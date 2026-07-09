@@ -1,5 +1,3 @@
-require_relative "adapter_factory"
-
 module UniversalRenderer
   module Renderable
     extend ActiveSupport::Concern
@@ -34,8 +32,8 @@ module UniversalRenderer
     end
 
     # Fetches Server-Side Rendered (SSR) content for the current request.
-    # This method makes a blocking call to the SSR service using the configured adapter
-    # and stores the result in the `@ssr` instance variable.
+    # This method makes a blocking call to the SSR service and stores the
+    # result in the `@ssr` instance variable.
     #
     # The SSR content is fetched based on the `request.original_url` and the
     # `@universal_renderer_props` accumulated for the request.
@@ -45,7 +43,7 @@ module UniversalRenderer
     def fetch_ssr
       props = @universal_renderer_props || {}
       @ssr =
-        UniversalRenderer::AdapterFactory.adapter.call(
+        UniversalRenderer::Client::Base.call(
           request.original_url,
           props
         )
@@ -73,31 +71,17 @@ module UniversalRenderer
     private
 
     def render_ssr_stream(*, **)
-      adapter = UniversalRenderer::AdapterFactory.adapter
-
-      # Check if the current adapter supports streaming
-      unless adapter.supports_streaming?
-        UniversalRenderer.log do |log|
-          log.warn(
-            "Current SSR adapter (#{adapter.class.name}) does not support streaming. " \
-              "Falling back to blocking SSR."
-          )
-        end
-        return false
-      end
-
       full_layout = render_to_string(*, **)
       current_props = (@universal_renderer_props || {}).dup
 
       streaming_succeeded =
-        adapter.stream(
+        UniversalRenderer::Client::Stream.call(
           request.original_url,
           current_props,
           full_layout,
           response
         )
 
-      # SSR streaming failed or was not possible (e.g. server down, config missing).
       if streaming_succeeded
         response.stream.close unless response.stream.closed?
         true

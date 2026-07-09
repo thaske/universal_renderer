@@ -31,11 +31,6 @@
       "types": "./dist/http/index.d.mts",
       "import": "./dist/http/index.mjs",
       "require": "./dist/http/index.js"
-    },
-    "./stdio": {
-      "types": "./dist/stdio/index.d.mts",
-      "import": "./dist/stdio/index.mjs",
-      "require": "./dist/stdio/index.js"
     }
   },
   "files": [

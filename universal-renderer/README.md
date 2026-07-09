@@ -2,7 +2,6 @@
 
 SSR micro-server that pairs with the `universal_renderer` Ruby gem.
 
-• **Runtime support** – Express HTTP + Bun stdio support.
 • **Framework-agnostic** – just start a server and hand it JSX/HTML.
 • **Simple API** – minimal configuration, maximum flexibility.
 
@@ -74,10 +73,9 @@ Point the gem at `http://localhost:3001` and you're done.
 
 ## Framework Support
 
-Universal Renderer supports Express HTTP and stdio runtimes. Both support
-streaming SSR: pass `streamCallbacks` to `createServer` (HTTP) or
-`createRenderer` (stdio) and enable `enable_ssr streaming: true` in the Rails
-controller.
+Universal Renderer supports Express HTTP runtime with streaming SSR: pass
+`streamCallbacks` to `createServer` and enable `enable_ssr streaming: true` in
+the Rails controller.
 
 ### Options
 

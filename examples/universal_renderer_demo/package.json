@@ -4,15 +4,11 @@
   "packageManager": "bun@1.3.14",
   "scripts": {
     "dev": "bunx vite dev",
-    "ssr:dev:http": "bun app/frontend/ssr/ssr.tsx",
-    "ssr:dev:http:bundle": "bun run build:ssr:http && bun public/vite-ssr-http/ssr.js",
+    "ssr:dev": "bun app/frontend/ssr/ssr.tsx",
+    "ssr:dev:bundle": "bun run build:ssr && bun public/vite-ssr-http/ssr.js",
     "build:client": "bunx vite build",
-    "build:ssr:http": "./bin/build-ssr-http",
-    "build:ssr:stdio": "./bin/build-ssr-stdio",
-    "build:ssr": "bun run build:ssr:http",
+    "build:ssr": "./bin/build-ssr-http",
     "build": "bun run build:client && bun run build:ssr",
-    "ssr:http": "bun public/vite-ssr-http/ssr.js",
-    "ssr:stdio": "bun public/vite-ssr-stdio/ssr.js",
     "ssr": "bun public/vite-ssr-http/ssr.js"
   },
   "dependencies": {

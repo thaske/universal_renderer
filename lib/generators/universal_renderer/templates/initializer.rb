@@ -2,8 +2,6 @@
 
 UniversalRenderer.configure do |c|
   # External Node.js/Bun SSR server. Supports streaming via the /stream endpoint.
-  c.adapter = :http
-
   c.url = "http://localhost:3001"
   c.timeout = 3
   c.stream_path = "/stream"

@@ -44,25 +44,13 @@ Configure in `config/initializers/universal_renderer.rb`:
 
 ```ruby
 UniversalRenderer.configure do |c|
-  # Choose your SSR adapter:
-  # :http  - External Node.js/Bun server (default, recommended for production)
-  # :stdio - EXPERIMENTAL. Stdio Bun processes via Open3 (no external server)
-  # Both adapters support blocking and streaming SSR.
-  c.adapter = :http
-  # HTTP is recommended for most applications, including production.
-  # Choose :stdio only for embedded SSR; it is experimental and not
-  # recommended for production.
-
-  # HTTP adapter configuration (when adapter = :http)
   c.url = "http://localhost:3001"
   c.timeout = 3
   c.stream_path = "/stream"
   c.http.pool_size = 5 # persistent Net::HTTP connections per SSR origin
 
-  # --- Stdio adapter (EXPERIMENTAL, when adapter = :stdio) -------------
-  # c.stdio.pool_size = 5
-  # c.stdio.timeout_ms = 5_000
-  # c.stdio.cli_script = "app/frontend/ssr/stdio.tsx"
+  # Blocking SSR is the default. Enable streaming per controller only when needed:
+  # enable_ssr streaming: true
 end
 ```
 
@@ -204,85 +192,6 @@ To set up the SSR server for your Rails application:
    web: bin/rails s
    ssr: bin/vite ssr
    ```
-
-## Setting Up the Stdio Adapter (Experimental)
-
-If you prefer to use the stdio adapter instead of an external HTTP server (experimental, not recommended for production):
-
-1. Configure the adapter in your initializer:
-
-   ```ruby
-   # config/initializers/universal_renderer.rb
-   UniversalRenderer.configure { |config| config.adapter = :stdio }
-   ```
-
-2. Create a persistent CLI script (e.g., `app/frontend/ssr/stdio.tsx`):
-
-   ```tsx
-   import { renderToString } from "react-dom/server.node";
-   import { createRenderer } from "universal-renderer/stdio";
-
-   import setup from "@/ssr/setup";
-
-   await createRenderer({
-     setup,
-     render: ({ app }) => ({
-       body: renderToString(app),
-     }),
-   });
-   ```
-
-3. Customize the SSR bundle at `app/assets/javascripts/universal_renderer/ssr_bundle.js`:
-
-   ```javascript
-   // Import your bundled React components here
-   // This file is created by the universal_renderer:install generator
-
-   globalThis.UniversalSSR = {
-     render: function (componentName, props, url) {
-       try {
-         // Map component names to actual components
-         const components = {
-           // Add your components here, e.g.:
-           // App: YourAppComponent,
-           // HomePage: YourHomePageComponent,
-         };
-
-         const Component = components[componentName];
-         if (!Component) {
-           throw new Error(`Unknown component: ${componentName}`);
-         }
-
-         // Use React.createElement and renderToString here
-         const element = React.createElement(Component, { ...props, url });
-         const body = renderToString(element);
-
-         return {
-           head: "<title>Your App</title>",
-           body: body,
-           bodyAttrs: {},
-         };
-       } catch (error) {
-         return this.handleError(error, componentName, props, url);
-       }
-     },
-
-     handleError: function (error, componentName, props, url) {
-       console.error("SSR Error:", error);
-       return {
-         head: "<title>SSR Error</title>",
-         body: `<div><h1>Server-Side Rendering Error</h1><p>Component: ${componentName}</p></div>`,
-         bodyAttrs: {},
-       };
-     },
-   };
-   ```
-
-4. Bundle your React components into the SSR bundle file using your preferred bundler (Webpack, Vite, etc.)
-
-5. Restart your Rails application - no external server needed.
-
-**Note:** The stdio engine requires a persistent CLI script that can handle JSON input/output and run under Bun. The persistent processes communicate via stdin/stdout, so your CLI script should read JSON from stdin and write JSON responses to stdout with `head`, `body`, and `body_attrs` fields (same format as the HTTP adapter).
 
 ## Development
 
