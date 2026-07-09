@@ -12,28 +12,26 @@ RSpec.shared_examples "SSR contract compliance" do |engine_type|
         array_data: [1, 2, 3]
       }
 
-      result = if engine_type == :http
-        test_ssr_endpoint(
+      result =
+        if engine_type == :http
+          test_ssr_endpoint(
             server_url,
             url: "http://example.com/test-page",
             props: test_props
           )
-      else
-        # For STDIO mode, test via the adapter directly
-        test_stdio_adapter(
+        else
+          # For STDIO mode, test via the adapter directly
+          test_stdio_adapter(
             url: "http://example.com/test-page",
             props: test_props
           )
-               end
+        end
 
       expect(result[:success]).to be true
       expect(result[:status]).to eq 200 if engine_type == :http
-      
+
       if engine_type == :http
-        expect(result[:json]).to include(
-          head: be_a(String),
-          body: be_a(String)
-        )
+        expect(result[:json]).to include(head: be_a(String), body: be_a(String))
       else
         expect(result[:response]).to be_a(UniversalRenderer::SSR::Response)
         expect(result[:response].head).to be_a(String)
@@ -42,14 +40,15 @@ RSpec.shared_examples "SSR contract compliance" do |engine_type|
     end
 
     it "handles empty props correctly" do
-      result = if engine_type == :http
-        test_ssr_endpoint(server_url, props: {})
-      else
-        test_stdio_adapter(props: {})
-               end
+      result =
+        if engine_type == :http
+          test_ssr_endpoint(server_url, props: {})
+        else
+          test_stdio_adapter(props: {})
+        end
 
       expect(result[:success]).to be true
-      
+
       if engine_type == :http
         expect(result[:json]).to be_a(Hash)
         expect(result[:json]).to have_key(:head)
@@ -79,11 +78,12 @@ RSpec.shared_examples "SSR contract compliance" do |engine_type|
         }
       }
 
-      result = if engine_type == :http
-        test_ssr_endpoint(server_url, props: complex_props)
-      else
-        test_stdio_adapter(props: complex_props)
-               end
+      result =
+        if engine_type == :http
+          test_ssr_endpoint(server_url, props: complex_props)
+        else
+          test_stdio_adapter(props: complex_props)
+        end
 
       expect(result[:success]).to be true
     end
@@ -91,12 +91,13 @@ RSpec.shared_examples "SSR contract compliance" do |engine_type|
 
   describe "Ruby client integration" do
     it "integrates properly with UniversalRenderer::Client::Base" do
-      results = if engine_type == :http
-        test_ruby_client_integration(server_url)
-      else
-        test_ruby_client_integration_stdio
-                end
-base_result = results[:base_client]
+      results =
+        if engine_type == :http
+          test_ruby_client_integration(server_url)
+        else
+          test_ruby_client_integration_stdio
+        end
+      base_result = results[:base_client]
 
       expect(base_result[:success]).to be true
       expect(base_result[:response]).to be_a(UniversalRenderer::SSR::Response)

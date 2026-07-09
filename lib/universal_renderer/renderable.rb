@@ -123,9 +123,7 @@ module UniversalRenderer
 
       # Only skip if we're in the middle of an active Warden throw/catch mechanism
       # This is more specific and allows SSR for public pages with unauthenticated users
-      if defined?(Warden) && request.env["warden"]&.message.present?
-        return true
-      end
+      return true if defined?(Warden) && request.env["warden"]&.message.present?
 
       false
     end

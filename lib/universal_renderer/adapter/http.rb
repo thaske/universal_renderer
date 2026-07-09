@@ -7,7 +7,7 @@ require_relative "../client/stream"
 module UniversalRenderer
   module Adapter
     class Http < Base
-      delegate :call, to: :'UniversalRenderer::Client::Base'
+      delegate :call, to: :"UniversalRenderer::Client::Base"
 
       def stream(url, props, template, response)
         UniversalRenderer::Client::Stream.call(url, props, template, response)

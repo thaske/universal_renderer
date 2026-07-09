@@ -24,7 +24,9 @@ RSpec.describe UniversalRenderer::Adapter::Stdio::StdioProcess do
     expect(first).to include(
       "head" => "<title>fixture</title>",
       "body" => "<div>alpha</div>",
-      "body_attrs" => { "data-echo" => "yes" }
+      "body_attrs" => {
+        "data-echo" => "yes"
+      }
     )
     expect(second["body"]).to eq("<div>beta</div>")
   end
@@ -74,7 +76,10 @@ RSpec.describe UniversalRenderer::Adapter::Stdio::StdioProcess do
           { "stream_fail" => true },
           template
         ) { |chunk| chunks << chunk }
-      end.to raise_error(described_class::RenderError, /intentional stream failure/)
+      end.to raise_error(
+        described_class::RenderError,
+        /intentional stream failure/
+      )
       expect(chunks).to be_empty
 
       # The error frame is terminal, so the pipe is still synchronized.
@@ -85,9 +90,11 @@ RSpec.describe UniversalRenderer::Adapter::Stdio::StdioProcess do
     it "raises RenderError when the template lacks the body marker" do
       chunks = []
       expect do
-        process.render_stream("http://example.com/x", {}, "<html></html>") do |chunk|
-          chunks << chunk
-        end
+        process.render_stream(
+          "http://example.com/x",
+          {},
+          "<html></html>"
+        ) { |chunk| chunks << chunk }
       end.to raise_error(described_class::RenderError, /SSR_BODY/)
       expect(chunks).to be_empty
     end
@@ -100,7 +107,8 @@ RSpec.describe UniversalRenderer::Adapter::Stdio::StdioProcess do
         template
       ) { |chunk| stream_html << chunk }
 
-      static_result = process.render("http://example.com/b", { "content" => "static" })
+      static_result =
+        process.render("http://example.com/b", { "content" => "static" })
 
       second_stream = []
       process.render_stream(

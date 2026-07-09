@@ -15,7 +15,11 @@ RSpec.describe UniversalRenderer::Adapter::Stdio do
 
     # Mock UniversalRenderer.config
     allow(UniversalRenderer).to receive(:config).and_return(config_mock)
-    allow(config_mock).to receive_messages(stdio_pool_size: 2, stdio_timeout: 3000, stdio_cli_script: cli_script)
+    allow(config_mock).to receive_messages(
+      stdio_pool_size: 2,
+      stdio_timeout: 3000,
+      stdio_cli_script: cli_script
+    )
   end
 
   describe "#initialize" do
@@ -23,14 +27,14 @@ RSpec.describe UniversalRenderer::Adapter::Stdio do
       before do
         # Mock File.exist? to return true for CLI script
         allow(File).to receive(:exist?).with(
-          Pathname.new("/fake/rails/root").join(cli_script),
+          Pathname.new("/fake/rails/root").join(cli_script)
         ).and_return(true)
 
         # Mock ConnectionPool and StdioProcess
         allow(ConnectionPool).to receive(:new).and_return(double("pool"))
-        allow(UniversalRenderer::Adapter::Stdio::StdioProcess).to receive(:new).and_return(
-          double("process"),
-        )
+        allow(UniversalRenderer::Adapter::Stdio::StdioProcess).to receive(
+          :new
+        ).and_return(double("process"))
       end
 
       it "initializes successfully" do
@@ -40,7 +44,7 @@ RSpec.describe UniversalRenderer::Adapter::Stdio do
 
       it "logs successful initialization" do
         expect(Rails.logger).to receive(:info).with(
-          "Universal Renderer Stdio process pool (2) initialized",
+          "Universal Renderer Stdio process pool (2) initialized"
         )
 
         described_class.new
@@ -50,13 +54,13 @@ RSpec.describe UniversalRenderer::Adapter::Stdio do
     context "when CLI script does not exist" do
       before do
         allow(File).to receive(:exist?).with(
-          Pathname.new("/fake/rails/root").join(cli_script),
+          Pathname.new("/fake/rails/root").join(cli_script)
         ).and_return(false)
       end
 
       it "logs error and does not create process pool" do
         expect(Rails.logger).to receive(:error).with(
-          /Stdio CLI script not found/,
+          /Stdio CLI script not found/
         )
 
         described_class.new
@@ -70,18 +74,20 @@ RSpec.describe UniversalRenderer::Adapter::Stdio do
     let(:props) { { "component" => "TestComponent", "title" => "Test" } }
 
     context "when process pool is available" do
-      let(:process_mock) { instance_double(UniversalRenderer::Adapter::Stdio::StdioProcess) }
+      let(:process_mock) do
+        instance_double(UniversalRenderer::Adapter::Stdio::StdioProcess)
+      end
       let(:pool_mock) { instance_double(ConnectionPool) }
 
       before do
         allow(File).to receive(:exist?).with(
-          Pathname.new("/fake/rails/root").join(cli_script),
+          Pathname.new("/fake/rails/root").join(cli_script)
         ).and_return(true)
 
         allow(ConnectionPool).to receive(:new).and_return(pool_mock)
-        allow(UniversalRenderer::Adapter::Stdio::StdioProcess).to receive(:new).and_return(
-          process_mock,
-        )
+        allow(UniversalRenderer::Adapter::Stdio::StdioProcess).to receive(
+          :new
+        ).and_return(process_mock)
         allow(pool_mock).to receive(:with).and_yield(process_mock)
       end
 
@@ -91,8 +97,8 @@ RSpec.describe UniversalRenderer::Adapter::Stdio do
             "head" => "<title>Test Page</title>",
             "body" => "<div>Test Component</div>",
             "body_attrs" => {
-            },
-          },
+            }
+          }
         )
 
         result = adapter.call(url, props)
@@ -105,11 +111,11 @@ RSpec.describe UniversalRenderer::Adapter::Stdio do
 
       it "handles rendering errors gracefully" do
         allow(process_mock).to receive(:render).and_raise(
-          StandardError.new("Node Error"),
+          StandardError.new("Node Error")
         )
 
         expect(Rails.logger).to receive(:error).with(
-          /Stdio SSR execution failed/,
+          /Stdio SSR execution failed/
         )
 
         result = adapter.call(url, props)
@@ -118,16 +124,11 @@ RSpec.describe UniversalRenderer::Adapter::Stdio do
 
       it "returns nil when the child reports a render error" do
         allow(process_mock).to receive(:render).and_return(
-          {
-            "head" => "",
-            "body" => "",
-            "body_attrs" => {},
-            "error" => "boom",
-          },
+          { "head" => "", "body" => "", "body_attrs" => {}, "error" => "boom" }
         )
 
         expect(Rails.logger).to receive(:error).with(
-          /Stdio SSR render failed.*boom/,
+          /Stdio SSR render failed.*boom/
         )
 
         result = adapter.call(url, props)
@@ -138,7 +139,7 @@ RSpec.describe UniversalRenderer::Adapter::Stdio do
     context "when process pool is not available" do
       before do
         allow(File).to receive(:exist?).with(
-          Pathname.new("/fake/rails/root").join(cli_script),
+          Pathname.new("/fake/rails/root").join(cli_script)
         ).and_return(false)
       end
 
@@ -163,23 +164,27 @@ RSpec.describe UniversalRenderer::Adapter::Stdio do
     end
 
     context "when process pool is available" do
-      let(:process_mock) { instance_double(UniversalRenderer::Adapter::Stdio::StdioProcess) }
+      let(:process_mock) do
+        instance_double(UniversalRenderer::Adapter::Stdio::StdioProcess)
+      end
       let(:pool_mock) { instance_double(ConnectionPool) }
 
       before do
         allow(File).to receive(:exist?).with(
-          Pathname.new("/fake/rails/root").join(cli_script),
+          Pathname.new("/fake/rails/root").join(cli_script)
         ).and_return(true)
 
         allow(ConnectionPool).to receive(:new).and_return(pool_mock)
-        allow(UniversalRenderer::Adapter::Stdio::StdioProcess).to receive(:new).and_return(
-          process_mock,
-        )
+        allow(UniversalRenderer::Adapter::Stdio::StdioProcess).to receive(
+          :new
+        ).and_return(process_mock)
         allow(pool_mock).to receive(:with).and_yield(process_mock)
       end
 
       it "writes streamed chunks to the response and returns true" do
-        allow(process_mock).to receive(:render_stream) do |_url, _props, _template, &block|
+        allow(process_mock).to receive(
+          :render_stream
+        ) do |_url, _props, _template, &block|
           block.call("<html>")
           block.call("<div>streamed</div>")
           block.call("</html>")
@@ -195,7 +200,9 @@ RSpec.describe UniversalRenderer::Adapter::Stdio do
 
       it "returns false when the stream fails before any chunk is written" do
         allow(process_mock).to receive(:render_stream).and_raise(
-          UniversalRenderer::Adapter::Stdio::StdioProcess::RenderError.new("boom"),
+          UniversalRenderer::Adapter::Stdio::StdioProcess::RenderError.new(
+            "boom"
+          )
         )
 
         expect(Rails.logger).to receive(:error).with(/Stdio SSR stream failed/)
@@ -205,7 +212,9 @@ RSpec.describe UniversalRenderer::Adapter::Stdio do
       end
 
       it "closes the response and returns true when the stream fails mid-flight" do
-        allow(process_mock).to receive(:render_stream) do |_url, _props, _template, &block|
+        allow(process_mock).to receive(
+          :render_stream
+        ) do |_url, _props, _template, &block|
           block.call("<html>")
           raise Timeout::Error, "stalled"
         end
@@ -234,7 +243,7 @@ RSpec.describe UniversalRenderer::Adapter::Stdio do
     context "when process pool is available" do
       before do
         allow(File).to receive(:exist?).with(
-          Pathname.new("/fake/rails/root").join(cli_script),
+          Pathname.new("/fake/rails/root").join(cli_script)
         ).and_return(true)
         allow(ConnectionPool).to receive(:new).and_return(double("pool"))
       end
@@ -261,7 +270,7 @@ RSpec.describe UniversalRenderer::Adapter::Stdio::StdioProcess do
 
   before do
     allow(Open3).to receive(:popen3).with("bun", cli_script).and_return(
-      [stdin_mock, stdout_mock, stderr_mock, wait_thr_mock],
+      [stdin_mock, stdout_mock, stderr_mock, wait_thr_mock]
     )
 
     allow(stdin_mock).to receive(:write_nonblock) { |data, **| data.bytesize }
@@ -280,7 +289,9 @@ RSpec.describe UniversalRenderer::Adapter::Stdio::StdioProcess do
     allow(wait_thr_mock).to receive(:alive?).and_return(true)
     allow(wait_thr_mock).to receive(:join)
     allow(Process).to receive(:kill)
-    allow(Thread).to receive(:new).and_return(instance_double(Thread, :name= => nil, kill: nil, respond_to?: true))
+    allow(Thread).to receive(:new).and_return(
+      instance_double(Thread, :name= => nil, :kill => nil, :respond_to? => true)
+    )
   end
 
   describe "#initialize" do
@@ -303,15 +314,18 @@ RSpec.describe UniversalRenderer::Adapter::Stdio::StdioProcess do
             head: "<title>Test</title>",
             body: "<div>Test Component</div>",
             body_attrs: {
-            },
-          },
+            }
+          }
         )
 
       expect(stdin_mock).to receive(:write_nonblock).with(
         "#{expected_payload}\n",
-        exception: false,
+        exception: false
       ) { |data, **| data.bytesize }
-      expect(stdout_mock).to receive(:read_nonblock).with(4096, exception: false).and_return("#{expected_response}\n")
+      expect(stdout_mock).to receive(:read_nonblock).with(
+        4096,
+        exception: false
+      ).and_return("#{expected_response}\n")
 
       result = process.render(url, props)
       expect(result).to eq(
@@ -319,13 +333,16 @@ RSpec.describe UniversalRenderer::Adapter::Stdio::StdioProcess do
           "head" => "<title>Test</title>",
           "body" => "<div>Test Component</div>",
           "body_attrs" => {
-          },
-        },
+          }
+        }
       )
     end
 
     it "closes the process on a non-JSON response line so the pipe cannot desync" do
-      allow(stdout_mock).to receive(:read_nonblock).with(4096, exception: false).and_return("stray stdout noise\n")
+      allow(stdout_mock).to receive(:read_nonblock).with(
+        4096,
+        exception: false
+      ).and_return("stray stdout noise\n")
 
       expect(stdin_mock).to receive(:close)
       expect(stdout_mock).to receive(:close)

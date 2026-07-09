@@ -133,4 +133,3 @@ export type StreamHandlerOptions<TContext extends Record<string, any>> =
       transform?: (context: TContext) => NodeJS.ReadWriteStream;
     };
   };
-

@@ -21,7 +21,7 @@ module UniversalRenderer
           Adapter::Stdio.new
         else
           Rails.logger.warn(
-            "Unknown SSR engine '#{engine}'. Falling back to HTTP adapter.",
+            "Unknown SSR engine '#{engine}'. Falling back to HTTP adapter."
           )
           Adapter::Http.new
         end

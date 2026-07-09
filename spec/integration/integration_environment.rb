@@ -76,15 +76,19 @@ module IntegrationEnvironment
     ).and_return(true)
 
     # Create a mock process that returns canned responses
-    mock_bun_process = instance_double(UniversalRenderer::Adapter::Stdio::StdioProcess)
+    mock_bun_process =
+      instance_double(UniversalRenderer::Adapter::Stdio::StdioProcess)
     allow(mock_bun_process).to receive(:render).and_return(
       {
         "head" => "<title>Test STDIO Response</title>",
         "body" => "<div>STDIO rendered content</div>",
-        "body_attrs" => {}
+        "body_attrs" => {
+        }
       }
     )
-    allow(mock_bun_process).to receive(:render_stream) do |_url, _props, _template, &block|
+    allow(mock_bun_process).to receive(
+      :render_stream
+    ) do |_url, _props, _template, &block|
       block.call("<html>")
       block.call("chunk-1")
       block.call("chunk-2")
@@ -97,9 +101,9 @@ module IntegrationEnvironment
     allow(mock_pool).to receive(:with).and_yield(mock_bun_process)
 
     allow(ConnectionPool).to receive(:new).and_return(mock_pool)
-    allow(UniversalRenderer::Adapter::Stdio::StdioProcess).to receive(:new).and_return(
-      mock_bun_process
-    )
+    allow(UniversalRenderer::Adapter::Stdio::StdioProcess).to receive(
+      :new
+    ).and_return(mock_bun_process)
   end
 
   # Resets UniversalRenderer configuration

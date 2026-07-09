@@ -52,9 +52,7 @@ export function createLineHandler<
   if (!setup) throw new Error("setup callback is required");
   if (!render) throw new Error("render callback is required");
 
-  return async function handleLine(
-    line: string,
-  ): Promise<string | undefined> {
+  return async function handleLine(line: string): Promise<string | undefined> {
     const trimmed = line.trim();
     if (!trimmed) return undefined;
 

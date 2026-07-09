@@ -94,7 +94,6 @@ RSpec.describe UniversalRenderer::AdapterFactory do
         expect(adapter).to be_a(UniversalRenderer::Adapter::Http)
       end
     end
-
   end
 
   describe ".adapter" do

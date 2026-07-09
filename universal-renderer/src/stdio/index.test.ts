@@ -104,12 +104,15 @@ describe("stdio line handler", () => {
       error: onError,
     });
 
-    const parsed = JSON.parse(
-      (await handle(JSON.stringify({ url: "/" })))!,
-    );
+    const parsed = JSON.parse((await handle(JSON.stringify({ url: "/" })))!);
 
     expect(onError).toHaveBeenCalledOnce();
-    expect(parsed).toEqual({ head: "", body: "", body_attrs: {}, error: "boom" });
+    expect(parsed).toEqual({
+      head: "",
+      body: "",
+      body_attrs: {},
+      error: "boom",
+    });
   });
 
   it("runs cleanup after successful and failed renders", async () => {
@@ -143,9 +146,7 @@ describe("stdio line handler", () => {
       error: onError,
     });
 
-    const parsed = JSON.parse(
-      (await handle(JSON.stringify({ url: "/" })))!,
-    );
+    const parsed = JSON.parse((await handle(JSON.stringify({ url: "/" })))!);
 
     expect(parsed.body).toBe("ok");
     expect(onError).toHaveBeenCalledOnce();
@@ -217,7 +218,9 @@ describe("stdio stream handler", () => {
       template: TEMPLATE,
     });
 
-    expect(frames[0].chunk).toBe("<html><head><title>streamed</title></head><body>");
+    expect(frames[0].chunk).toBe(
+      "<html><head><title>streamed</title></head><body>",
+    );
   });
 
   it("falls back to context.app when no node callback is given", async () => {
@@ -282,8 +285,6 @@ describe("stdio stream handler", () => {
     await collectFrames(handle, { url: "/", template: TEMPLATE });
 
     expect(cleanup).toHaveBeenCalledOnce();
-    expect(cleanup).toHaveBeenCalledWith(
-      expect.objectContaining({ url: "/" }),
-    );
+    expect(cleanup).toHaveBeenCalledWith(expect.objectContaining({ url: "/" }));
   });
 });

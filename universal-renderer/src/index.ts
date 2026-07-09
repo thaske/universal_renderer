@@ -2,11 +2,11 @@ export { SSR_MARKERS } from "./constants";
 export {
   createErrorHandler,
   createHealthHandler,
+  createServer,
   createSSRHandler,
   createStreamHandler,
-  createServer,
+  createServer as default,
 } from "./http";
-export { createServer as default } from "./http";
 export type {
   BaseHandlerOptions,
   RenderOutput,

@@ -101,12 +101,10 @@ module UniversalRenderer
           timeout_ms = @timeout
           script = cli_script_path.to_s
           @process_pool =
-            ConnectionPool.new(size: @pool_size, timeout: timeout_ms / 1000.0) do
-              StdioProcess.new(
-                script,
-                timeout_ms: timeout_ms
-              )
-            end
+            ConnectionPool.new(
+              size: @pool_size,
+              timeout: timeout_ms / 1000.0
+            ) { StdioProcess.new(script, timeout_ms: timeout_ms) }
 
           Rails.logger.info(
             "Universal Renderer Stdio process pool (#{@pool_size}) initialized"
@@ -173,7 +171,8 @@ module UniversalRenderer
         def render_stream(url, props, template)
           spawn! unless alive?
 
-          payload = JSON.generate({ url: url, props: props, template: template })
+          payload =
+            JSON.generate({ url: url, props: props, template: template })
           write_line_with_deadline(payload)
 
           loop do
@@ -222,8 +221,11 @@ module UniversalRenderer
           deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + @timeout
           data = "#{payload}\n"
           until data.empty?
-            remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
-            raise Timeout::Error, "Stdio write timed out after #{@timeout}s" if remaining <= 0
+            remaining =
+              deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+            if remaining <= 0
+              raise Timeout::Error, "Stdio write timed out after #{@timeout}s"
+            end
 
             written = @stdin.write_nonblock(data, exception: false)
             if written == :wait_writable
@@ -253,11 +255,16 @@ module UniversalRenderer
               return line
             end
 
-            remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
-            raise Timeout::Error, "Stdio render timed out after #{@timeout}s" if remaining <= 0
+            remaining =
+              deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+            if remaining <= 0
+              raise Timeout::Error, "Stdio render timed out after #{@timeout}s"
+            end
 
             ready = @stdout.wait_readable(remaining)
-            raise Timeout::Error, "Stdio render timed out after #{@timeout}s" if ready.nil?
+            if ready.nil?
+              raise Timeout::Error, "Stdio render timed out after #{@timeout}s"
+            end
 
             chunk = @stdout.read_nonblock(4096, exception: false)
             case chunk
@@ -310,7 +317,10 @@ module UniversalRenderer
             rescue IOError
               # pipe closed
             end
-          @stderr_thread.name = "universal_renderer-stdio-stderr" if @stderr_thread.respond_to?(:name=)
+          @stderr_thread.name =
+            "universal_renderer-stdio-stderr" if @stderr_thread.respond_to?(
+            :name=
+          )
         end
       end
     end

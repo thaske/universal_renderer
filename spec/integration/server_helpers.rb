@@ -41,7 +41,7 @@ module IntegrationHelpers
       )
 
       # Spawn the SSR process
-      command = ["bun", "server.mjs"]
+      command = %w[bun server.mjs]
 
       process =
         Process.spawn(
