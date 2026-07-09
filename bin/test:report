@@ -55,7 +55,7 @@ class HtmlSectionsBuilder
           <h3>Ruby Gem Tests</h3>
           <p>Count: #{@data[:ruby].dig("summary", "example_count") || 7} | Failures: #{@data[:ruby].dig("summary", "failure_count") || 0} | Status: #{ReportCalculator.test_status(@data[:ruby])}</p>
 
-          <h3>NPM Package Tests</h3>
+          <h3>Bun Package Tests</h3>
           <p>Count: 29 | Status: ✅ Passing</p>
 
           <h3>Integration Tests</h3>
@@ -66,7 +66,7 @@ class HtmlSectionsBuilder
 
   def coverage_section
     coverage = @data[:coverage]
-    if coverage[:ruby_available] || coverage[:npm_available]
+    if coverage[:ruby_available] || coverage[:bun_available]
       content = '<div class="metric-card"><h2>📈 Coverage Reports</h2>'
       content +=
         if coverage[:ruby_available]
@@ -74,11 +74,11 @@ class HtmlSectionsBuilder
         else
           "<p>❌ <strong>Ruby Gem:</strong> Not available</p>"
         end
-      if coverage[:npm_available]
+      if coverage[:bun_available]
         content +=
-          "<p>✅ <strong>NPM Package:</strong> <a href='../#{coverage[:npm_path]}'>View Coverage Report</a></p>"
+          "<p>✅ <strong>Bun Package:</strong> <a href='../#{coverage[:bun_path]}'>View Coverage Report</a></p>"
       else
-        content += "<p>❌ <strong>NPM Package:</strong> Not available</p>"
+        content += "<p>❌ <strong>Bun Package:</strong> Not available</p>"
       end
       "#{content}</div>"
     else
@@ -182,7 +182,7 @@ class MarkdownReportBuilder
       - **Failures:** #{@data[:ruby].dig("summary", "failure_count") || 0}
       - **Status:** #{ReportCalculator.test_status(@data[:ruby])}
 
-      ### NPM Package Tests
+      ### Bun Package Tests
       - **Count:** 29 (from Vitest)
       - **Status:** ✅ Passing
 
@@ -215,7 +215,7 @@ class MarkdownReportBuilder
   private
 
   def coverage_section(coverage)
-    if coverage[:ruby_available] || coverage[:npm_available]
+    if coverage[:ruby_available] || coverage[:bun_available]
       sections = []
       ruby_status =
         (
@@ -227,15 +227,15 @@ class MarkdownReportBuilder
         )
       sections << "- **Ruby Gem:** #{ruby_status}"
 
-      npm_status =
+      bun_status =
         (
-          if coverage[:npm_available]
-            "✅ Available (#{coverage[:npm_path]})"
+          if coverage[:bun_available]
+            "✅ Available (#{coverage[:bun_path]})"
           else
             "❌ Not available"
           end
         )
-      sections << "- **NPM Package:** #{npm_status}"
+      sections << "- **Bun Package:** #{bun_status}"
       sections.join("\n")
     else
       "❌ No coverage reports available. Run `bin/test:coverage` to generate."
@@ -257,7 +257,7 @@ class DataCollector
     data = {
       timestamp: timestamp,
       ruby: collect_ruby_data,
-      npm: collect_npm_data,
+      bun: collect_bun_data,
       integration: collect_integration_data,
       coverage: collect_coverage_data,
       performance: collect_performance_data
@@ -278,14 +278,14 @@ class DataCollector
     end
   end
 
-  def self.collect_npm_data
-    result_file = "tmp/npm-test-results.json"
-    return default_npm_data unless File.exist?(result_file)
+  def self.collect_bun_data
+    result_file = "tmp/bun-test-results.json"
+    return default_bun_data unless File.exist?(result_file)
 
     begin
       JSON.parse(File.read(result_file))
     rescue JSON::ParserError
-      default_npm_data
+      default_bun_data
     end
   end
 
@@ -302,13 +302,13 @@ class DataCollector
 
   def self.collect_coverage_data
     ruby_coverage = File.exist?("coverage/index.html")
-    npm_coverage = File.exist?("universal-renderer/coverage/index.html")
+    bun_coverage = File.exist?("universal-renderer/coverage/index.html")
 
     {
       ruby_available: ruby_coverage,
-      npm_available: npm_coverage,
+      bun_available: bun_coverage,
       ruby_path: ruby_coverage ? "coverage/index.html" : nil,
-      npm_path: npm_coverage ? "universal-renderer/coverage/index.html" : nil
+      bun_path: bun_coverage ? "universal-renderer/coverage/index.html" : nil
     }
   end
 
@@ -327,13 +327,13 @@ class DataCollector
   def self.generate_summary(data)
     {
       total_tests:
-        (data[:ruby].dig("summary", "example_count") || 7) + 29 + # NPM package tests
+        (data[:ruby].dig("summary", "example_count") || 7) + 29 + # Bun package tests
           (data[:integration].dig("summary", "example_count") || 18),
       total_failures:
         (data[:ruby].dig("summary", "failure_count") || 0) +
           (data[:integration].dig("summary", "failure_count") || 0),
       coverage_available:
-        data[:coverage][:ruby_available] || data[:coverage][:npm_available],
+        data[:coverage][:ruby_available] || data[:coverage][:bun_available],
       performance_available: data[:performance][:available]
     }
   end
@@ -342,7 +342,7 @@ class DataCollector
     { "summary" => { "example_count" => 7, "failure_count" => 0 } }
   end
 
-  def self.default_npm_data
+  def self.default_bun_data
     { "tests" => 29, "failures" => 0 }
   end
 

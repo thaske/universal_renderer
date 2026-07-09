@@ -4,12 +4,15 @@ require "socket"
 
 module IntegrationEnvironment
   # Sets up integration test environment
-  def setup_integration_environment
+  def setup_integration_environment(engine: :http)
     # Ensure we have a clean environment
     cleanup_ssr_servers
 
     # Configure UniversalRenderer for testing
-    configure_universal_renderer_for_tests
+    configure_universal_renderer_for_tests(engine: engine)
+
+    # Set up engine-specific resources
+    setup_engine_resources(engine)
   end
 
   # Tears down integration test environment
@@ -18,7 +21,7 @@ module IntegrationEnvironment
     reset_universal_renderer_config
   end
 
-  # Spawns a test SSR server and returns its base URL
+  # Spawns a test SSR server and returns its base URL (HTTP mode only)
   #
   # @param config [Hash] Server configuration options
   # @return [String] Base URL of the spawned server
@@ -31,13 +34,65 @@ module IntegrationEnvironment
     "http://#{hostname}:#{port}"
   end
 
+  # Sets up test resources for the given engine
+  #
+  # @param engine [Symbol] The engine to set up (:http or :stdio)
+  def setup_engine_resources(engine)
+    case engine
+    when :http
+      # HTTP mode uses real servers - no additional setup needed
+    when :stdio
+      # Stdio mode uses stubbed processes - but don't set up mocks here
+      # Mocks will be set up in before(:each) blocks
+    end
+  end
+
   private
 
   # Configures UniversalRenderer for integration testing
-  def configure_universal_renderer_for_tests
+  def configure_universal_renderer_for_tests(engine: :http)
     UniversalRenderer.configure do |config|
       config.timeout = ENV["CI"] ? 15 : 5 # Longer timeout in CI
+      config.engine = engine
+
+      if %i[stdio].include?(engine)
+        config.stdio_pool_size = 2
+        config.stdio_timeout = 3000
+        config.stdio_cli_script = "spec/fixtures/test_ssr.ts"
+      end
     end
+  end
+
+  # Sets up STDIO mode stubs for testing
+  # This should be called from within a before(:each) block to ensure proper RSpec mock lifecycle
+  def setup_stdio_stubs
+    # Mock Rails.root first
+    allow(Rails).to receive(:root).and_return(Pathname.new("/fake/rails/root"))
+
+    # Mock File.exist? for CLI script
+    allow(File).to receive(:exist?).and_call_original
+    allow(File).to receive(:exist?).with(
+      Pathname.new("/fake/rails/root/spec/fixtures/test_ssr.ts")
+    ).and_return(true)
+
+    # Create a mock process that returns canned responses
+    mock_bun_process = instance_double(UniversalRenderer::Adapter::Stdio::StdioProcess)
+    allow(mock_bun_process).to receive(:render).and_return(
+      {
+        "head" => "<title>Test STDIO Response</title>",
+        "body" => "<div>STDIO rendered content</div>",
+        "body_attrs" => {}
+      }
+    )
+
+    # Mock the process pool
+    mock_pool = instance_double(ConnectionPool)
+    allow(mock_pool).to receive(:with).and_yield(mock_bun_process)
+
+    allow(ConnectionPool).to receive(:new).and_return(mock_pool)
+    allow(UniversalRenderer::Adapter::Stdio::StdioProcess).to receive(:new).and_return(
+      mock_bun_process
+    )
   end
 
   # Resets UniversalRenderer configuration

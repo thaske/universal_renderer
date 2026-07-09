@@ -24,7 +24,8 @@ Gem::Specification.new do |spec|
       Dir["{app,config,db,lib}/**/*", "MIT-LICENSE", "Rakefile", "README.md"]
     end
 
+  spec.add_dependency "connection_pool", "~> 2.4"
   spec.add_dependency "loofah", "~> 2.24"
   spec.add_dependency "rails", ">= 7.1", "< 9.0"
-spec.metadata['rubygems_mfa_required'] = 'true'
+  spec.metadata["rubygems_mfa_required"] = "true"
 end

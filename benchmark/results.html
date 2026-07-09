@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>UniversalRenderer HTTP vs Stdio Benchmark</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 2rem; color: #172033; }
+      table { border-collapse: collapse; width: 100%; margin: 1rem 0 2rem; }
+      th, td { border: 1px solid #d9e2f2; padding: 0.55rem 0.7rem; text-align: right; }
+      th:first-child, td:first-child { text-align: left; }
+      th { background: #f3f6fc; }
+      .winner { color: #0b7a34; font-weight: 700; }
+      .meta { color: #5b6475; }
+      .error { color: #b00020; }
+    </style>
+  </head>
+  <body>
+    <h1>UniversalRenderer HTTP vs Stdio Benchmark</h1>
+    <p class="meta" id="meta">Loading tmp/reports/http-vs-stdio.json…</p>
+    <div id="results"></div>
+
+    <script>
+      const fmt = (value, suffix = "") => Number(value).toFixed(3) + suffix;
+
+      async function main() {
+        const response = await fetch("../tmp/reports/http-vs-stdio.json", { cache: "no-store" });
+        if (!response.ok) throw new Error(`Could not load report: ${response.status}`);
+        const report = await response.json();
+        document.getElementById("meta").textContent =
+          `Generated ${report.generated_at}; iterations=${report.iterations}; warmup=${report.warmup}; stdio_pool_size=${report.stdio_pool_size}`;
+
+        document.getElementById("results").innerHTML = report.scenarios.map((scenario) => {
+          const rows = ["http", "stdio"].map((name) => {
+            const r = scenario.results[name];
+            const winner = scenario.comparison.faster === name ? "winner" : "";
+            return `<tr class="${winner}"><td>${name}</td><td>${fmt(r.avg_ms, "ms")}</td><td>${fmt(r.p50_ms, "ms")}</td><td>${fmt(r.p95_ms, "ms")}</td><td>${fmt(r.p99_ms, "ms")}</td><td>${r.rps.toFixed(1)}</td><td>${r.response_bytes ?? ""}</td><td>${r.successes}/${r.nils}/${r.errors}</td></tr>`;
+          }).join("");
+
+          const win = scenario.comparison.faster
+            ? `<p class="winner">Winner: ${scenario.comparison.faster} by ${scenario.comparison.average_latency_ratio.toFixed(2)}x average latency</p>`
+            : "";
+
+          return `<section><h2>${scenario.scenario}</h2><p class="meta">items=${scenario.item_count}; props=${scenario.props_bytes} bytes</p><table><thead><tr><th>adapter</th><th>avg</th><th>p50</th><th>p95</th><th>p99</th><th>rps</th><th>response bytes</th><th>ok/nil/errors</th></tr></thead><tbody>${rows}</tbody></table>${win}</section>`;
+        }).join("");
+      }
+
+      main().catch((error) => {
+        document.getElementById("meta").className = "error";
+        document.getElementById("meta").textContent = error.message;
+      });
+    </script>
+  </body>
+</html>

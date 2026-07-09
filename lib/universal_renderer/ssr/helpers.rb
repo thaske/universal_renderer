@@ -40,6 +40,30 @@ module UniversalRenderer
         sanitize(html, scrubber: Scrubber.new)
       end
 
+      # @!method ssr_props_json(props = nil)
+      #   Serializes and JSON-escapes SSR props for safe embedding in HTML attributes.
+      #   Defaults to `@universal_renderer_props` from the current controller/view context.
+      #   @param props [Hash, nil] Optional props hash to serialize.
+      #   @return [String] JSON string escaped for safe HTML embedding.
+      def ssr_props_json(props = nil)
+        raw_props = props || @universal_renderer_props || {}
+        ERB::Util.json_escape(raw_props.to_json)
+      end
+
+      # @!method ssr_props(id: "ssr-props", props: nil)
+      #   Renders a JSON script tag containing SSR props for client hydration.
+      #   @param id [String] DOM id for the script element.
+      #   @param props [Hash, nil] Optional props hash to serialize.
+      #   @return [ActiveSupport::SafeBuffer] Script tag with serialized JSON payload.
+      def ssr_props(id: "ssr-props", props: nil)
+        content_tag(
+          :script,
+          ssr_props_json(props),
+          { id: id, type: "application/json" },
+          false
+        )
+      end
+
       # @!method ssr_streaming?
       #   Determines if SSR streaming should be used for the current request.
       #   The decision is based solely on the `ssr_streaming_preference` class attribute

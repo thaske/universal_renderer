@@ -11,7 +11,7 @@ begin
   require "action_view"
 rescue LoadError
   # If Rails is not available, we'll skip Rails-specific tests
-  puts "Rails not available, skipping Rails-specific tests"
+  warn "Rails not available, skipping Rails-specific tests"
 end
 
 # Only load the engine if Rails is available

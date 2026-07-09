@@ -7,5 +7,5 @@ bundle exec rspec
 echo ""
 echo "✅ Ruby tests completed"
 echo ""
-echo "💡 To run all tests including NPM package: bin/test:full"
+echo "💡 To run all tests including Bun package tests: bin/test:full"
 echo "💡 To run tests in watch mode: bin/test:watch"

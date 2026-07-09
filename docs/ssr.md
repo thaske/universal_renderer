@@ -1,0 +1,2 @@
+- https://vite-ruby.netlify.app/config/#ssrbuildenabled
+- https://vite.dev/guide/ssr#setting-up-the-dev-server

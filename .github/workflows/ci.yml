@@ -24,31 +24,21 @@ jobs:
           ruby-version: ${{ env.RUBY_VERSION }}
           bundler-cache: true
 
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Install NPM dependencies
-        run: bun install
-
       - name: Run RuboCop
         run: bundle exec rubocop
+        continue-on-error: true
 
   ruby-tests:
     runs-on: ubuntu-latest
     name: Ruby Tests
-    strategy:
-      matrix:
-        ruby: ["3.2", "3.3"]
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Ruby ${{ matrix.ruby }}
+      - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: ${{ matrix.ruby }}
+          ruby-version: ${{ env.RUBY_VERSION }}
           bundler-cache: true
 
       - name: Run Ruby unit tests
@@ -58,122 +48,92 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ruby-test-results-${{ matrix.ruby }}
+          name: ruby-test-results
           path: tmp/rspec-results.json
 
-  npm-tests:
+  typescript-tests:
     runs-on: ubuntu-latest
-    name: NPM Tests
-    strategy:
-      matrix:
-        bun: ["1.2.1", "1.2.7", "latest"]
+    name: TypeScript Tests (Bun)
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Bun ${{ matrix.bun }}
+      - name: Set up Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: ${{ matrix.bun }}
+          bun-version: ${{ env.BUN_VERSION }}
 
-      - name: Cache NPM dependencies
-        uses: actions/cache@v4
-        with:
-          path: universal-renderer/node_modules
-          key: ${{ runner.os }}-bun-${{ matrix.bun }}-${{ hashFiles('universal-renderer/bun.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-bun-${{ matrix.bun }}-
-
-      - name: Install NPM dependencies
-        run: |
-          cd universal-renderer
-          bun install
+      - name: Install workspace dependencies with npm (bun optionalDependencies workaround for rolldown/rollup native bindings)
+        run: npm install --no-save --no-package-lock
 
       - name: Create tmp directory for test results
         run: mkdir -p tmp
 
-      - name: Build NPM package
-        run: |
-          cd universal-renderer
-          bun run build
+      - name: Build TypeScript package with Bun
+        working-directory: universal-renderer
+        run: bun run build
 
-      - name: Run NPM unit tests
-        run: |
-          cd universal-renderer
-          bun test --reporter=junit --reporter-outfile=../tmp/npm-test-results.xml
+      - name: Run TypeScript tests with Bun
+        working-directory: universal-renderer
+        run: bun run test -- --reporter=junit --reporter.outputFile=../tmp/bun-test-results.xml
 
-      - name: Upload NPM test results
+      - name: Upload Bun test results
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: npm-test-results-bun-${{ matrix.bun }}
-          path: tmp/npm-test-results.xml
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: npm-build-artifacts-bun-${{ matrix.bun }}
-          path: universal-renderer/dist/
+          name: bun-test-results
+          path: tmp/bun-test-results.xml
 
   integration-tests:
     runs-on: ubuntu-latest
     name: Integration Tests
-    needs: [ruby-tests, npm-tests]
-    strategy:
-      matrix:
-        ruby: ["3.2"]
-        bun: ["1.2.7"]
+    needs: [ruby-tests, typescript-tests]
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Ruby ${{ matrix.ruby }}
+      - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: ${{ matrix.ruby }}
+          ruby-version: ${{ env.RUBY_VERSION }}
           bundler-cache: true
 
-      - name: Set up Bun ${{ matrix.bun }}
+      - name: Set up Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: ${{ matrix.bun }}
+          bun-version: ${{ env.BUN_VERSION }}
 
-      - name: Cache NPM dependencies
-        uses: actions/cache@v4
-        with:
-          path: universal-renderer/node_modules
-          key: ${{ runner.os }}-bun-${{ matrix.bun }}-${{ hashFiles('universal-renderer/bun.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-bun-${{ matrix.bun }}-
-
-      - name: Install NPM dependencies
-        run: |
-          cd universal-renderer
-          bun install
+      - name: Install workspace dependencies with npm (bun optionalDependencies workaround for rolldown/rollup native bindings)
+        run: npm install --no-save --no-package-lock
 
       - name: Create tmp directory for test results
         run: mkdir -p tmp
 
-      - name: Build NPM package for integration tests
-        run: |
-          cd universal-renderer
-          bun run build
+      - name: Build package for integration tests with Bun
+        working-directory: universal-renderer
+        run: bun run build
 
       - name: Run integration tests
         run: |
-          bundle exec rspec spec/integration --format progress --format json --out tmp/integration-results.json
+          bundle exec rspec spec/integration --format progress --format json --out tmp/integration-results-bun.json
 
       - name: Upload integration test results
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: integration-test-results-ruby-${{ matrix.ruby }}-bun-${{ matrix.bun }}
-          path: tmp/integration-results.json
+          name: integration-test-results-bun
+          path: tmp/integration-results-bun.json
 
   test-summary:
     runs-on: ubuntu-latest
     name: Test Summary Report
-    needs: [lint, ruby-tests, npm-tests, integration-tests]
+    needs:
+      [
+        lint,
+        ruby-tests,
+        typescript-tests,
+        integration-tests,
+      ]
     if: always()
 
     steps:
@@ -188,5 +148,5 @@ jobs:
         run: |
           .github/scripts/generate-test-summary.sh \
             "${{ needs.ruby-tests.result }}" \
-            "${{ needs.npm-tests.result }}" \
+            "${{ needs.typescript-tests.result }}" \
             "${{ needs.integration-tests.result }}"

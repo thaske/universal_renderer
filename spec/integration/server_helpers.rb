@@ -13,9 +13,9 @@ module IntegrationHelpers
     # Default configuration for test SSR servers
     DEFAULT_HOSTNAME = "127.0.0.1" # Use IPv4 explicitly for better CI compatibility
     DEFAULT_PORT = 9876
-    DEFAULT_TIMEOUT = ENV["CI"] ? 30 : 10 # Longer timeout in CI environments
+    DEFAULT_TIMEOUT = ENV["CI"] ? 60 : 20 # Longer timeout in CI environments
 
-    # Spawns a real SSR server using Bun and the universal-renderer NPM package
+    # Spawns a real SSR server process using Bun and the universal-renderer workspace package
     #
     # @param port [Integer] The port to run the server on
     # @param hostname [String] The hostname to bind to
@@ -27,28 +27,29 @@ module IntegrationHelpers
       **config
     )
       ensure_port_available!(hostname, port)
+      config = config.dup
 
       # Create a temporary directory for the test server
-      server_dir = TestServerGenerator.create_directory
+      server_dir = HttpExpressServerGenerator.create_directory
 
       # Write the test server configuration
-      TestServerGenerator.write_files(
+      HttpExpressServerGenerator.write_files(
         server_dir,
         port: port,
         hostname: hostname,
         **config
       )
 
-      # Spawn the Bun process
+      # Spawn the SSR process
+      command = ["bun", "server.mjs"]
+
       process =
         Process.spawn(
           { "NODE_ENV" => "test" },
-          "bun",
-          "run",
-          "server.ts",
+          *command,
           chdir: server_dir,
-          out: config[:verbose] ? $stdout : File::NULL,
-          err: config[:verbose] ? $stderr : File::NULL,
+          out: config[:verbose] || !ENV["CI"] ? $stdout : File::NULL,
+          err: config[:verbose] || !ENV["CI"] ? $stderr : File::NULL,
           pgroup: true
         )
 
@@ -96,7 +97,7 @@ module IntegrationHelpers
           # Then verify HTTP endpoint actually responds
           break if server_responds_to_http?(hostname, port)
         rescue Errno::ECONNREFUSED, Errno::EHOSTUNREACH
-          sleep 0.2 # Slightly longer sleep for CI stability
+          sleep 0.5 # Slightly longer sleep for CI stability
         end
       end
     rescue Timeout::Error

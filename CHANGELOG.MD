@@ -39,7 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `bin/test:watch` - Automated test watching with file change detection
 - JSON schema validation for SSR requests and responses
 - Mock utilities and test server generation for integration testing
-- GitHub Actions CI workflow with matrix testing across Ruby 3.2/3.3 and Bun versions
+- GitHub Actions CI workflow with matrix testing across supported Ruby and JavaScript runtime versions
 
 #### Changed
 
@@ -57,7 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Added
 
 - **Hostname parameter**: `createServer` function now accepts an optional `hostname` parameter in `CreateServerOptions`
-- Server configuration now supports custom hostname binding (defaults to Bun's default if not specified)
+- Server configuration now supports custom hostname binding with runtime-default fallback behavior
 - Comprehensive test suite using Vitest with React Testing Library
 - Test dependencies: `@testing-library/jest-dom`, `@testing-library/react`, `jsdom`, `vitest`
 - Coverage reporting configuration for NPM package tests
@@ -115,17 +115,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Added
 
-- Native Bun HTTP server support through the new `createServer` helper with zero external runtime dependencies
+- Native HTTP server support through the new `createServer` helper
 - JSON rendering pipeline with `setup`, `render`, and `cleanup` lifecycle callbacks
 - Streaming-specific hooks (`onReady`, `onChunk`, `onFinish`) for fine-grained control over React SSR
 - Strongly-typed `ServerOptions` contract (`src/types/serverOptions.ts`) and internal `SSR_MARKERS` constants
-- Development typings for Bun via `@types/bun`
+- Development typings for the JavaScript runtime environment
 
 #### Changed
 
-- Replaced Express with Bun — the package **no longer depends on `express`**; bundle size and cold-start time reduced
+- Reworked the package runtime strategy and dependency layout for a leaner SSR server
 - Stream handler completely rewritten for stricter type-safety, meta-tag injection, and hardened error handling
-- Build & watch scripts migrated to Bun; `engines` field removed; peer-dependencies updated
+- Build & watch scripts updated alongside peer-dependency changes
 - Consolidated all exports into the top-level entry file; removed framework-specific sub-paths
 - Error responses are now signalled only via status codes; bodies kept empty for smaller payloads
 - Simplified error handling in stream handlers and improved graceful failure mode to allow Rails fallback

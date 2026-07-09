@@ -1,0 +1,36 @@
+{
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.3.5",
+  "scripts": {
+    "dev": "bunx vite dev",
+    "ssr:dev:http": "bun app/frontend/ssr/ssr.tsx",
+    "ssr:dev:http:bundle": "bun run build:ssr:http && bun public/vite-ssr-http/ssr.js",
+    "build:client": "bunx vite build",
+    "build:ssr:http": "./bin/build-ssr-http",
+    "build:ssr:stdio": "./bin/build-ssr-stdio",
+    "build:ssr": "bun run build:ssr:stdio",
+    "build": "bun run build:client && bun run build:ssr",
+    "ssr:http": "bun public/vite-ssr-http/ssr.js",
+    "ssr:stdio": "bun public/vite-ssr-stdio/ssr.js",
+    "ssr": "bun public/vite-ssr-stdio/ssr.js"
+  },
+  "dependencies": {
+    "@dr.pogodin/react-helmet": "^3.0.6",
+    "@tanstack/react-query": "^5.90.21",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-query": "^3.39.3",
+    "react-router": "^7.13.1",
+    "styled-components": "^6.3.11",
+    "universal-renderer": "file:../../universal-renderer"
+  },
+  "devDependencies": {
+    "express": "^4.21.2",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "typescript": "^5.9.3",
+    "vite": "^5.4.21",
+    "vite-plugin-ruby": "^5.1.3"
+  }
+}

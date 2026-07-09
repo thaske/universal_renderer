@@ -1,10 +1,21 @@
+require_relative "adapter_factory"
+
 module UniversalRenderer
   module Renderable
     extend ActiveSupport::Concern
 
     included do
       helper UniversalRenderer::SSR::Helpers
-      before_action :initialize_props
+
+      # Distinct from the `enable_ssr` DSL method: reading a class_attribute
+      # named `enable_ssr` on a class that never opted in would invoke the DSL
+      # (arming SSR as a side effect) instead of returning false.
+      class_attribute :ssr_enabled, instance_writer: false, default: false
+      class_attribute :ssr_streaming_preference,
+                      instance_writer: false,
+                      default: nil
+
+      before_action :initialize_props, unless: :skip_universal_renderer?
     end
 
     module Streaming
@@ -15,10 +26,7 @@ module UniversalRenderer
 
     class_methods do
       def enable_ssr(options = {})
-        class_attribute :enable_ssr, instance_writer: false
-        self.enable_ssr = true
-
-        class_attribute :ssr_streaming_preference, instance_writer: false
+        self.ssr_enabled = true
         self.ssr_streaming_preference = options[:streaming]
 
         include UniversalRenderer::Renderable::Streaming if options[:streaming]
@@ -26,7 +34,7 @@ module UniversalRenderer
     end
 
     # Fetches Server-Side Rendered (SSR) content for the current request.
-    # This method makes a blocking call to the SSR service using {UniversalRenderer::Client::Base.fetch}
+    # This method makes a blocking call to the SSR service using the configured adapter
     # and stores the result in the `@ssr` instance variable.
     #
     # The SSR content is fetched based on the `request.original_url` and the
@@ -35,21 +43,24 @@ module UniversalRenderer
     # @return [Hash, nil] The fetched SSR data (typically a hash with keys like `:head`, `:body_html`, `:body_attrs`),
     #   or `nil` if the fetch fails or SSR is not configured.
     def fetch_ssr
+      props = @universal_renderer_props || {}
       @ssr =
-        UniversalRenderer::Client::Base.call(
+        UniversalRenderer::AdapterFactory.adapter.call(
           request.original_url,
-          @universal_renderer_props
+          props
         )
     end
 
     def ssr_streaming?
-      self.class.try(:ssr_streaming_preference)
+      self.class.ssr_streaming_preference
     end
 
     def render(*, **)
-      return super unless self.class.enable_ssr
+      return super unless self.class.ssr_enabled
       return super unless request.format.html?
 
+      # Allow Warden and other authentication mechanisms to complete first
+      # This prevents interference with authentication throws like :warden
       if ssr_streaming?
         success = render_ssr_stream(*, **)
         super unless success
@@ -62,11 +73,22 @@ module UniversalRenderer
     private
 
     def render_ssr_stream(*, **)
+      adapter = UniversalRenderer::AdapterFactory.adapter
+
+      # Check if the current adapter supports streaming
+      unless adapter.supports_streaming?
+        Rails.logger.warn(
+          "Current SSR adapter (#{adapter.class.name}) does not support streaming. " \
+            "Falling back to blocking SSR."
+        )
+        return false
+      end
+
       full_layout = render_to_string(*, **)
-      current_props = @universal_renderer_props.dup
+      current_props = (@universal_renderer_props || {}).dup
 
       streaming_succeeded =
-        UniversalRenderer::Client::Stream.call(
+        adapter.stream(
           request.original_url,
           current_props,
           full_layout,
@@ -76,6 +98,7 @@ module UniversalRenderer
       # SSR streaming failed or was not possible (e.g. server down, config missing).
       if streaming_succeeded
         response.stream.close unless response.stream.closed?
+        true
       else
         Rails.logger.error(
           "SSR stream fallback: " \
@@ -87,6 +110,24 @@ module UniversalRenderer
 
     def initialize_props
       @universal_renderer_props = {}
+    end
+
+    # Determines whether to skip universal renderer initialization
+    # This helps prevent interference with authentication flows like Warden
+    def skip_universal_renderer?
+      # Skip if SSR is not enabled for this controller
+      return true unless self.class.ssr_enabled
+
+      # Skip for non-HTML requests
+      return true unless request.format.html?
+
+      # Only skip if we're in the middle of an active Warden throw/catch mechanism
+      # This is more specific and allows SSR for public pages with unauthenticated users
+      if defined?(Warden) && request.env["warden"]&.message.present?
+        return true
+      end
+
+      false
     end
 
     # Adds a prop or a hash of props to be sent to the SSR service.
@@ -101,6 +142,7 @@ module UniversalRenderer
     #   add_prop({theme: "dark", locale: "en"})
     # @return [void]
     def add_prop(key_or_hash, data_value = nil)
+      @universal_renderer_props ||= {}
       if data_value.nil? && key_or_hash.is_a?(Hash)
         @universal_renderer_props.merge!(key_or_hash.deep_stringify_keys)
       else
@@ -126,6 +168,7 @@ module UniversalRenderer
     #   push_prop(:item, "second") # @universal_renderer_props becomes { "item" => ["first", "second"] }
     # @return [void]
     def push_prop(key, value_to_add)
+      @universal_renderer_props ||= {}
       prop_key = key.to_s
       current_value = @universal_renderer_props[prop_key]
 
@@ -141,6 +184,19 @@ module UniversalRenderer
       else
         @universal_renderer_props[prop_key] << value_to_add
       end
+    end
+
+    # Adds a React Query cache entry that can be hydrated on SSR/client boot.
+    #
+    # @param query_key [Array, String, Symbol] The React Query key.
+    # @param data [Object] The cached query data.
+    # @return [void]
+    def add_query_data(query_key, data)
+      normalized_query_key = query_key.is_a?(Array) ? query_key : [query_key]
+      push_prop(
+        :react_query,
+        { query_key: normalized_query_key, data: data }.deep_stringify_keys
+      )
     end
   end
 end

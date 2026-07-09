@@ -12,14 +12,11 @@ else
 fi
 
 echo ""
-echo "2️⃣ Running NPM package tests..."
-cd universal-renderer
-if bun run test; then
-  echo "✅ NPM tests passed"
-  cd ..
+echo "2️⃣ Running Bun package tests..."
+if bun run --filter universal-renderer test; then
+  echo "✅ Bun tests passed"
 else
-  echo "❌ NPM tests failed"
-  cd ..
+  echo "❌ Bun tests failed"
   exit 1
 fi
 
@@ -28,6 +25,6 @@ echo "🎉 Full test suite completed successfully!"
 echo ""
 echo "📊 Test Summary:"
 echo "   • Ruby gem: 7 tests passing"
-echo "   • NPM package: 29 tests passing"
+echo "   • Bun package: 29 tests passing"
 echo ""
 echo "💡 Run 'bin/test' for fast Ruby-only tests"

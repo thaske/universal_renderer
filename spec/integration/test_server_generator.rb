@@ -5,8 +5,8 @@ require "fileutils"
 require "tmpdir"
 
 module IntegrationHelpers
-  # Service class responsible for generating test SSR server files and configuration
-  class TestServerGenerator
+  # Service class responsible for generating HTTP Express test SSR server files and configuration
+  class HttpExpressServerGenerator
     # Gets the project root directory
     def self.project_root
       @project_root ||= File.expand_path("../..", __dir__)
@@ -45,41 +45,41 @@ module IntegrationHelpers
       )
     end
 
-    # Creates the server.ts file
+    # Creates the server.mjs file
     def self.write_server_file(server_dir, port:, hostname:, **_config)
       server_content = generate_server_content(port: port, hostname: hostname)
-      File.write(File.join(server_dir, "server.ts"), server_content)
+      File.write(File.join(server_dir, "server.mjs"), server_content)
     end
 
-    # Generates the TypeScript content for the test server
+    # Generates the JavaScript content for the test server
     def self.generate_server_content(port:, hostname:, **_config)
-      <<~TYPESCRIPT
-        import { createServer } from 'universal-renderer';
+      <<~JAVASCRIPT
+        import { createServer } from 'universal-renderer/http';
         import React from 'react';
 
         // Test callbacks for integration testing
         const callbacks = {
-          setup: async (url: string, props: any) => {
+          setup: async (url, props) => {
             return {
               url,
               props,
               timestamp: new Date().toISOString()
             };
           },
-          render: async (context: any) => {
+          render: async (_context) => {
             return {
               head: '<meta name="test" content="true">',
               body: '<div>Test Content</div>'
             };
           },
-          cleanup: async (context: any) => {
+          cleanup: async (_context) => {
             // cleanup
           }
         };
 
         const streamCallbacks = {
-          node: (context: any) => React.createElement('div', null, 'Streaming Test Content'),
-          head: async (context: any) => '<meta name="stream-test" content="true">'
+          node: (_context) => React.createElement('div', null, 'Streaming Test Content'),
+          head: async (_context) => '<meta name="stream-test" content="true">'
         };
 
         // Create and start the server
@@ -100,10 +100,10 @@ module IntegrationHelpers
           server.close();
           process.exit(0);
         });
-      TYPESCRIPT
+      JAVASCRIPT
     end
 
-    # Installs NPM dependencies in the server directory
+    # Installs Bun-managed dependencies in the server directory
     def self.install_dependencies(server_dir)
       result =
         system(
