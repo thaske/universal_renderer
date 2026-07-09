@@ -4,6 +4,7 @@ import path from "path";
 const RESULTS_FILE = path.join(
   __dirname,
   "..",
+  "..",
   "tmp",
   "reports",
   "http-vs-stdio.json",

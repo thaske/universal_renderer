@@ -1,4 +1,4 @@
-import { createRenderer } from "../universal-renderer/src/stdio";
+import { createRenderer } from "../../universal-renderer/src/stdio";
 import { renderBenchmarkPayload, type BenchmarkProps } from "./workload";
 
 interface BenchmarkContext extends Record<string, unknown> {
