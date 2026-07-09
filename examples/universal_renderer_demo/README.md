@@ -32,8 +32,8 @@ bin/dev
 
 Then open `http://127.0.0.1:3000`.
 
-This demo uses the `:http` engine with streaming enabled. The Rails app sends
-render requests to the external SSR server at `http://localhost:5200`.
+This demo uses the external HTTP SSR server with streaming enabled. The Rails
+app sends render requests to `http://localhost:5200`.
 
 SSR setup/render handlers are shared in `app/frontend/ssr/setup.tsx`.
 
@@ -48,7 +48,7 @@ When deploying the HTTP SSR server, make sure the SSR bundle output exists:
 ```bash
 bun run build
 # or at minimum:
-bun run build:ssr:http
+bun run build:ssr
 ```
 
 To run the built HTTP bundle directly, use:
