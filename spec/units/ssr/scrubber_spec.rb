@@ -57,9 +57,11 @@ RSpec.describe UniversalRenderer::SSR::Scrubber do
     expect(result).not_to include("javascript", "vbscript", "data:", "refresh")
   end
 
-  it "preserves hydration attributes and safe asset URLs" do
+  it "preserves hydration attributes and safe URLs" do
     html = <<~HTML
       <main id="root" class="app" data-page="home" aria-live="polite">
+        <a href="https://example.test/docs/javascript:guide">Protocol guide</a>
+        <a href="https://example.test/?example=data:text/html">Data URL guide</a>
         <img src="https://example.test/image.png" alt="Example">
       </main>
     HTML

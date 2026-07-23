@@ -79,7 +79,7 @@ export type ExpressServerOptions<
 
   /**
    * Optional Express middleware to be applied to the server.
-   * This middleware will be applied after the built-in middleware but before the error handler.
+   * This middleware runs after request parsing and before the built-in health and SSR routes.
    *
    * @example
    * ```typescript

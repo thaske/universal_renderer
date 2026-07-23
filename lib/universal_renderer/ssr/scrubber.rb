@@ -15,8 +15,8 @@ module UniversalRenderer
         srcset xlink:href
       ].freeze
       ALLOWED_PROTOCOLS = %w[http https mailto tel].freeze
-      DANGEROUS_PROTOCOL = /(?:javascript|vbscript):/i
-      DANGEROUS_DATA = %r{data:(?:text/html|application/xhtml\+xml|image/svg\+xml)}i
+      DANGEROUS_PROTOCOL = /\A(?:javascript|vbscript):/i
+      DANGEROUS_DATA = %r{\Adata:(?:text/html|application/xhtml\+xml|image/svg\+xml)}i
       SAFE_DATA_IMAGE = %r{\Adata:image/(?:avif|gif|jpeg|png|webp);base64,}i
 
       def initialize
