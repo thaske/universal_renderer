@@ -60,6 +60,12 @@ export async function createServer<
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ extended: true }));
 
+  // Apply custom middleware before the built-in routes so authentication,
+  // request decoration, and response headers affect SSR and health requests.
+  if (options.middleware) {
+    app.use(options.middleware);
+  }
+
   // Health check endpoint using the health handler factory
   app.get("/health", createHealthHandler());
 
@@ -80,11 +86,6 @@ export async function createServer<
       error: options.error,
     });
     app.post("/stream", streamHandler);
-  }
-
-  // Custom middleware
-  if (options.middleware) {
-    app.use(options.middleware);
   }
 
   // Handle 404 - Not Found

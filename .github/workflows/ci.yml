@@ -26,7 +26,6 @@ jobs:
 
       - name: Run RuboCop
         run: bundle exec rubocop
-        continue-on-error: true
 
   ruby-tests:
     runs-on: ubuntu-latest
@@ -72,6 +71,10 @@ jobs:
       - name: Build TypeScript package with Bun
         working-directory: universal-renderer
         run: bun run build
+
+      - name: Verify package entry points
+        working-directory: universal-renderer
+        run: bun run test:package
 
       - name: Run TypeScript tests with Bun
         working-directory: universal-renderer
@@ -127,13 +130,7 @@ jobs:
   test-summary:
     runs-on: ubuntu-latest
     name: Test Summary Report
-    needs:
-      [
-        lint,
-        ruby-tests,
-        typescript-tests,
-        integration-tests,
-      ]
+    needs: [lint, ruby-tests, typescript-tests, integration-tests]
     if: always()
 
     steps:

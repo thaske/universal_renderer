@@ -15,6 +15,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Security
+
+- Hardened SSR HTML sanitization against embedded documents, event handlers,
+  executable URL protocols, SVG data payloads, and meta refresh redirects.
+
+### Fixed
+
+- Corrected the NPM package's CommonJS entry points and included its MIT license.
+- Hardened HTTP request validation, asynchronous cleanup, streaming errors, and
+  client-disconnect handling.
+- Applied custom Express middleware before built-in SSR and health routes.
+- Prevented integration tests from leaking Bun servers and temporary installs.
+- Made RuboCop failures block CI and added package entry-point smoke tests.
+
+### Changed
+
+- Restored React 18 compatibility and made Vite a development-only dependency.
+
 ## 0.5.1 (Ruby Gem) - 2026-07-09
 
 ### Fixed

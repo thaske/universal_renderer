@@ -26,10 +26,21 @@ export function createSSRHandler<TContext extends Record<string, any>>(
     let context: TContext | undefined;
 
     try {
+      if (
+        !req.body ||
+        typeof req.body !== "object" ||
+        Array.isArray(req.body)
+      ) {
+        throw new HttpError("JSON request body is required", 400);
+      }
+
       const { url, props = {} } = req.body;
 
       if (!url || typeof url !== "string") {
         throw new HttpError("URL string is required", 400);
+      }
+      if (props === null || typeof props !== "object" || Array.isArray(props)) {
+        throw new HttpError("Props must be an object", 400);
       }
 
       context = await options.setup(url, props);
@@ -44,7 +55,13 @@ export function createSSRHandler<TContext extends Record<string, any>>(
       return next(error);
     } finally {
       if (context && options.cleanup) {
-        await options.cleanup(context);
+        try {
+          await options.cleanup(context);
+        } catch (error) {
+          // Cleanup must never turn a completed response into an unhandled
+          // rejection. Rendering errors have already been delegated above.
+          console.error("[SSR] Cleanup error:", error);
+        }
       }
     }
   };
