@@ -24,6 +24,9 @@ jobs:
           ruby-version: ${{ env.RUBY_VERSION }}
           bundler-cache: true
 
+      - name: Install RuboCop formatting configuration
+        run: npm install --workspaces=false --ignore-scripts --no-save --no-package-lock
+
       - name: Run RuboCop
         run: bundle exec rubocop
 
