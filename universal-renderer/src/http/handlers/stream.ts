@@ -69,6 +69,19 @@ export function createStreamHandler<TContext extends Record<string, any>>(
     let props: Record<string, any>;
     let template: string;
 
+    // Listen before setup: setup may be asynchronous, and a client can
+    // disconnect before it returns a context that must be cleaned up.
+    res.once("finish", () => {
+      void cleanup();
+    });
+    res.once("close", () => {
+      if (!res.writableFinished) {
+        stopped = true;
+        abortRender?.();
+        void cleanup();
+      }
+    });
+
     try {
       if (
         !req.body ||
@@ -95,6 +108,11 @@ export function createStreamHandler<TContext extends Record<string, any>>(
 
       context = await options.setup(url, props);
 
+      if (stopped || res.destroyed) {
+        await cleanup();
+        return;
+      }
+
       if (streamCallbacks.node) {
         reactNode = streamCallbacks.node(context);
       } else if ("app" in context) {
@@ -108,17 +126,6 @@ export function createStreamHandler<TContext extends Record<string, any>>(
       await cleanup();
       return next(error);
     }
-
-    res.once("finish", () => {
-      void cleanup();
-    });
-    res.once("close", () => {
-      if (!res.writableFinished) {
-        stopped = true;
-        abortRender?.();
-        void cleanup();
-      }
-    });
 
     const startStreaming = async (
       pipe: (destination: NodeJS.WritableStream) => void,

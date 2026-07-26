@@ -200,6 +200,52 @@ describe("HTTP handler hardening", () => {
     }
   });
 
+  it("cleans up if the client disconnects while setup is pending", async () => {
+    const cleanup = vi.fn(async () => {});
+    let setupStarted!: () => void;
+    let finishSetup!: () => void;
+    const setupHasStarted = new Promise<void>((resolve) => {
+      setupStarted = resolve;
+    });
+    const setupCanFinish = new Promise<void>((resolve) => {
+      finishSetup = resolve;
+    });
+    const app = await createServer({
+      ...basicOptions(),
+      setup: async () => {
+        setupStarted();
+        await setupCanFinish;
+        return { app: createElement("div", null, "streamed") };
+      },
+      cleanup,
+      streamCallbacks: { node: (context) => context.app },
+    });
+    const server = await listen(app);
+
+    try {
+      const clientRequest = request(`${server.baseUrl}/stream`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+      });
+      clientRequest.once("error", () => {});
+      clientRequest.end(
+        JSON.stringify({
+          url: "/test",
+          template: "<html><body><!-- SSR_BODY --></body></html>",
+        }),
+      );
+
+      await setupHasStarted;
+      clientRequest.destroy();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      finishSetup();
+
+      await vi.waitFor(() => expect(cleanup).toHaveBeenCalledOnce());
+    } finally {
+      await server.close();
+    }
+  });
+
   it("cleans up when React cannot produce a shell", async () => {
     const cleanup = vi.fn(async () => {});
     vi.spyOn(console, "error").mockImplementation(() => {});
