@@ -62,7 +62,7 @@ export type BaseHandlerOptions<TContext extends Record<string, any>> = {
    * Optional cleanup function called after rendering is complete.
    * @param context - The context object returned by the setup function
    */
-  cleanup?: (context: TContext) => void;
+  cleanup?: (context: TContext) => Promise<void> | void;
 };
 
 /**

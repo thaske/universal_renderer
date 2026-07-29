@@ -29,58 +29,74 @@ module IntegrationHelpers
       ensure_port_available!(hostname, port)
       config = config.dup
 
-      # Create a temporary directory for the test server
       server_dir = HttpExpressServerGenerator.create_directory
+      process = nil
 
-      # Write the test server configuration
-      HttpExpressServerGenerator.write_files(
-        server_dir,
-        port: port,
-        hostname: hostname,
-        **config
-      )
-
-      # Spawn the SSR process
-      command = %w[bun server.mjs]
-
-      process =
-        Process.spawn(
-          { "NODE_ENV" => "test" },
-          *command,
-          chdir: server_dir,
-          out: config[:verbose] || !ENV["CI"] ? $stdout : File::NULL,
-          err: config[:verbose] || !ENV["CI"] ? $stderr : File::NULL,
-          pgroup: true
+      begin
+        HttpExpressServerGenerator.write_files(
+          server_dir,
+          port: port,
+          hostname: hostname,
+          **config
         )
 
-      # Wait for server to be ready
-      wait_for_server(hostname, port)
+        process =
+          Process.spawn(
+            { "NODE_ENV" => "test" },
+            "bun",
+            "server.mjs",
+            chdir: server_dir,
+            out: config[:verbose] || !ENV["CI"] ? $stdout : File::NULL,
+            err: config[:verbose] || !ENV["CI"] ? $stderr : File::NULL,
+            pgroup: true
+          )
 
-      # Store cleanup info
-      @spawned_servers ||= []
-      @spawned_servers << { process: process, directory: server_dir }
-
-      process
+        wait_for_server(hostname, port)
+        ServerHelpers.spawned_servers << {
+          process: process,
+          directory: server_dir
+        }
+        process
+      rescue StandardError
+        terminate_server(process) if process
+        FileUtils.rm_rf(server_dir)
+        raise
+      end
     end
 
-    # Stops all spawned SSR servers and cleans up resources
+    def self.spawned_servers
+      @spawned_servers ||= []
+    end
+
+    # Stops all spawned SSR servers and cleans up resources. The registry is
+    # module-scoped because RSpec runs before(:all), examples, and after(:all)
+    # on different object instances.
     def cleanup_ssr_servers
-      return unless @spawned_servers
-
-      @spawned_servers.each do |server_info|
-        begin
-          # Kill the process group to ensure all child processes are terminated
-          Process.kill("TERM", -Process.getpgid(server_info[:process]))
-          Process.waitpid(server_info[:process], Process::WNOHANG)
-        rescue Errno::ESRCH, Errno::ECHILD
-          # Process already terminated
-        end
-
-        # Clean up temporary directory
+      ServerHelpers.spawned_servers.each do |server_info|
+        terminate_server(server_info[:process])
+      ensure
         FileUtils.rm_rf(server_info[:directory])
       end
+    ensure
+      ServerHelpers.spawned_servers.clear
+    end
 
-      @spawned_servers.clear
+    def terminate_server(process)
+      process_group = Process.getpgid(process)
+      Process.kill("TERM", -process_group)
+
+      Timeout.timeout(5) { Process.waitpid(process) }
+    rescue Timeout::Error
+      force_terminate_server(process, process_group)
+    rescue Errno::ESRCH, Errno::ECHILD
+      # Process already terminated and reaped.
+    end
+
+    def force_terminate_server(process, process_group)
+      Process.kill("KILL", -process_group)
+      Process.waitpid(process)
+    rescue Errno::ESRCH, Errno::ECHILD
+      # Process exited between the timeout and forced termination.
     end
 
     # Waits for a server to be responsive on the given hostname and port

@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 
 export class HttpError extends Error {
   statusCode?: number;
+  status?: number;
 
   constructor(message: string, statusCode: number = 500) {
     super(message);
@@ -18,15 +19,12 @@ export class HttpError extends Error {
  * @returns Error handler function
  */
 export function createErrorHandler() {
-  return (
-    err: HttpError,
-    _req: Request,
-    res: Response,
-    _next: NextFunction,
-  ) => {
+  return (err: HttpError, _req: Request, res: Response, next: NextFunction) => {
+    if (res.headersSent) return next(err);
+
     const isDev = process.env.NODE_ENV !== "production";
 
-    const statusCode = err.statusCode || 500;
+    const statusCode = err.statusCode || err.status || 500;
 
     if (statusCode >= 500) {
       console.error("[SSR] Express Server Error:", err);
