@@ -1,5 +1,6 @@
 require "universal_renderer/version"
 require "universal_renderer/configuration"
+require "universal_renderer/instrumentation"
 require "universal_renderer/ssr/helpers"
 require "universal_renderer/renderable"
 require "universal_renderer/engine"

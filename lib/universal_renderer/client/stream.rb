@@ -19,6 +19,14 @@ module UniversalRenderer
       # @param response [ActionDispatch::Response] The Rails response object to stream to.
       # @return [Boolean] True if streaming was initiated, false otherwise.
       def self.call(url, props, template, response)
+        Instrumentation.instrument(url: url, mode: :streaming) do |event|
+          succeeded = perform(url, props, template, response)
+          event[:outcome] = :error unless succeeded
+          succeeded
+        end
+      end
+
+      def self.perform(url, props, template, response)
         config = UniversalRenderer.config
 
         unless Setup.ensure_ssr_server_url_configured?(config)
@@ -50,7 +58,7 @@ module UniversalRenderer
           end
           return false
         rescue StandardError => e
-          log_setup_error(e, full_ssr_url_for_log)
+          ErrorLogger.log_setup_error(e, full_ssr_url_for_log)
           return false
         end
 

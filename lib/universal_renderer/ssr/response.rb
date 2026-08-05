@@ -14,6 +14,13 @@ module UniversalRenderer
     #   @return [String, nil] Raw body HTML snippet produced by the renderer.
     # @!attribute body_attrs
     #   @return [Hash, nil] A hash of attributes that should be applied to the <body> tag.
-    Response = Struct.new(:head, :body, :body_attrs, keyword_init: true)
+    # @!attribute payload
+    #   @return [Object, nil] Arbitrary JSON-serializable hydration state the
+    #     renderer produced. Only the render knows things like a dehydrated
+    #     query cache or the class names a CSS-in-JS library already emitted, so
+    #     this travels back from the SSR service rather than out from Rails. Emit
+    #     it with the `ssr_payload` helper.
+    Response =
+      Struct.new(:head, :body, :body_attrs, :payload, keyword_init: true)
   end
 end

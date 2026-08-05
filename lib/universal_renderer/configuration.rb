@@ -18,13 +18,73 @@ module UniversalRenderer
       end
     end
 
-    attr_accessor :url, :timeout, :stream_path
+    # Origin of the SSR service, e.g. "http://localhost:3001".
+    attr_accessor :url
+
+    # Open and read timeout, in seconds, for every request to the SSR service.
+    attr_accessor :timeout
+
+    # Path the blocking renderer is mounted at on the SSR service. Must match
+    # the `paths.render` option given to `createServer` in the NPM package,
+    # whose default mounts `/` and `/static`.
+    #
+    # Defaults to nil, meaning "whatever path is already in `url`" — so setting
+    # `url` to `http://host/render` keeps working without also setting this.
+    attr_accessor :render_path
+
+    # Path the streaming renderer is mounted at on the SSR service. Must match
+    # the `paths.stream` option given to `createServer` in the NPM package.
+    attr_accessor :stream_path
+
+    # Whether `ssr_head`/`ssr_body` run the renderer's HTML through Loofah
+    # before embedding it.
+    #
+    # Sanitizing a full page render is not free: it parses and rewrites the
+    # entire document on the Rails side of every request, which eats into the
+    # latency SSR is meant to buy. The SSR service is first-party code, so when
+    # you control what it emits (and especially when it runs on the same host)
+    # turning this off is a reasonable trade. It defaults to on because failing
+    # closed is the right default for a security control.
+    attr_accessor :sanitize
+
+    # Scrubber instance used when `sanitize` is true. Defaults to
+    # {UniversalRenderer::SSR::Scrubber}; assign your own Loofah::Scrubber to
+    # widen or narrow what survives.
+    attr_accessor :scrubber
+
+    # Whether the Rails engine includes {UniversalRenderer::Renderable} into
+    # every ActionController::Base descendant.
+    #
+    # The concern adds a before_action, two class attributes, and a `render`
+    # override to whatever it is included in. That is a lot of surface to add
+    # application-wide for something a handful of controllers use, so apps can
+    # turn the automatic include off and `include UniversalRenderer::Renderable`
+    # in just the controllers that render server-side.
+    #
+    # Read when ActionController::Base loads, which is after initializers run.
+    attr_accessor :auto_include
+
+    # Optional callable invoked as `call(error, context)` whenever a render
+    # request fails, where `context` is a hash carrying at least `:url` and
+    # `:outcome`. Errors are always logged; this exists so failures can also
+    # reach an exception tracker.
+    #
+    # Every failure mode is a silent fall back to client-side rendering, so
+    # without either this hook or the `render.universal_renderer` notification
+    # an app has no way to notice that SSR stopped working.
+    attr_accessor :on_error
+
     attr_reader :http
 
     def initialize
       @url = nil
       @timeout = 3
+      @render_path = nil
       @stream_path = "/stream"
+      @sanitize = true
+      @scrubber = nil
+      @auto_include = true
+      @on_error = nil
       @http = Http.new
     end
   end

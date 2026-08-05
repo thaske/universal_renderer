@@ -10,6 +10,7 @@ module UniversalRenderer
                 "#{error.class.name} - #{error.message} at #{backtrace_info}"
             )
           end
+          report(error, target_uri_string, :setup)
         end
 
         def self.log_connection_error(error, target_uri_string)
@@ -18,6 +19,7 @@ module UniversalRenderer
               "SSR stream connection to #{target_uri_string} failed: #{error.class.name} - #{error.message}"
             )
           end
+          report(error, target_uri_string, :connection)
         end
 
         def self.log_unexpected_error(error, target_uri_string, context_message)
@@ -28,6 +30,21 @@ module UniversalRenderer
                 "#{error.class.name} - #{error.message} at #{backtrace_info}"
             )
           end
+          report(error, target_uri_string, :unexpected)
+        end
+
+        # Streaming failures fall back to client-side rendering just as blocking
+        # ones do, so they need the same escape hatch to an exception tracker.
+        def self.report(error, target_uri_string, stage)
+          Instrumentation.report(
+            error,
+            {
+              mode: :streaming,
+              outcome: :error,
+              stage: stage,
+              target: target_uri_string
+            }
+          )
         end
       end
     end
