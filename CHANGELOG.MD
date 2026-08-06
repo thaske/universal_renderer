@@ -72,6 +72,36 @@ get it silently wrong.
 - `Client::Stream` called `log_setup_error` bare, but `ErrorLogger` defines only
   singleton methods, so that rescue path raised `NoMethodError` instead of logging.
 
+#### Security
+
+- Hardened SSR HTML sanitization against embedded documents, event handlers,
+  executable URL protocols, SVG data payloads, and meta refresh redirects.
+- Relaxed it in two narrow places, because the previous rules made SSR
+  self-defeating. Both fail closed in the ambiguous cases:
+  - `<script>` survives when it declares `application/json` or
+    `application/ld+json`. HTML treats those as data blocks and never executes
+    them, and without the exception server-rendered JSON-LD could not survive
+    sanitization at all — stripping the SEO that motivates server rendering.
+    Scripts with no `type`, or with `module`, `importmap`, `speculationrules`, or
+    any JavaScript MIME type, stay blocked.
+  - SVG data URIs survive in `<img src>` and `<img srcset>`, and nowhere else.
+    Browsers render SVG referenced by `<img>` in a restricted mode that runs no
+    scripts and loads no external references, and bundlers routinely inline icons
+    this way, so otherwise every inlined logo vanished from the server render.
+    They remain blocked on `<a href>`, `<object data>`, and every other element
+    and attribute, where the SVG *would* execute as a document.
+
+#### Known limitations
+
+- `srcset` is checked as if it were a single URI. It is a comma-separated
+  candidate list and every check anchors at the start of the value, so an
+  approved first candidate carries whatever follows it. Not exploitable —
+  candidates are fetched as images, and neither `javascript:` nor
+  `data:text/html` is a fetchable image source — but the guarantee is weaker
+  than it reads for that one attribute, and it is pinned by a test. A real fix
+  has to parse candidates rather than split on commas, since data URIs
+  legitimately contain them.
+
 ### NPM Package
 
 #### Added
@@ -106,6 +136,10 @@ get it silently wrong.
 - `SsrConfig` type for the render config module.
 - `bodyLimit` option.
 
+#### Changed
+
+- Restored React 18 compatibility and made Vite a development-only dependency.
+
 #### Fixed
 
 - A streaming client disconnect during `setup` no longer skips the context cleanup
@@ -116,6 +150,15 @@ get it silently wrong.
   to resolve mid-render.
 - The README's React Query example read `props.query_data` with `{ key, data }`.
   The gem has always emitted `props.react_query` with `{ query_key, data }`.
+- Corrected the CommonJS entry points and included the MIT license.
+- Hardened HTTP request validation, asynchronous cleanup, streaming errors, and
+  client-disconnect handling.
+- Applied custom Express middleware before built-in SSR and health routes.
+- Prevented integration tests from leaking Bun servers and temporary installs.
+
+### Tooling
+
+- RuboCop failures block CI, and the package has entry-point smoke tests.
 
 ## 0.5.2 (Ruby Gem) - 2026-07-09
 
@@ -124,26 +167,6 @@ get it silently wrong.
 - Limit the Rails controller hook to `ActionController::Base`, preventing the
   renderable concern from being included in API-only controllers that do not
   provide the required view helpers.
-
-## Unreleased
-
-### Security
-
-- Hardened SSR HTML sanitization against embedded documents, event handlers,
-  executable URL protocols, SVG data payloads, and meta refresh redirects.
-
-### Fixed
-
-- Corrected the NPM package's CommonJS entry points and included its MIT license.
-- Hardened HTTP request validation, asynchronous cleanup, streaming errors, and
-  client-disconnect handling.
-- Applied custom Express middleware before built-in SSR and health routes.
-- Prevented integration tests from leaking Bun servers and temporary installs.
-- Made RuboCop failures block CI and added package entry-point smoke tests.
-
-### Changed
-
-- Restored React 18 compatibility and made Vite a development-only dependency.
 
 ## 0.5.1 (Ruby Gem) - 2026-07-09
 
