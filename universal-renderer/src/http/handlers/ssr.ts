@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
+import { createLimiter, type Limiter } from "../../concurrency";
 import type { SSRHandlerOptions } from "../../types";
 import { HttpError } from "./error";
 
@@ -6,14 +7,17 @@ import { HttpError } from "./error";
  * Creates a Server-Side Rendering route handler for Express.
  *
  * This handler expects POST requests with `{ url: string, props?: any }` and
- * returns JSON responses with `{ head: string, body: string, body_attrs: object }`.
+ * returns JSON responses with `{ head, body, body_attrs, payload }`.
+ *
+ * Renders are serialized by default; pass a `limiter` (or use `createServer`'s
+ * `concurrency` option) to change that.
  *
  * @template TContext - The type of context object used throughout the rendering pipeline
  * @param options - Configuration options for SSR
  * @returns SSR handler
  */
 export function createSSRHandler<TContext extends Record<string, any>>(
-  options: SSRHandlerOptions<TContext>,
+  options: SSRHandlerOptions<TContext> & { limiter?: Limiter },
 ) {
   if (!options.render) {
     throw new Error("render callback is required");
@@ -22,8 +26,11 @@ export function createSSRHandler<TContext extends Record<string, any>>(
     throw new Error("setup callback is required");
   }
 
+  const limiter = options.limiter ?? createLimiter(1);
+
   return async (req: Request, res: Response, next: NextFunction) => {
-    let context: TContext | undefined;
+    let url: string;
+    let props: Record<string, any>;
 
     try {
       if (
@@ -34,7 +41,7 @@ export function createSSRHandler<TContext extends Record<string, any>>(
         throw new HttpError("JSON request body is required", 400);
       }
 
-      const { url, props = {} } = req.body;
+      ({ url, props = {} } = req.body);
 
       if (!url || typeof url !== "string") {
         throw new HttpError("URL string is required", 400);
@@ -42,27 +49,44 @@ export function createSSRHandler<TContext extends Record<string, any>>(
       if (props === null || typeof props !== "object" || Array.isArray(props)) {
         throw new HttpError("Props must be an object", 400);
       }
+    } catch (error) {
+      // Validation failures never reach setup, so there is nothing to serialize
+      // or clean up. Rejecting them outside the limiter also keeps a burst of
+      // malformed requests from queueing behind real renders.
+      return next(error);
+    }
 
-      context = await options.setup(url, props);
-      const result = await options.render(context);
+    try {
+      const result = await limiter(async () => {
+        let context: TContext | undefined;
+
+        try {
+          context = await options.setup(url, props);
+          options.prepare?.(context);
+          return await options.render(context);
+        } finally {
+          // Inside the limiter on purpose: cleanup is what restores whatever
+          // prepare mutated, so it has to run before the next render starts.
+          if (context && options.cleanup) {
+            try {
+              await options.cleanup(context);
+            } catch (error) {
+              // Cleanup must never turn a completed response into an unhandled
+              // rejection. Rendering errors propagate from the try above.
+              console.error("[SSR] Cleanup error:", error);
+            }
+          }
+        }
+      });
 
       res.json({
         head: result.head ?? "",
         body: result.body,
         body_attrs: result.bodyAttrs ?? {},
+        payload: result.payload ?? null,
       });
     } catch (error) {
       return next(error);
-    } finally {
-      if (context && options.cleanup) {
-        try {
-          await options.cleanup(context);
-        } catch (error) {
-          // Cleanup must never turn a completed response into an unhandled
-          // rejection. Rendering errors have already been delegated above.
-          console.error("[SSR] Cleanup error:", error);
-        }
-      }
     }
   };
 }

@@ -21,35 +21,59 @@ export type RenderOutput = {
 
   /**
    * Additional attributes to be applied to the body element, as a
-   * name→value map. Serialized to the Ruby side as the `body_attrs` hash.
+   * name→value map. Serialized to the Ruby side as the `body_attrs` hash and
+   * emitted by the `ssr_body_attributes` view helper.
    * @example { class: "dark-theme", "data-page": "home" }
    */
   bodyAttrs?: Record<string, string>;
+
+  /**
+   * Arbitrary JSON-serializable state the client needs in order to hydrate.
+   *
+   * This exists because the interesting hydration state is only known *after*
+   * the render: a dehydrated query cache, the class names a CSS-in-JS library
+   * already emitted into `head`, the route that was resolved. Rails emits it as
+   * an inert `<script type="application/json">` via the `ssr_payload` helper,
+   * which handles the escaping, so you should not hand-roll a script tag inside
+   * `head`.
+   *
+   * @example { queryCache: dehydrate(queryClient), styleIds: sheet.renderedClassNames }
+   */
+  payload?: unknown;
 };
 
 /**
- * Base configuration for handlers that use setup/render/cleanup pattern.
+ * Base configuration for handlers that use the setup/prepare/render/cleanup
+ * pipeline.
  * @template TContext - The type of context object used throughout the rendering pipeline
  */
 export type BaseHandlerOptions<TContext extends Record<string, any>> = {
   /**
    * Setup function called before rendering to prepare the context.
+   *
+   * Keep this free of side effects on module-level state. It is allowed to be
+   * async (awaiting a lazy route chunk, say), and mutating a shared singleton
+   * before an await point leaves that mutation visible for as long as the await
+   * lasts. Put those mutations in {@link BaseHandlerOptions.prepare} instead.
+   *
    * @param url - The URL being rendered
    * @param props - Additional props passed from the client
    * @returns Context object that will be passed to render and cleanup functions
    *
    * @example
    * ```typescript
-   * setup: (url, props) => {
+   * setup: async (url, props) => {
    *     const pathname = new URL(url).pathname;
+   *     await preloadRoute(pathname);
    *
+   *     const sheet = new ServerStyleSheet();
    *     const app = sheet.collectStyles(
    *       <StaticRouter location={pathname}>
    *         <App />
    *       </StaticRouter>
    *     );
    *
-   *     return { app };
+   *     return { app, sheet };
    *   }
    * ```
    */
@@ -59,7 +83,32 @@ export type BaseHandlerOptions<TContext extends Record<string, any>> = {
   ) => Promise<TContext> | TContext;
 
   /**
-   * Optional cleanup function called after rendering is complete.
+   * Optional synchronous hook run immediately before the render, with no await
+   * point in between.
+   *
+   * This is where module-level state gets mutated: seeding a store the tree
+   * reads from, swapping in this request's feature flags, pointing a library's
+   * "am I in a browser" global somewhere useful. Pairing it with `cleanup`
+   * gives you a window that is guaranteed not to overlap another render (see
+   * the `concurrency` option), which `setup` cannot promise because it may
+   * await.
+   *
+   * @param context - The context object returned by the setup function
+   *
+   * @example
+   * ```typescript
+   * prepare: ({ props }) => {
+   *   previousFlags = { ...FEATURE_FLAGS };
+   *   Object.assign(FEATURE_FLAGS, props.feature_flags);
+   * }
+   * ```
+   */
+  prepare?: (context: TContext) => void;
+
+  /**
+   * Optional cleanup function called after rendering is complete, whether it
+   * succeeded or threw. Restore anything `prepare` mutated here, and release
+   * per-render resources (seal the style sheet, clear the query cache).
    * @param context - The context object returned by the setup function
    */
   cleanup?: (context: TContext) => Promise<void> | void;
@@ -74,7 +123,8 @@ export type SSRHandlerOptions<TContext extends Record<string, any>> =
     /**
      * Main render function that produces the SSR output.
      * @param context - The context object returned by the setup function
-     * @returns The rendered output containing head, body, and optional body attributes
+     * @returns The rendered output containing head, body, optional body
+     *   attributes, and optional hydration payload
      */
     render: (context: TContext) => Promise<RenderOutput> | RenderOutput;
   };
@@ -133,3 +183,19 @@ export type StreamHandlerOptions<TContext extends Record<string, any>> =
       transform?: (context: TContext) => NodeJS.ReadWriteStream;
     };
   };
+
+/**
+ * Paths the renderer mounts its endpoints at.
+ *
+ * These are half of a contract: the Ruby gem's `config.render_path` and
+ * `config.stream_path` must name the same paths, or Rails posts renders into a
+ * 404 and silently falls back to client rendering.
+ */
+export type ServerPaths = {
+  /** Blocking render endpoint. Defaults to `["/", "/static"]`. */
+  render?: string | string[];
+  /** Streaming render endpoint. Defaults to `"/stream"`. */
+  stream?: string | string[];
+  /** Health check endpoint. Defaults to `"/health"`. */
+  health?: string | string[];
+};

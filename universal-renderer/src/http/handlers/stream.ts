@@ -3,6 +3,7 @@ import { PassThrough } from "node:stream";
 import { renderToPipeableStream } from "react-dom/server.node";
 
 import type { ReactNode } from "react";
+import { acquire, createLimiter, type Limiter } from "../../concurrency";
 import { SSR_MARKERS } from "../../constants";
 import type { ExpressStreamHandlerOptions } from "../types";
 import { HttpError } from "./error";
@@ -17,36 +18,56 @@ function asError(error: unknown): Error {
  * This handler expects POST requests with `{ url: string, props?: any, template: string }`
  * and returns streamed HTML responses for faster perceived performance.
  *
+ * A streaming render holds its concurrency slot until the response finishes or
+ * the client disconnects, not just until the shell is ready — the tree is still
+ * reading module state for as long as it is producing chunks.
+ *
  * @template TContext - The type of context object used throughout the rendering pipeline
  * @param options - Configuration options for streaming SSR
  * @returns Express route handler for streaming SSR requests
  */
 export function createStreamHandler<TContext extends Record<string, any>>(
-  options: ExpressStreamHandlerOptions<TContext>,
+  options: ExpressStreamHandlerOptions<TContext> & { limiter?: Limiter },
 ): RequestHandler {
   if (!options.streamCallbacks)
     throw new Error("streamCallbacks are required for streaming handler");
 
   const { streamCallbacks } = options;
+  const limiter = options.limiter ?? createLimiter(1);
 
   return async (req, res, next: NextFunction) => {
     let context: TContext | undefined;
     let reactNode: ReactNode | undefined;
     let abortRender: (() => void) | undefined;
     let cleanupStarted = false;
+    let setupSettled = false;
     let stopped = false;
     let didRenderError = false;
 
-    const cleanup = async () => {
-      if (cleanupStarted || !context || !options.cleanup) return;
+    let releaseSlot: (() => void) | undefined;
 
+    // Runs the context cleanup and releases the concurrency slot, so a stream
+    // that dies mid-flight cannot wedge the queue behind it. Idempotent: the
+    // response lifecycle can reach this from `finish`, `close`, and the error
+    // path.
+    //
+    // Before setup settles this is a deliberate no-op. A client can disconnect
+    // while setup is still awaiting, and finalizing there would both miss the
+    // context setup is about to return and hand the slot to the next render
+    // while this one is still touching module state. The post-setup check
+    // notices `stopped` and finalizes then.
+    const cleanup = async () => {
+      if (!setupSettled || cleanupStarted) return;
       cleanupStarted = true;
+
       try {
-        await options.cleanup(context);
+        if (context && options.cleanup) await options.cleanup(context);
       } catch (error) {
         // Cleanup runs after the response lifecycle and cannot safely be sent
         // through Express once headers have been written.
         console.error("[SSR] Cleanup error:", error);
+      } finally {
+        releaseSlot?.();
       }
     };
 
@@ -106,7 +127,12 @@ export function createStreamHandler<TContext extends Record<string, any>>(
         throw new HttpError(`Template missing ${SSR_MARKERS.BODY} marker`, 400);
       }
 
-      context = await options.setup(url, props);
+      releaseSlot = await acquire(limiter);
+      try {
+        context = await options.setup(url, props);
+      } finally {
+        setupSettled = true;
+      }
 
       if (stopped || res.destroyed) {
         await cleanup();
@@ -122,6 +148,10 @@ export function createStreamHandler<TContext extends Record<string, any>>(
       } else {
         throw new HttpError("No app callback provided", 400);
       }
+
+      // Last thing before React starts reading the tree, with no await point in
+      // between — see BaseHandlerOptions.prepare.
+      options.prepare?.(context);
     } catch (error) {
       await cleanup();
       return next(error);
@@ -143,7 +173,11 @@ export function createStreamHandler<TContext extends Record<string, any>>(
 
       const stream = new PassThrough();
       const transform = streamCallbacks.transform?.(context);
-      const output = transform ? stream.pipe(transform) : stream;
+      // Widened deliberately: PassThrough and ReadWriteStream have overload sets
+      // TypeScript cannot reconcile into one callable `once`.
+      const output: NodeJS.ReadableStream = transform
+        ? stream.pipe(transform)
+        : stream;
 
       const handleOutputError = (error: unknown) => stopWithError(error);
       stream.once("error", handleOutputError);

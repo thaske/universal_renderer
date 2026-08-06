@@ -5,8 +5,10 @@ import type {
   RequestHandler,
   Response,
 } from "express";
+import type { Concurrency } from "../concurrency";
 import type {
   BaseHandlerOptions,
+  ServerPaths,
   SSRHandlerOptions as CoreSSRHandlerOptions,
   StreamHandlerOptions as CoreStreamHandlerOptions,
 } from "../types";
@@ -78,6 +80,29 @@ export type ExpressServerOptions<
   streamCallbacks?: ExpressStreamHandlerOptions<TContext>["streamCallbacks"];
 
   /**
+   * How many renders may be in flight at once. Defaults to `1`.
+   *
+   * Serialized is the safe default: an app retrofitted with SSR usually keeps
+   * request state in module-level singletons, and interleaving renders through
+   * those leaks one visitor's data into another's HTML. Scale out with more
+   * renderer processes, and only raise this once you have verified the render
+   * touches no shared mutable state. `"unbounded"` removes the limit.
+   */
+  concurrency?: Concurrency;
+
+  /**
+   * Paths to mount the endpoints at. Must agree with the gem's
+   * `config.render_path` / `config.stream_path`.
+   */
+  paths?: ServerPaths;
+
+  /**
+   * Body size limit for `express.json`. Defaults to `"50mb"` — props carrying a
+   * serialized query cache get large.
+   */
+  bodyLimit?: string;
+
+  /**
    * Optional Express middleware to be applied to the server.
    * This middleware runs after request parsing and before the built-in health and SSR routes.
    *
@@ -92,3 +117,17 @@ export type ExpressServerOptions<
    */
   middleware?: RequestHandler;
 };
+
+/**
+ * The complete render configuration for an app: everything `createServer` needs
+ * except transport concerns.
+ *
+ * Keep this in one module that default-exports it (`app/frontend/ssr/config.ts`
+ * by convention). The production entry passes it to `startServer`; the dev
+ * entry hands the *path* to `startDevServer`, which reloads the module through
+ * Vite on every render so edits to any part of the render take effect without a
+ * rebuild.
+ */
+export type SsrConfig<
+  TContext extends Record<string, any> = Record<string, any>,
+> = ExpressServerOptions<TContext>;
