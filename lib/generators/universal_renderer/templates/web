@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Boots the web process: the SSR renderer alongside the app server.
+#
+# These deliberately share a process rather than being separate Procfile process
+# types. On Heroku (and most PaaS) process types get no routable address for each
+# other, so a standalone `ssr:` type could not be reached at the configured URL —
+# while on one dyno the loopback default just works, and each web dyno gets its
+# own renderer, so SSR capacity scales with the web process count.
+#
+# If the renderer dies, the Rails client fails open and those requests fall back
+# to client-side rendering. That is a degraded page, not an outage, so it must not
+# take the process down.
+set -uo pipefail
+
+SSR_BUNDLE="${SSR_BUNDLE:-ssr-build/server.mjs}"
+export SSR_PORT="${SSR_PORT:-3001}"
+
+SSR_PID=""
+
+start_ssr() {
+  if [ ! -f "$SSR_BUNDLE" ]; then
+    echo "[web] $SSR_BUNDLE missing — serving client-rendered pages only." >&2
+    return
+  fi
+
+  # Use `node` instead if you are not on Bun.
+  bun "$SSR_BUNDLE" &
+  SSR_PID=$!
+  echo "[web] SSR renderer started (pid $SSR_PID, port $SSR_PORT)"
+}
+
+start_ssr
+
+# The app server is what keeps the process alive; when it exits, so does the
+# renderer.
+trap 'if [ -n "$SSR_PID" ]; then kill "$SSR_PID" 2>/dev/null; fi' EXIT
+
+exec bundle exec puma -C config/puma.rb
