@@ -7,12 +7,10 @@ require "rails_helper"
 require "rails-html-sanitizer"
 
 RSpec.describe UniversalRenderer::SSR::Scrubber do
-  # The examples run against both sanitizer vendors, because the two parsers
-  # disagree in ways that matter here. A bare SanitizeHelper defaults to HTML4,
-  # but Rails 7.1+ apps get HTML5 through `best_supported_vendor` — so testing
-  # only the bare default tests the parser almost no real app uses. That gap hid
-  # an `xlink:href` bypass: HTML5 splits the namespace prefix off the attribute
-  # name, and the scrubber looked the value up under a name that did not exist.
+  # Both vendors, because they parse differently and the difference is
+  # security-relevant. A bare SanitizeHelper defaults to HTML4, while Rails 7.1+
+  # apps get HTML5 — so testing only the default tests the wrong parser, which is
+  # how an `xlink:href` bypass survived.
   shared_examples "a scrubber" do
     it "removes executable elements and embedded documents" do
       html = <<~HTML
@@ -44,11 +42,8 @@ RSpec.describe UniversalRenderer::SSR::Scrubber do
       expect(result).not_to include("alert(1)")
     end
 
-    # The JSON allowance is an allowlist keyed on `type`, so the types that must
-    # stay out of it deserve an explicit test rather than passing by construction.
     # `importmap` and `speculationrules` are the ones that matter: they are not
-    # JavaScript MIME types, so a laxer rule than exact matching would admit them,
-    # and both change how the page loads code.
+    # JavaScript MIME types, so a rule laxer than exact matching would admit them.
     it "keeps blocking script types that are not inert data blocks" do
       html = <<~HTML
         <script type="module">alert("module")</script>
@@ -71,16 +66,10 @@ RSpec.describe UniversalRenderer::SSR::Scrubber do
         "javascript"
       )
 
-      # srcset is a comma-separated candidate list, but every URI check anchors at
-      # the start of the attribute value, so an approved first candidate carries
-      # whatever follows it. This is not exploitable — srcset candidates are
-      # fetched as images, and neither `javascript:` nor `data:text/html` is a
-      # fetchable image source — but it means the sanitizer's guarantee is weaker
-      # than it reads for this one attribute, so pin it as a decision rather than a
-      # surprise.
-      #
-      # A real fix has to parse candidates rather than split on commas, because
-      # data URIs legitimately contain them (`data:image/svg+xml,<svg/>`).
+      # Every URI check anchors at the start of the value, so an approved first
+      # candidate carries whatever follows it. Not exploitable, since candidates
+      # are fetched as images. A real fix has to parse candidates rather than split
+      # on commas, because data URIs contain them.
       carried = sanitize(
         %(<img srcset="data:image/svg+xml;base64,PHN2Zy8+ 1x, javascript:alert(1) 2x">)
       )
@@ -145,14 +134,12 @@ RSpec.describe UniversalRenderer::SSR::Scrubber do
       expect(result).not_to include("data:image/svg+xml")
     end
 
-    # Both of these were verified against a real browser: the payload the
-    # sanitizer emits executes. They are the reason this scrubber removes elements
-    # that switch parsing context rather than trusting its own parse of them.
+    # This and the MathML case below were verified in a real browser: the payload
+    # the sanitizer emits executes.
     it "removes noscript, which the browser and the sanitizer tokenize differently" do
-      # The sanitizer parses <noscript> as markup (scripting disabled), so the
-      # `</noscript>` inside the title attribute is inert to it. The browser parses
-      # it as raw text (scripting enabled), so that string closes the element early
-      # and the <img> that follows becomes a live element.
+      # The sanitizer sees markup (scripting disabled), so the `</noscript>` in the
+      # title attribute is inert to it. The browser sees raw text, so that string
+      # closes the element early and the <img> becomes live.
       html = %(<noscript><p title="</noscript><img src=x onerror=alert(1)>"></noscript>)
 
       result = sanitize(html)
@@ -185,10 +172,9 @@ RSpec.describe UniversalRenderer::SSR::Scrubber do
       expect(sanitize(html).strip).to eq(html.strip)
     end
 
-    # The reason both vendors are exercised. Under HTML5 the prefix is a
-    # namespace rather than part of the name, so a scrubber that reads
-    # `node["href"]` sees nothing and keeps the attribute. In SVG, `<a
-    # xlink:href="javascript:...">` is a live link, so that was a real XSS.
+    # Under HTML5 the prefix is a namespace, not part of the name, so reading
+    # `node["href"]` sees nothing and keeps the attribute. In SVG,
+    # `<a xlink:href="javascript:...">` is a live link.
     it "removes dangerous URIs from namespaced attributes" do
       html = <<~HTML
         <svg><a xlink:href="javascript:alert(1)"><text>click</text></a></svg>
@@ -209,8 +195,8 @@ RSpec.describe UniversalRenderer::SSR::Scrubber do
     end
   end
 
-  # Applied per vendor rather than through ActionView's SanitizeHelper, whose
-  # sanitizer is memoized in a class variable for the life of the process.
+  # Not through ActionView's SanitizeHelper, whose sanitizer is memoized in a
+  # class variable for the life of the process.
   {
     "HTML4" => Rails::HTML4::Sanitizer,
     "HTML5" => Rails::HTML5::Sanitizer

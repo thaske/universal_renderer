@@ -7,24 +7,19 @@ module UniversalRenderer
     # Removes executable content from HTML returned by the SSR service while
     # preserving the elements and data attributes needed to hydrate an app.
     #
-    # This is a blocklist, and a blocklist over the whole HTML grammar cannot be
-    # a boundary against attacker-controlled markup: the sanitizer and the
-    # browser have to agree on how the document parses, and elements that switch
-    # parsing context (see PARSER_CONTEXT_ELEMENTS) are how they stop agreeing.
-    # Treat it as defense in depth over HTML your own renderer produced, not as
-    # a substitute for escaping untrusted data inside the render.
+    # A blocklist over the whole HTML grammar cannot be a boundary against
+    # attacker-controlled markup, because the sanitizer and the browser have to
+    # agree on how the document parses. Treat it as defense in depth over HTML
+    # your own renderer produced.
     class Scrubber < ::Loofah::Scrubber
-      # Elements that change how the *rest* of the markup is tokenized, so that
-      # the tree this scrubber inspects is not the tree the browser builds.
+      # Elements that change how the *rest* of the markup is tokenized, so the
+      # tree this scrubber inspects is not the tree the browser builds.
       #
-      # `<noscript>` is parsed as raw text when scripting is enabled and as
-      # markup when it is not; the sanitizer is always in the second mode and
-      # the browser is always in the first, so `<noscript><p title="</noscript>
-      # <img src=x onerror=...>">` reaches the browser as a live element.
-      # `<mglyph>`, `<malignmark>`, and `<annotation-xml>` are the MathML
-      # equivalents: they flip the parser between foreign content and HTML
-      # integration points and give the same mismatch. None of them have any
-      # business in a server render, so they are removed outright.
+      # `<noscript>` is raw text with scripting enabled (the browser) and markup
+      # without it (the sanitizer), so `<noscript><p title="</noscript><img src=x
+      # onerror=...>">` reaches the browser as a live element. The MathML three
+      # flip the parser between foreign content and HTML integration points for
+      # the same effect. None belong in a server render.
       PARSER_CONTEXT_ELEMENTS = %w[
         noscript mglyph malignmark annotation-xml
       ].freeze
@@ -35,16 +30,12 @@ module UniversalRenderer
           animate animatemotion animatetransform set
         ] + PARSER_CONTEXT_ELEMENTS
       ).freeze
-      # Non-executable data-script MIME types. HTML treats a script whose type
-      # is neither a JavaScript MIME type nor one of the special types
-      # (`module`, `importmap`, `speculationrules`) as a data block and never
-      # executes it, so these carry inert JSON.
+      # Non-executable data-script MIME types. HTML treats a script whose type is
+      # neither a JavaScript MIME type nor one of the special types (`module`,
+      # `importmap`, `speculationrules`) as an inert data block.
       #
-      # The exception exists for JSON-LD: structured data is emitted by the
-      # render, and stripping it would sanitize away the SEO that motivates
-      # server rendering in the first place. Hydration state does not need this
-      # allowance — it comes back from the renderer as `payload` and is emitted
-      # by the `ssr_payload` helper, which never passes through the scrubber.
+      # The exception exists for JSON-LD, which the render emits and which would
+      # otherwise be sanitized away along with the SEO that motivates SSR.
       ALLOWED_SCRIPT_TYPES = %w[application/json application/ld+json].freeze
       URI_ATTRIBUTES = %w[
         action background cite codebase data formaction href longdesc poster src
@@ -54,15 +45,10 @@ module UniversalRenderer
       DANGEROUS_PROTOCOL = /\A(?:javascript|vbscript):/i
       DANGEROUS_DATA = %r{\Adata:(?:text/html|application/xhtml\+xml|image/svg\+xml)}i
       SAFE_DATA_IMAGE = %r{\Adata:image/(?:avif|gif|jpeg|png|webp);base64,}i
-      # An SVG referenced by an <img> element is rendered in a restricted mode:
-      # browsers neither run its scripts nor load its external references. Since
-      # bundlers routinely inline small SVGs (logos, icons) as data URIs, the
-      # server render would otherwise lose those images. SVG data URIs stay
-      # blocked on every other element and attribute.
-      #
-      # `<source>` inside `<picture>` feeds the same restricted image mode, so
-      # an inlined icon behind an art-direction breakpoint gets the same
-      # allowance. `<source>` inside `<video>`/`<audio>` does not.
+      # An SVG referenced by <img> renders in a restricted mode: no scripts, no
+      # external references. Bundlers routinely inline icons as data URIs, so the
+      # render would otherwise lose them. `<source>` inside `<picture>` feeds the
+      # same mode; inside `<video>`/`<audio>` it does not.
       INLINE_SVG_DATA = %r{\Adata:image/svg\+xml[,;]}i
       IMAGE_SOURCE_ATTRIBUTES = %w[src srcset].freeze
 
@@ -91,9 +77,7 @@ module UniversalRenderer
         BLOCKED_ELEMENTS.include?(node.name.downcase)
       end
 
-      # A script is a safe data script when it declares a non-executable JSON
-      # MIME type (e.g. application/json or application/ld+json). JavaScript
-      # scripts (including those without an explicit type) remain blocked.
+      # Scripts with no explicit type are JavaScript, so they stay blocked.
       def data_script?(node)
         type = node["type"].to_s.downcase.strip
         return false if type.blank?
@@ -105,12 +89,10 @@ module UniversalRenderer
         node.name == "meta" && node["http-equiv"]&.casecmp?("refresh")
       end
 
-      # Iterates attribute *nodes* rather than the `attributes` hash. That hash
-      # is keyed by local name and drops the namespace prefix, so under the HTML5
-      # parser `xlink:href` arrives as `"href"` and `node["href"]` then returns
-      # nil — the check saw an empty value and kept the attribute. Rails 7.1+
-      # apps get the HTML5 sanitizer by default, so that path is the normal one,
-      # and `<svg><a xlink:href="javascript:...">` survived it.
+      # Attribute *nodes*, not the `attributes` hash: that hash is keyed by local
+      # name, so under the HTML5 parser `xlink:href` arrives as `"href"` and
+      # `node["href"]` returns nil. An empty value read as safe, which left
+      # `<svg><a xlink:href="javascript:...">` intact.
       def clean_attributes(node)
         node.attribute_nodes.each do |attribute|
           normalized_name = qualified_name(attribute)
@@ -124,9 +106,8 @@ module UniversalRenderer
         end
       end
 
-      # The name as it was written in the markup, so the blocklist can match
-      # `xlink:href` under both parsers. HTML4 keeps the prefix in the name and
-      # reports no namespace; HTML5 splits them.
+      # The name as written in the markup. HTML4 keeps the prefix in the name;
+      # HTML5 splits it into a namespace.
       def qualified_name(attribute)
         prefix = attribute.namespace&.prefix
         name = attribute.name.to_s

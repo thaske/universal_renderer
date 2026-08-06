@@ -17,8 +17,7 @@ module UniversalRenderer
       # before the main application view is rendered.
       #
       # Emits a `render.universal_renderer` notification for every attempt and
-      # routes failures through `config.on_error`; see
-      # {UniversalRenderer::Instrumentation}.
+      # routes failures through `config.on_error`.
       #
       # @param url [String] The URL of the page to render on the SSR server.
       #   This should typically be the `request.original_url` from the controller.
@@ -83,17 +82,12 @@ module UniversalRenderer
         nil
       end
 
-      # String keys on purpose: `payload` can be a large dehydrated query
-      # cache, and deep-symbolizing the whole response would walk and
-      # re-allocate all of it on every render for no benefit — only these four
-      # top-level keys are read, and `payload` is passed through untouched.
+      # String keys on purpose: `payload` can be a large dehydrated query cache,
+      # and deep-symbolizing it would walk and re-allocate all of it per render.
       #
-      # `head`, `body`, and `body_attrs` *are* type-checked, because they are
-      # the three that reach a view helper. Every other failure in this gem
-      # degrades to client-side rendering; a renderer that answers 200 with the
-      # wrong shape must not be the one case that raises mid-layout instead.
-      # Raising here is deliberate: `perform` rescues it, records `:error`, and
-      # falls back like any other failed render.
+      # The three keys that reach a view helper are type-checked, so a renderer
+      # answering 200 with the wrong shape falls back like any other failed
+      # render instead of raising mid-layout. `perform` rescues the TypeError.
       def self.build_response(data)
         unless data.is_a?(Hash)
           raise TypeError,
@@ -112,10 +106,8 @@ module UniversalRenderer
         value if value.is_a?(String)
       end
 
-      # URI.join replaces the base URL's last path segment when the joined path
-      # is relative ("http://host/base" + "render" -> "http://host/render"),
-      # which would silently post renders to the wrong endpoint. Paths are
-      # absolute by convention; enforce it rather than documenting a trap.
+      # URI.join replaces the base URL's last path segment when the joined path is
+      # relative, which would post renders to the wrong endpoint.
       def self.absolute_path(path)
         path = path.to_s
         path.start_with?("/") ? path : "/#{path}"

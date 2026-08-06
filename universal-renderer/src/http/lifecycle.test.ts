@@ -260,10 +260,8 @@ describe("render timeout", () => {
 
     await render(base, { url: "http://x/", props: {} });
 
-    // Polled rather than checked once. The stuck render holds its slot forever,
-    // so `longestActiveMs` only grows and this cannot pass spuriously — but it
-    // is compared against a 30ms threshold, and a single check right after the
-    // 504 is tight enough to flake on a loaded machine.
+    // Polled: `longestActiveMs` only grows, so this cannot pass spuriously, but a
+    // single check against a 30ms threshold flakes on a loaded machine.
     const body = await vi.waitFor(async () => {
       const health = await fetch(`${base}/health`);
       expect(health.status).toBe(503);

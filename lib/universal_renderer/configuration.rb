@@ -3,11 +3,8 @@
 module UniversalRenderer
   # Configuration for UniversalRenderer.
   #
-  # This object holds plain Ruby defaults only. It never reads environment
-  # variables itself; binding configuration to ENV is the host application's
-  # responsibility, done in the initializer (see the generated
-  # config/initializers/universal_renderer.rb). The documented env-var
-  # convention is the `UNIVERSAL_RENDERER_*` prefix.
+  # Plain Ruby defaults only. Binding these to ENV is the host application's job,
+  # done in the generated initializer.
   class Configuration
     # HTTP client options.
     class Http
@@ -29,14 +26,12 @@ module UniversalRenderer
     # nobody is waiting for.
     attr_accessor :timeout
 
-    # Path the blocking renderer is mounted at on the SSR service. Must match
-    # the `paths.render` option given to `createServer` in the NPM package,
-    # whose default mounts `/` and `/static`.
+    # Path the blocking renderer is mounted at. Must match the `paths.render`
+    # option given to `createServer`, whose default mounts `/` and `/static`.
     #
-    # Defaults to nil, meaning "whatever path is already in `url`" — so setting
-    # `url` to `http://host/render` keeps working without also setting this.
-    # A relative value is treated as absolute (a leading slash is added), since
-    # joining it relatively would replace the last path segment of `url`.
+    # Defaults to nil, meaning the path already in `url`. A relative value is
+    # treated as absolute, since joining it relatively would replace the last
+    # path segment of `url`.
     attr_accessor :render_path
 
     # Path the streaming renderer is mounted at on the SSR service. Must match
@@ -44,19 +39,12 @@ module UniversalRenderer
     # Normalized the same way as `render_path`.
     attr_accessor :stream_path
 
-    # Whether `ssr_head`/`ssr_body` run the renderer's HTML through Loofah
-    # before embedding it.
+    # Whether `ssr_head`/`ssr_body` run the renderer's HTML through Loofah.
     #
-    # This is defense in depth over HTML your own renderer produced, not a
-    # boundary against attacker-controlled markup. {SSR::Scrubber} is a
-    # blocklist, and a blocklist cannot survive a parser mismatch between Loofah
-    # and the browser. Escape untrusted data inside the render — React already
-    # does, unless you reach for `dangerouslySetInnerHTML`.
-    #
-    # Sanitizing a full page render is also not free: it parses and rewrites the
-    # entire document on the Rails side of every request, which eats into the
-    # latency SSR is meant to buy. Defaults to on, because the cost is bounded
-    # and the mistake it catches is not.
+    # {SSR::Scrubber} is a blocklist, so this is defense in depth over HTML your
+    # own renderer produced, not a boundary against attacker-controlled markup.
+    # It also parses and rewrites the whole document on every request. On by
+    # default, because the cost is bounded and the mistake it catches is not.
     attr_accessor :sanitize
 
     # Scrubber instance used when `sanitize` is true. Defaults to
@@ -65,27 +53,16 @@ module UniversalRenderer
     attr_accessor :scrubber
 
     # Whether the Rails engine includes {UniversalRenderer::Renderable} into
-    # every ActionController::Base descendant.
-    #
-    # The concern adds three class attributes, a handful of public instance
-    # methods, and a `render` override to whatever it is included in. That is a
-    # lot of surface to add application-wide for something a handful of
-    # controllers use, so apps can
-    # turn the automatic include off and `include UniversalRenderer::Renderable`
-    # in just the controllers that render server-side.
-    #
-    # Read when ActionController::Base loads, which is after initializers run.
+    # every ActionController::Base descendant. Turn it off and include the
+    # concern only in the controllers that render server-side.
     attr_accessor :auto_include
 
-    # Optional callable invoked as `call(error, context)` whenever a configured
-    # render request fails, where `context` is a hash carrying at least `:url`
-    # and `:outcome`. A missing `url` is reported as `:not_configured` through
-    # ActiveSupport::Notifications but does not call this hook. Errors are
-    # always logged; this exists so failures can also reach an exception tracker.
+    # Optional callable invoked as `call(error, context)` when a configured
+    # render fails, where `context` carries at least `:url` and `:outcome`. A
+    # missing `url` reports `:not_configured` through the notification only.
     #
-    # Every failure mode is a silent fall back to client-side rendering, so
-    # without either this hook or the `render.universal_renderer` notification
-    # an app has no way to notice that SSR stopped working.
+    # Errors are always logged; this exists so they can also reach an exception
+    # tracker, since every failure falls back to client rendering silently.
     attr_accessor :on_error
 
     attr_reader :http

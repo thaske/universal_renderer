@@ -1,10 +1,7 @@
 /**
- * A single entry as the gem's `add_query_data` serializes it.
- *
- * The gem deep-stringifies keys, so the wire shape is snake_case
- * (`query_key`), not camelCase. Getting this wrong is silent: the loop finds
- * nothing, the cache stays empty, and the server renders a loading state that
- * the client then re-fetches.
+ * A single entry as the gem's `add_query_data` serializes it. The wire shape is
+ * snake_case (`query_key`), not camelCase. Getting it wrong is silent: the cache
+ * stays empty and the server renders a loading state the client re-fetches.
  */
 export type ReactQueryEntry = {
   query_key?: readonly unknown[];
@@ -22,11 +19,9 @@ export type HydrateReactQueryOptions = {
 };
 
 /**
- * Seeds a React Query cache from the props Rails sent.
- *
- * The counterpart to the gem's `add_query_data(query_key, data)`. Call it in
- * `setup` before building the tree, then dehydrate the client so the browser
- * hydrates the same cache the server rendered from:
+ * Seeds a React Query cache from the props Rails sent, the counterpart to the
+ * gem's `add_query_data`. Call it in `setup` before building the tree, then
+ * dehydrate so the browser hydrates the same cache the server rendered from:
  *
  * ```ts
  * setup: async (url, props) => {
@@ -38,7 +33,7 @@ export type HydrateReactQueryOptions = {
  * ```
  *
  * @returns The number of entries seeded, so a caller can assert it got the data
- *   it expected rather than rendering an empty page.
+ *   it expected.
  */
 export function hydrateReactQuery(
   props: Record<string, unknown> | undefined,

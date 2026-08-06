@@ -16,9 +16,8 @@ import type {
 /**
  * Express-specific base configuration for handlers.
  *
- * Error handling is a server-level concern, not a handler-level one: the
- * handlers call `next(error)` and Express routes it to whatever is mounted
- * last. Pass `error` to `createServer` (see {@link ExpressServerOptions}).
+ * Error handling is server-level, not handler-level: handlers call
+ * `next(error)`. Pass `error` to `createServer`.
  *
  * @template TContext - The type of context object used throughout the rendering pipeline
  */
@@ -78,36 +77,29 @@ export type ExpressServerOptions<
    * How long a render may take before the request is answered `504`, in
    * milliseconds. Defaults to 10000; `false` disables it.
    *
-   * This is what keeps a bounded `concurrency` from being a single point of
-   * failure. A running render's slot is never revoked — it is still touching
-   * module state, and handing that slot on is the interleaving `concurrency`
-   * exists to prevent — so a render that never settles holds its slot forever
-   * and, at `concurrency: 1`, the renderer is finished. The timeout frees the
-   * *caller*; `/health` then reports 503 so a supervisor can restart the
-   * process, which is the only thing that actually clears it. The generated
-   * `bin/web` does exactly that.
+   * A running render's slot is never revoked, since it is still touching module
+   * state, so a render that never settles ends the renderer at `concurrency: 1`.
+   * This frees the caller only; `/health` then reports 503 so a supervisor can
+   * restart the process, which is the only thing that clears it.
    *
    * Keep the gem's `config.timeout` above this value. The defaults do not line
-   * up (3s against 10s), and a Rails client that gives up first leaves the
-   * render holding its slot, so the queue fills with work nobody is waiting for.
+   * up (3s against 10s), so Rails gives up while the render keeps its slot.
    */
   renderTimeout?: number | false;
 
   /**
    * How many renders may be in flight at once. Defaults to `1`.
    *
-   * Serialized is the safe default: an app retrofitted with SSR usually keeps
-   * request state in module-level singletons, and interleaving renders through
-   * those leaks one visitor's data into another's HTML. Scale out with more
-   * renderer processes, and only raise this once you have verified the render
-   * touches no shared mutable state. `"unbounded"` removes the limit.
+   * Serialized by default, because an app retrofitted with SSR keeps request
+   * state in module-level singletons, and interleaving renders through those
+   * leak one visitor's data into another's HTML. Scale out with more renderer
+   * processes. `"unbounded"` removes the limit.
    */
   concurrency?: Concurrency;
 
   /**
-   * Maximum requests waiting for a render slot. Defaults to ten per slot.
-   * Once full, new requests receive 503 rather than growing an unbounded stale
-   * backlog. `"unbounded"` restores the old behavior.
+   * Maximum requests waiting for a render slot. Defaults to ten per slot; once
+   * full, new requests receive 503. `"unbounded"` removes the limit.
    */
   queueLimit?: QueueLimit;
 
@@ -143,11 +135,9 @@ export type ExpressServerOptions<
  * The complete render configuration for an app: everything `createServer` needs
  * except transport concerns.
  *
- * Keep this in one module that default-exports it (`app/frontend/ssr/config.ts`
- * by convention). The production entry passes it to `startServer`; the dev
- * entry hands the *path* to `startDevServer`, which reloads the module through
- * Vite on every render so edits to any part of the render take effect without a
- * rebuild.
+ * Keep it in one module that default-exports it (`app/frontend/ssr/config.ts` by
+ * convention). The production entry passes it to `startServer`; the dev entry
+ * hands the *path* to `startDevServer`, which reloads it per render.
  */
 export type SsrConfig<
   TContext extends Record<string, any> = Record<string, any>,

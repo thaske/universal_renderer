@@ -8,23 +8,17 @@ export type HealthHandlerOptions = {
    * How long a single render may hold its slot before the process is reported
    * unhealthy, in milliseconds. `false` disables the check.
    *
-   * Renders are serialized by default and a running task's slot is never
-   * revoked, so one render that never settles means the renderer is finished:
-   * the queue fills and everything after it 503s. Nothing inside the process
-   * can recover from that, which is why it has to be visible from outside —
-   * the generated `bin/web` polls this endpoint and restarts the renderer.
+   * A running task's slot is never revoked, so one render that never settles
+   * ends the renderer. Nothing inside the process can recover from that, which
+   * is why it has to be visible from outside: the generated `bin/web` polls this
+   * endpoint and restarts the renderer.
    */
   stallAfterMs?: number | false;
 };
 
 /**
- * Creates a health check handler.
- *
- * Returns 200 with the limiter's state while renders are moving, and 503 once a
- * render has been stuck past `stallAfterMs`. Point a load balancer, a container
- * health check, or a process supervisor at it.
- *
- * @returns Health check handler
+ * Creates a health check handler: 200 with the limiter's state while renders are
+ * moving, 503 once one has been stuck past `stallAfterMs`.
  */
 export function createHealthHandler(options: HealthHandlerOptions = {}) {
   const { limiter, stallAfterMs } = options;

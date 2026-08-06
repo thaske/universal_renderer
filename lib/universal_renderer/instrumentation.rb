@@ -1,14 +1,12 @@
 # frozen_string_literal: true
 
 module UniversalRenderer
-  # Every SSR failure in this gem is a silent fall back to client-side
-  # rendering. That is the right behaviour for availability and the wrong
-  # behaviour for operations: without a signal, an app cannot tell a healthy
-  # renderer from one that has been down for a week. These two hooks are that
-  # signal.
+  # Every SSR failure falls back to client-side rendering silently, which is
+  # right for availability and useless for operations. These two hooks are the
+  # signal that SSR stopped working.
   module Instrumentation
-    # ActiveSupport::Notifications event name. Subscribe to record SSR hit rate
-    # and latency:
+    # ActiveSupport::Notifications event name. Subscribe to record hit rate and
+    # latency:
     #
     #   ActiveSupport::Notifications.subscribe("render.universal_renderer") do |event|
     #     StatsD.timing("ssr.duration", event.duration, tags: ["outcome:#{event.payload[:outcome]}"])

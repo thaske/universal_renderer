@@ -87,9 +87,8 @@ RSpec.describe UniversalRenderer::Renderable do
   describe "conditional enable_ssr" do
     before { allow(UniversalRenderer::Client::Base).to receive(:call).and_return(payload) }
 
-    # A fresh instance per call, because the decision is memoized per request and
-    # a real controller instance serves exactly one. Two simulated requests need
-    # two instances.
+    # Fresh instance per call: the decision is memoized per request, and a real
+    # controller serves exactly one.
     def enable(**options)
       controller_class.enable_ssr(options)
       controller_class.new
@@ -127,9 +126,7 @@ RSpec.describe UniversalRenderer::Renderable do
       expect(UniversalRenderer::Client::Base).to have_received(:call).once
     end
 
-    # The layout asks the same question through `ssr_streaming?`, and the answer
-    # has to match the one `render` acted on. Deriving it twice would evaluate a
-    # caller-supplied predicate twice.
+    # The layout asks the same question through `ssr_streaming?`.
     it "evaluates a condition once per request" do
       calls = 0
       controller = enable(if: -> { calls += 1 })
@@ -170,10 +167,8 @@ RSpec.describe UniversalRenderer::Renderable do
       expect(UniversalRenderer::Client::Base).to have_received(:call).once
     end
 
-    # A Turbo Frame or Stream response is rendered from an HTML action, so it
-    # meets every other condition, and it never reaches the layout that would
-    # emit the payload. On a serialized renderer it also takes a slot that real
-    # page loads queue behind.
+    # A Turbo response is rendered from an HTML action, so it meets every other
+    # condition, and it never reaches the layout that emits the payload.
     it "skips partials and layout-less renders, which never reach the helpers" do
       controller = enable
 
@@ -201,9 +196,8 @@ RSpec.describe UniversalRenderer::Renderable do
       expect(controller.ssr_streaming?).to be(false)
     end
 
-    # `enable_ssr streaming: true, only: :show` streams `show` and nothing else,
-    # so every other action must report false — otherwise the layout emits the
-    # streaming placeholders into a page no renderer will ever see.
+    # Otherwise the layout emits the streaming placeholders into a page no
+    # renderer will see.
     it "reports neither streaming nor ssr? on an action the conditions exclude" do
       controller_class.ssr_conditions = { only: :index }
 
@@ -211,7 +205,6 @@ RSpec.describe UniversalRenderer::Renderable do
       expect(controller.ssr?).to be(false)
     end
 
-    # A streaming page has no response object, but it is still server-rendered.
     # Layouts pick their entry point with `ssr?`, so reporting false here shipped
     # the client-render bundle into a server-rendered document.
     it "reports ssr? while streaming, and stops once a failed stream downgrades" do

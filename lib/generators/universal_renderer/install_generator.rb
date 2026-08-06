@@ -1,12 +1,9 @@
 # frozen_string_literal: true
 
 module UniversalRenderer
-  # Scaffolds a working SSR setup: the initializer, the two renderer entry
-  # points, the SSR Vite build, the precompile hook, and the web-dyno launcher.
-  #
-  # None of these files are boilerplate in the sense of being optional. Each one
-  # encodes something that is wrong by default and fails silently when you get it
-  # wrong — see the comments in the generated files.
+  # Scaffolds a working SSR setup: the initializer, the two renderer entry points,
+  # the SSR Vite build, the precompile hook, and the web-dyno launcher. Each file
+  # encodes something that is wrong by default and fails silently.
   class InstallGenerator < Rails::Generators::Base
     source_root File.expand_path("templates", __dir__)
 

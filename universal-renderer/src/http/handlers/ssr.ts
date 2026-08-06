@@ -67,20 +67,15 @@ export function createSSRHandler<TContext extends Record<string, any>>(
         throw new HttpError("Props must be an object", 400);
       }
     } catch (error) {
-      // Validation failures never reach setup, so there is nothing to serialize
-      // or clean up. Rejecting them outside the limiter also keeps a burst of
-      // malformed requests from queueing behind real renders.
+      // Outside the limiter, so a burst of malformed requests cannot queue behind
+      // real renders.
       return next(error);
     }
 
     try {
-      // The timeout wraps the limiter call, so queue time counts towards it —
-      // a request that has been waiting longer than a render is allowed to take
-      // is not worth starting. On expiry the abort drops it from the queue if it
-      // is still waiting; if it is already running, the slot deliberately stays
-      // held, because the render is still touching module state and handing that
-      // slot to the next render is exactly the interleaving `concurrency` exists
-      // to prevent. `/health` reports the process as stalled at that point.
+      // The timeout wraps the limiter call, so queue time counts towards it. On
+      // expiry the abort drops the request if it is still queued; if it is
+      // already rendering, the slot stays held and `/health` reports a stall.
       const result = await withTimeout(
         limiter(
           async () => {
@@ -91,15 +86,13 @@ export function createSSRHandler<TContext extends Record<string, any>>(
               options.prepare?.(context);
               return await options.render(context);
             } finally {
-              // Inside the limiter on purpose: cleanup is what restores whatever
-              // prepare mutated, so it has to run before the next render starts.
+              // Inside the limiter: cleanup restores what prepare mutated, so it
+              // has to run before the next render starts.
               if (context && options.cleanup) {
                 try {
                   await options.cleanup(context);
                 } catch (error) {
-                  // Cleanup must never turn a completed response into an
-                  // unhandled rejection. Rendering errors propagate from the
-                  // try above.
+                  // Never turn a completed response into an unhandled rejection.
                   console.error("[SSR] Cleanup error:", error);
                 }
               }

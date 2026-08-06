@@ -38,9 +38,9 @@ export type LimiterStats = {
   /** Tasks waiting for one. */
   waiting: number;
   /**
-   * How long the longest-running task has held its slot, in milliseconds; 0
-   * when idle. A value past the render timeout means a render is stuck and,
-   * because slots are not revoked from running tasks, is never coming back.
+   * How long the longest-running task has held its slot, in milliseconds; 0 when
+   * idle. A value past the render timeout means a render is stuck for good,
+   * because slots are never revoked from running tasks.
    */
   longestActiveMs: number;
 };
@@ -56,11 +56,10 @@ export type Limiter = {
 
 /**
  * Rejects with {@link RenderTimeoutError} if `promise` has not settled in time,
- * without disturbing `promise` itself — a render that is still running is still
- * touching module state, so its slot must stay held until it finishes.
+ * without disturbing `promise` itself: a render that is still running is still
+ * touching module state, so its slot must stay held.
  *
- * `onTimeout` is where the caller cancels whatever it can (dropping a queued
- * task, aborting a React render).
+ * `onTimeout` is where the caller cancels what it can.
  */
 export function withTimeout<T>(
   promise: Promise<T>,
@@ -74,7 +73,6 @@ export function withTimeout<T>(
       onTimeout?.();
       reject(new RenderTimeoutError(timeoutMs));
     }, timeoutMs);
-    // Never hold the process open for a timer whose only job is to fire late.
     timer.unref?.();
 
     promise.then(
@@ -93,15 +91,11 @@ export function withTimeout<T>(
 /**
  * Creates a concurrency limiter for render requests.
  *
- * SSR retrofitted onto a client-first app almost always has request-scoped
- * state living in module-level singletons — a store, a query client, a mutable
- * feature-flag object, a CSS-in-JS registry. Two renders interleaving through
- * those is not a slow page, it is one visitor's data rendered into another
- * visitor's HTML. So the default is `1`: renders are serialized, and
- * concurrency comes from running several renderer processes.
- *
- * Raise it, or pass `"unbounded"`, only once you know every module your render
- * touches is either stateless or per-request.
+ * SSR retrofitted onto a client-first app keeps request-scoped state in
+ * module-level singletons: a store, a query client, a CSS-in-JS registry. Two
+ * renders interleaving through those is not a slow page, it is one visitor's
+ * data in another visitor's HTML. Hence the default of `1`; get concurrency from
+ * more renderer processes.
  */
 export function createLimiter(
   concurrency: Concurrency = 1,
@@ -117,9 +111,8 @@ export function createLimiter(
     );
   }
 
-  // Start times of in-flight tasks, so `stats()` can report a stuck render.
-  // Keyed by a counter rather than by the timestamp: two tasks can start in the
-  // same millisecond, and deleting by timestamp would drop both.
+  // Start times of in-flight tasks, so `stats()` can report a stuck render. Keyed
+  // by a counter, since two tasks can start in the same millisecond.
   const startedAt = new Map<number, number>();
   let nextTaskId = 0;
 
@@ -248,9 +241,8 @@ export function createLimiter(
 }
 
 /**
- * A limiter slot held explicitly, for callers whose critical section does not
- * fit inside a single function — streaming, where the section ends on a
- * response event rather than a return.
+ * A limiter slot held explicitly, for callers whose critical section ends on an
+ * event rather than a return. Streaming is the case.
  */
 export async function acquire(
   limiter: Limiter,
@@ -269,8 +261,8 @@ export async function acquire(
   });
 
   // The task keeps the slot until `release` is called; `ready` resolves as soon
-  // as the slot is ours. Errors on `held` are impossible — it only ever
-  // resolves — so this promise needs no rejection handling.
+  // as the slot is ours. `held` only ever resolves, so it needs no rejection
+  // handling.
   void limiter(async () => {
     acquired();
     await held;

@@ -7,10 +7,8 @@ require_relative "stream/setup"
 module UniversalRenderer
   module Client
     class Stream
-      # No `extend` of the three modules below: each defines only singleton
-      # methods, so extending imported nothing while reading as though it had.
-      # That is what produced a NoMethodError on the setup-error path. Every call
-      # site names the module.
+      # The three modules below define only singleton methods, so `extend` would
+      # import nothing while reading as though it had. Call sites name the module.
 
       # Orchestrates the streaming process for server-side rendering.
       #

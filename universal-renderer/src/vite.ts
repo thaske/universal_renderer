@@ -22,9 +22,8 @@ export type SsrBuildOptions = Omit<UserConfig, "build"> & {
 
   /**
    * Public path prefix for asset URLs the *server* render emits. Must match the
-   * client build's, or SSR produces `/assets/x.png` while Rails serves the
-   * fingerprinted file at `/vite/assets/x.png` and every server-rendered image
-   * 404s. Defaults to `/vite/`, vite_ruby's default public output dir.
+   * client build's, or every server-rendered image 404s. Defaults to `/vite/`,
+   * vite_ruby's default public output dir.
    */
   base?: string;
 
@@ -35,21 +34,17 @@ export type SsrBuildOptions = Omit<UserConfig, "build"> & {
 /**
  * Builds the Vite config for the SSR bundle.
  *
- * This exists because a Rails SSR build has four settings that are each wrong by
- * default and each fail *silently* — you get a bundle, it just renders the wrong
- * thing:
+ * A Rails SSR build has four settings that are wrong by default and fail
+ * silently: you get a bundle, it just renders the wrong thing.
  *
- *   1. `vite-plugin-rails` must be left out. It is built for the client manifest
+ *   1. `vite-plugin-rails` must be left out. It targets the client manifest
  *      pipeline and overrides entrypoints and outDir. Pass only the plugins the
- *      render itself needs (react, svgr, your ERB plugin) — this helper does not
- *      add any.
- *   2. `base` must match the client build's public prefix (see above).
- *   3. `publicDir` must be false. Rails' `public/` is this root's default
- *      publicDir, so otherwise the SSR build copies the whole directory into its
- *      own output.
- *   4. `outDir` must sit outside `public/` but still survive
- *      `assets:precompile` into the deploy slug. A plain project-root directory
- *      does both.
+ *      render needs; this helper adds none.
+ *   2. `base` must match the client build's public prefix.
+ *   3. `publicDir` must be false, or the SSR build copies Rails' `public/` into
+ *      its own output.
+ *   4. `outDir` must sit outside `public/` and still survive
+ *      `assets:precompile` into the deploy slug.
  *
  * @example
  * ```ts
@@ -76,9 +71,8 @@ export function defineSsrConfig(options: SsrBuildOptions): UserConfig {
   const absolute = (path: string) =>
     isAbsolute(path) ? path : resolve(root, path);
 
-  // An array of outputs would be spread into an object below and silently
-  // become `{ "0": {...} }`, losing the pinned entry filename with it. The SSR
-  // bundle is a single entry, so there is nothing to support here — say so.
+  // An array would be spread into an object below and become `{ "0": {...} }`,
+  // losing the pinned entry filename. The SSR bundle is a single entry.
   if (Array.isArray(build?.rollupOptions?.output)) {
     throw new Error(
       "defineSsrConfig does not support an array of rollup outputs; the SSR " +
@@ -86,9 +80,8 @@ export function defineSsrConfig(options: SsrBuildOptions): UserConfig {
     );
   }
 
-  // Pinned rather than left to Vite, which picks `.js` or `.mjs` depending on
-  // whether package.json declares `"type": "module"`. The process supervisor has
-  // to name this file, so it must not change under you.
+  // Pinned: Vite picks `.js` or `.mjs` depending on `"type": "module"`, and the
+  // process supervisor has to name this file.
   const outputName = `${basename(entry).replace(/\.[cm]?[jt]sx?$/, "")}.mjs`;
 
   return {
@@ -98,8 +91,8 @@ export function defineSsrConfig(options: SsrBuildOptions): UserConfig {
     publicDir: false,
     ...rest,
     define: {
-      // Bundled browser-oriented modules reference `global`; under Node/Bun it
-      // does not exist as a bare identifier in ESM.
+      // Browser-oriented modules reference `global`, which is not a bare
+      // identifier in ESM.
       global: "globalThis",
       ...rest.define,
     },

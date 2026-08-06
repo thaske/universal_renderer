@@ -33,15 +33,13 @@ function basicOptions() {
 
 afterEach(() => {
   vi.restoreAllMocks();
-  // `restoreAllMocks` does not cover stubbed env vars, and this config does not
-  // set `unstubEnvs`. Without this, a stubbed NODE_ENV leaks into every later
-  // test in the file and decides how much detail the error handler returns.
+  // Not covered by restoreAllMocks, and `unstubEnvs` is not set, so a stubbed
+  // NODE_ENV would leak into every later test in this file.
   vi.unstubAllEnvs();
 });
 
-// `NODE_ENV !== "production"` read like a production guard but was not one:
-// nothing in a Rails deploy sets NODE_ENV for the renderer process, so the
-// default leaked messages and stack traces from every render.
+// Nothing in a Rails deploy sets NODE_ENV for the renderer process, so a
+// `!== "production"` check leaked internals from every render.
 describe("error detail", () => {
   function callErrorHandler() {
     const error = Object.assign(new Error("internal detail"), {
@@ -167,9 +165,8 @@ describe("HTTP handler hardening", () => {
     }
   });
 
-  // `String.replace` with a string pattern treats `$&`, `$'`, and `$1` in the
-  // replacement as substitution patterns. Head content carries them: `$` is
-  // legal in CSS-in-JS class names and in JSON-LD values.
+  // A string replacement treats `$&` and `$1` as substitution patterns, and `$`
+  // is legal in CSS-in-JS class names.
   it("writes head content containing $ substitution patterns literally", async () => {
     const head = `<style>.a$&b{color:red}</style><meta content="$'x$1">`;
     const app = await createServer({

@@ -21,7 +21,7 @@ end
 if Rake::Task.task_defined?("assets:precompile")
   Rake::Task["assets:precompile"].enhance(["ssr:build"])
 else
-  # No asset pipeline in this app; make the dependency explicit rather than
-  # silently skipping the build and shipping a release with no renderer.
+  # No asset pipeline here, so define the task rather than skipping the build
+  # and shipping a release with no renderer.
   Rake::Task.define_task("assets:precompile" => "ssr:build")
 end

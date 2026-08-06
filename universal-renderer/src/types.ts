@@ -32,10 +32,8 @@ export type RenderOutput = {
    *
    * This exists because the interesting hydration state is only known *after*
    * the render: a dehydrated query cache, the class names a CSS-in-JS library
-   * already emitted into `head`, the route that was resolved. Rails emits it as
-   * an inert `<script type="application/json">` via the `ssr_payload` helper,
-   * which handles the escaping, so you should not hand-roll a script tag inside
-   * `head`.
+   * already emitted into `head`. Rails emits it through the `ssr_payload`
+   * helper, which handles the escaping, so do not hand-roll a script tag.
    *
    * @example { queryCache: dehydrate(queryClient), styleIds: sheet.renderedClassNames }
    */
@@ -51,10 +49,9 @@ export type BaseHandlerOptions<TContext extends Record<string, any>> = {
   /**
    * Setup function called before rendering to prepare the context.
    *
-   * Keep this free of side effects on module-level state. It is allowed to be
-   * async (awaiting a lazy route chunk, say), and mutating a shared singleton
-   * before an await point leaves that mutation visible for as long as the await
-   * lasts. Put those mutations in {@link BaseHandlerOptions.prepare} instead.
+   * Keep this free of side effects on module-level state. It may await, and a
+   * mutation made before an await point stays visible for as long as the await
+   * lasts. Put those in {@link BaseHandlerOptions.prepare} instead.
    *
    * @param url - The URL being rendered
    * @param props - Additional props passed from the client
@@ -87,11 +84,9 @@ export type BaseHandlerOptions<TContext extends Record<string, any>> = {
    * point in between.
    *
    * This is where module-level state gets mutated: seeding a store the tree
-   * reads from, swapping in this request's feature flags, pointing a library's
-   * "am I in a browser" global somewhere useful. Pairing it with `cleanup`
-   * gives you a window that is guaranteed not to overlap another render (see
-   * the `concurrency` option), which `setup` cannot promise because it may
-   * await.
+   * reads from, swapping in this request's feature flags. Paired with `cleanup`
+   * it is a window guaranteed not to overlap another render, which `setup`
+   * cannot promise because it may await.
    *
    * @param context - The context object returned by the setup function
    *
@@ -185,11 +180,9 @@ export type StreamHandlerOptions<TContext extends Record<string, any>> =
   };
 
 /**
- * Paths the renderer mounts its endpoints at.
- *
- * These are half of a contract: the Ruby gem's `config.render_path` and
- * `config.stream_path` must name the same paths, or Rails posts renders into a
- * 404 and silently falls back to client rendering.
+ * Paths the renderer mounts its endpoints at. The gem's `config.render_path`
+ * and `config.stream_path` must name the same paths, or Rails posts renders into
+ * a 404 and falls back to client rendering.
  */
 export type ServerPaths = {
   /** Blocking render endpoint. Defaults to `["/", "/static"]`. */

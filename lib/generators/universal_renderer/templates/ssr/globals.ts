@@ -1,35 +1,21 @@
-// Browser globals for server rendering. **This is your code — grow it.**
+// Browser globals for server rendering. **This is your code, grow it.**
 //
-// It is scaffolded here rather than shipped by the package on purpose. Which
-// globals a graph touches is a property of that graph, not of SSR, so a library
-// version would be a pile of guesses: too small to boot your app and too large
-// to reason about. Start from this, add what your own render actually reaches
-// for, and delete the file entirely if it turns out you need none of it.
+// Scaffolded rather than shipped by the package, because which globals a graph
+// touches is a property of that graph. Add what your render reaches for, and
+// delete the file if it needs none.
 //
-// ## Why anything is needed at all
+// Why any of this is needed: `renderToString` runs no effects, but it does
+// evaluate every module and every render body, and in a client-first app those
+// touch the DOM (a singleton assigning `window.x`, a component reading
+// `window.innerWidth`).
 //
-// `renderToString` does not run effects, so `useEffect` is safe. It does still
-// evaluate every module in the graph and every render body, and both of those
-// routinely touch the DOM in an app that was written client-first:
+// The cost: defining `window` makes `typeof window === "undefined"` false for the
+// whole process, which is how libraries detect a server. Prefer fixing the module
+// that reaches for the DOM.
 //
-//   - a singleton doing `window.myThing = ...` at module scope
-//   - a component reading `window.innerWidth` or `localStorage` while rendering
-//
-// Neither survives under Node, and neither is React's problem to solve.
-//
-// ## The cost, so you make it deliberately
-//
-// Defining `window` makes `typeof window === "undefined"` false for the whole
-// process. That check is the standard way libraries detect a server, so any
-// library that uses it now takes its browser path. Prefer fixing the module
-// that reaches for the DOM; reach for this when you cannot.
-//
-// ## Import order
-//
-// A library that snapshots the environment at module-evaluation time —
-// `var Server = typeof window !== "undefined" ? null : {...}` — loses its server
-// API for good if it is imported after this file. Import those *above* the
-// import of this module, and reach the rest of the app graph through a dynamic
+// Import order: a library that snapshots the environment at module-evaluation
+// time loses its server API for good if it is imported after this file. Import
+// those *above* this module, and reach the app graph through a dynamic
 // `import()` (see server.ts).
 
 const noop = () => undefined;
@@ -40,9 +26,8 @@ const MARKER = "__ssrBrowserGlobals";
 /** True when these globals are stubs rather than a real browser. */
 export const isShimmed = (): boolean => g[MARKER] === true;
 
-// Nothing about the real device is knowable at render time. Pick a viewport and
-// have the client's first render start from the same numbers, or every
-// width-dependent branch disagrees and React throws the server markup away.
+// Nothing about the device is knowable at render time. The client's first render
+// must start from the same numbers, or React throws the server markup away.
 export const SSR_VIEWPORT = { width: 1024, height: 768 };
 
 const makeLocation = (value: string) => {
@@ -64,10 +49,8 @@ const makeLocation = (value: string) => {
   };
 };
 
-// Deliberately forgetful. These globals live for the life of the *process*, not
-// the request, so a backing store would carry one visitor's writes into the next
-// visitor's render — and serializing renders does not help, because the value
-// persists after the render that wrote it.
+// Deliberately forgetful: these globals live for the life of the process, so a
+// backing store would carry one visitor's writes into the next visitor's render.
 const makeStorage = (): Storage =>
   ({
     length: 0,
@@ -97,12 +80,10 @@ const makeElement = (): any => ({
 
 /**
  * Points the stub `location` at the URL being rendered. Call it at the top of
- * `setup`: code that reads `window.location.pathname` during render is common,
- * and a stale location renders the wrong page.
+ * `setup`, or a stale location renders the wrong page.
  *
- * A no-op in a real browser, and safe to call from a module evaluated more than
- * once (the entry and Vite's SSR graph each hold a copy) — the marker lives on
- * `globalThis`, which every copy shares.
+ * A no-op in a real browser. The marker lives on `globalThis`, so this is safe
+ * from a module that gets evaluated more than once.
  */
 export function setBrowserLocation(url: string): void {
   if (!isShimmed()) return;
@@ -136,8 +117,7 @@ export function installBrowserGlobals(): boolean {
       documentElement: makeElement(),
       body: makeElement(),
       head: makeElement(),
-      // Consistent with each other, and with what the browser reports on first
-      // paint, so a visibility-dependent branch hydrates cleanly.
+      // What the browser reports on first paint, so this hydrates cleanly.
       hidden: false,
       visibilityState: "visible",
       createElement: () => makeElement(),
@@ -157,9 +137,8 @@ export function installBrowserGlobals(): boolean {
       removeEventListener: noop,
     }),
     getComputedStyle: () => ({ getPropertyValue: () => "" }),
-    // Never invoked. Backing these with real timers schedules work that fires
-    // *after* the render returns, outside the prepare/cleanup window, where it
-    // mutates the module state `concurrency: 1` exists to protect.
+    // Never invoked: real timers would fire after the render returns, outside the
+    // prepare/cleanup window, and mutate the state `concurrency: 1` protects.
     requestAnimationFrame: (_cb: () => void) => 0,
     cancelAnimationFrame: noop,
     innerWidth: SSR_VIEWPORT.width,
@@ -193,10 +172,8 @@ export function installBrowserGlobals(): boolean {
 
   // Add your own here. Common cases:
   //
-  //   - DOM constructors a library references at module scope, usually through
-  //     a `PropTypes.instanceOf(HTMLElement)` guard. Inert classes are enough:
-  //       class DomElement {}
-  //       g.HTMLElement ??= DomElement;
+  //   - DOM constructors a library references at module scope. Inert classes are
+  //     enough: `class DomElement {}; g.HTMLElement ??= DomElement;`
   //   - globals your Rails layout injects, e.g. `g.gon ??= {}`.
   //   - runtime workarounds, e.g. Bun's Error.captureStackTrace rejecting a
   //     non-Error `this`, which breaks follow-redirects under axios.

@@ -21,17 +21,15 @@ const DEFAULT_PATHS = {
 /** Port the renderer listens on when nothing else is specified. */
 export const DEFAULT_PORT = 3001;
 
-/**
- * Resolves the port from an explicit option, then `SSR_PORT`, then the default.
- * `SSR_PORT` is the documented convention on both sides: the gem's generated
- * initializer defaults `config.url` to `http://localhost:3001`.
- */
 const isUsablePort = (value: number) =>
   Number.isInteger(value) && value >= 0 && value <= 65535;
 
+/**
+ * Resolves the port from an explicit option, then `SSR_PORT`, then the default.
+ * Validated here, because `listen` rejects a bad port with an opaque error at
+ * boot, long after the typo.
+ */
 export function resolvePort(port?: number): number {
-  // Validated rather than passed through: `listen` rejects a fractional or
-  // out-of-range port with an opaque error at boot, long after the typo.
   if (typeof port === "number") {
     if (!isUsablePort(port)) {
       throw new Error(
@@ -99,8 +97,7 @@ export async function createServer<
   const app = express();
   const paths = { ...DEFAULT_PATHS, ...options.paths };
 
-  // One limiter shared by both handlers: a blocking render and a streaming
-  // render contend for exactly the same module state.
+  // One limiter for both handlers: they contend for the same module state.
   const limiter = createLimiter(options.concurrency ?? 1, options.queueLimit);
   const renderTimeout = options.renderTimeout ?? DEFAULT_RENDER_TIMEOUT_MS;
 
@@ -108,15 +105,13 @@ export async function createServer<
   app.use(express.json({ limit: options.bodyLimit ?? "50mb" }));
   app.use(express.urlencoded({ extended: true }));
 
-  // Apply custom middleware before the built-in routes so authentication,
-  // request decoration, and response headers affect SSR and health requests.
+  // Before the built-in routes, so it affects SSR and health requests too.
   if (options.middleware) {
     app.use(options.middleware);
   }
 
-  // Health check endpoint. It reports the limiter so a supervisor can tell a
-  // busy renderer from a wedged one; a render still holding its slot past the
-  // timeout is never finishing, and only a restart clears it.
+  // Reports the limiter, so a supervisor can tell a busy renderer from a wedged
+  // one. Only a restart clears the latter.
   app.get(
     paths.health as string | string[],
     createHealthHandler({ limiter, stallAfterMs: renderTimeout }),
@@ -146,10 +141,7 @@ export async function createServer<
     app.post(paths.stream as string | string[], streamHandler);
   }
 
-  // Handle 404 - Not Found
   app.use((req, res, next) => {
-    // Check if headers have already been sent, which means a response was already initiated.
-    // If so, delegate to the next error handler.
     if (res.headersSent) {
       return next();
     }
@@ -169,11 +161,9 @@ export async function createServer<
 /**
  * Creates the SSR server and starts listening.
  *
- * Prefer this over calling `createServer(...)` then `app.listen(3001)`: it
- * resolves the port the same way the gem's generated initializer expects
- * (`SSR_PORT`, then 3001), binds loopback by default, and resolves only once the
- * socket is actually listening — which is what makes it usable from a process
- * supervisor that needs to know the renderer is up.
+ * Prefer this over `createServer(...)` then `app.listen(3001)`: it resolves the
+ * port the way the generated initializer expects, binds loopback, and resolves
+ * only once the socket is listening, which a process supervisor needs.
  *
  * @returns The Express app, the Node server, and the port it bound.
  */
@@ -195,9 +185,8 @@ export async function startServer<
 
   const server = await new Promise<Server>((resolve, reject) => {
     const listening = app.listen(port, host, () => {
-      // Once listening, startup errors can no longer occur — drop the
-      // rejection listener so a later server 'error' surfaces instead of
-      // being swallowed by an already-settled promise.
+      // Drop the rejection listener, so a later server 'error' surfaces instead
+      // of being swallowed by an already-settled promise.
       listening.removeListener("error", reject);
       resolve(listening);
     });

@@ -16,8 +16,7 @@ describe("composeMiddleware", () => {
     expect(composeMiddleware(first, undefined)).toBe(first);
   });
 
-  // The app's middleware was previously accepted by the type and then dropped,
-  // because it was assigned before the dev server's own.
+  // Previously accepted by the type and then dropped.
   it("runs the app's middleware after the dev server's", () => {
     const order: string[] = [];
     const composed = composeMiddleware(
@@ -38,8 +37,7 @@ describe("composeMiddleware", () => {
     expect(next).toHaveBeenCalledOnce();
   });
 
-  // Vite's stack answers module transforms and HMR itself. Calling the app's
-  // middleware afterwards would write to a finished response.
+  // Vite answers module transforms and HMR itself.
   it("stops when the dev server has already answered", () => {
     const second = vi.fn();
     const composed = composeMiddleware((_req, _res, next) => {

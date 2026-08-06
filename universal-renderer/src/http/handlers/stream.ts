@@ -68,20 +68,14 @@ export function createStreamHandler<TContext extends Record<string, any>>(
       shellTimer = undefined;
     };
 
-    // Runs the context cleanup and releases the concurrency slot, so a stream
-    // that dies mid-flight cannot wedge the queue behind it. Idempotent: the
-    // response lifecycle can reach this from `finish`, `close`, and the error
-    // path.
+    // Runs the context cleanup and releases the slot. Idempotent: `finish`,
+    // `close`, and the error path all reach it.
     //
-    // Before setup settles this is a deliberate no-op. A client can disconnect
-    // while setup is still awaiting, and finalizing there would both miss the
-    // context setup is about to return and hand the slot to the next render
-    // while this one is still touching module state. The post-setup check
-    // notices `stopped` and finalizes then.
-    //
-    // Cleanup also waits for asynchronous stream startup (notably the `head`
-    // callback), because releasing the slot while that callback still reads
-    // shared state would break the limiter's isolation guarantee.
+    // A no-op before setup settles. A client can disconnect while setup is still
+    // awaiting, and finalizing there would miss the context setup is about to
+    // return; the post-setup check notices `stopped` and finalizes then. It also
+    // waits for async stream startup, since the `head` callback still reads
+    // shared state.
     const cleanup = async () => {
       cleanupRequested = true;
       clearShellTimer();
@@ -91,8 +85,7 @@ export function createStreamHandler<TContext extends Record<string, any>>(
       try {
         if (context && options.cleanup) await options.cleanup(context);
       } catch (error) {
-        // Cleanup runs after the response lifecycle and cannot safely be sent
-        // through Express once headers have been written.
+        // Too late to route through Express; headers are already written.
         console.error("[SSR] Cleanup error:", error);
       } finally {
         releaseSlot?.();
@@ -125,21 +118,14 @@ export function createStreamHandler<TContext extends Record<string, any>>(
       void cleanup();
     };
 
-    // Bounds the time from arrival to first byte: queue wait, setup, and shell
-    // render. It is cleared once bytes are on the wire, which leaves the rest of
-    // the stream unbounded, and that is worth stating plainly rather than
-    // implying the risk ends at the first byte: the slot is held until the
-    // response finishes or the client disconnects, so a tree that stalls after
-    // the shell (a Suspense boundary awaiting something un-timed) blocks every
-    // render behind it at `concurrency: 1`. The recovery is external — `/health`
-    // reports the held slot through `longestActiveMs` and `bin/web` restarts the
-    // renderer. Keep unbounded waits out of the render rather than relying on
-    // that.
+    // Bounds arrival to first byte: queue wait, setup, and shell render. The rest
+    // of the stream is deliberately unbounded, but the slot is held until the
+    // response finishes, so a tree that stalls after the shell blocks every
+    // render behind it at `concurrency: 1`. Recovery is external: `/health`
+    // reports the held slot and `bin/web` restarts the renderer.
     //
-    // If this fires before `setup` settles, `cleanup` is a no-op by design and
-    // the slot stays held — the renderer is stuck and `/health` says so. If it
-    // fires after, aborting the React render really does end it, so the slot
-    // comes back.
+    // Firing before `setup` settles leaves the slot held, by the same design as
+    // `cleanup`. Firing after aborts the React render, which does return it.
     if (renderTimeout && renderTimeout > 0) {
       shellTimer = setTimeout(() => {
         console.error(
@@ -154,8 +140,8 @@ export function createStreamHandler<TContext extends Record<string, any>>(
     let props: Record<string, any>;
     let template: string;
 
-    // Listen before setup: setup may be asynchronous, and a client can
-    // disconnect before it returns a context that must be cleaned up.
+    // Before setup, which may await: a client can disconnect before it returns
+    // a context that needs cleaning up.
     res.once("finish", () => {
       void cleanup();
     });
@@ -210,8 +196,7 @@ export function createStreamHandler<TContext extends Record<string, any>>(
         throw new HttpError("No app callback provided", 400);
       }
 
-      // Last thing before React starts reading the tree, with no await point in
-      // between — see BaseHandlerOptions.prepare.
+      // No await between this and the render; see BaseHandlerOptions.prepare.
       options.prepare?.(context);
     } catch (error) {
       clearShellTimer();
@@ -235,17 +220,16 @@ export function createStreamHandler<TContext extends Record<string, any>>(
 
         if (didRenderError) res.status(500);
         res.setHeader("content-type", "text/html");
-        // Function replacement, not a string: `$&`, `$'`, and `$1` in the
-        // replacement text are substitution patterns, and head content carries
-        // them — `$` is legal in CSS-in-JS class names and in JSON-LD values.
+        // Function replacement: `$&` and `$1` in a string replacement are
+        // substitution patterns, and `$` is legal in CSS-in-JS class names.
         res.write(head.replace(SSR_MARKERS.HEAD, () => finalHead ?? ""));
         // First byte is out; the shell timeout has done its job.
         clearShellTimer();
 
         const stream = new PassThrough();
         const transform = streamCallbacks.transform?.(context);
-        // Widened deliberately: PassThrough and ReadWriteStream have overload sets
-        // TypeScript cannot reconcile into one callable `once`.
+        // Widened: PassThrough and ReadWriteStream have overload sets TypeScript
+        // cannot reconcile into one callable `once`.
         const output: NodeJS.ReadableStream = transform
           ? stream.pipe(transform)
           : stream;
