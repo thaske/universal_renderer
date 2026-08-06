@@ -72,6 +72,17 @@ get it silently wrong.
 
 - `Client::Stream` called `log_setup_error` bare, but `ErrorLogger` defines only
   singleton methods, so that rescue path raised `NoMethodError` instead of logging.
+- `render_ssr(props)` merged its `props` argument even when a render had
+  already happened for the request, silently changing `ssr_props` without
+  affecting the response. Props are now ignored once the render has run.
+- The response parser no longer deep-symbolizes the body. Only the four
+  top-level keys are read, and `payload` can be a large dehydrated query cache
+  that was being walked and re-allocated on every render. Payload keys now
+  reach views as strings, matching what `JSON.parse` gives the client.
+- A relative `render_path` / `stream_path` (`"render"` rather than
+  `"/render"`) is treated as absolute. `URI.join` replaces the base URL's last
+  path segment with a relative path, so a path-prefix mount would have posted
+  renders to the wrong endpoint and silently fallen back.
 
 #### Security
 
@@ -160,6 +171,13 @@ get it silently wrong.
   client-disconnect handling.
 - Applied custom Express middleware before built-in SSR and health routes.
 - Prevented integration tests from leaking Bun servers and temporary installs.
+- The streaming handler validates `setup` at boot, like the blocking handler,
+  instead of failing with a `TypeError` at request time.
+- `startDevServer` delegates the stream `transform` to the per-render config
+  like the other streaming callbacks, instead of pinning the boot-time one.
+- `startServer` drops its startup error listener once listening, so a later
+  server `error` event surfaces instead of being swallowed by an
+  already-settled promise.
 
 ### Tooling
 

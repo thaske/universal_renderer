@@ -31,6 +31,9 @@ export function createStreamHandler<TContext extends Record<string, any>>(
 ): RequestHandler {
   if (!options.streamCallbacks)
     throw new Error("streamCallbacks are required for streaming handler");
+  if (!options.setup) {
+    throw new Error("setup callback is required");
+  }
 
   const { streamCallbacks } = options;
   const limiter = options.limiter ?? createLimiter(1);

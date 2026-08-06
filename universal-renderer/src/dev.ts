@@ -167,10 +167,10 @@ export async function startDevServer(options: DevServerOptions): Promise<{
           configFor(context).streamCallbacks?.node?.(context),
         head: (context: any) =>
           configFor(context).streamCallbacks?.head?.(context) ?? "",
-        transform: initial.streamCallbacks.transform
-          ? (context: any) =>
-              configFor(context).streamCallbacks!.transform!(context)
-          : undefined,
+        // Delegated like the others — gating on the boot-time config would
+        // miss an edit that adds or removes the transform until restart.
+        transform: (context: any) =>
+          configFor(context).streamCallbacks?.transform?.(context),
       }
     : undefined;
 

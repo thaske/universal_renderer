@@ -46,7 +46,11 @@ module UniversalRenderer
         # A nil render_path means the path in `url` is already the endpoint.
         parsed = URI.parse(ssr_url)
         uri =
-          config.render_path.present? ? URI.join(parsed, config.render_path) : parsed
+          if config.render_path.present?
+            URI.join(parsed, absolute_path(config.render_path))
+          else
+            parsed
+          end
 
         request = Net::HTTP::Post.new(uri.request_uri)
         request.body = { url: url, props: props }.to_json
@@ -66,7 +70,7 @@ module UniversalRenderer
           return nil
         end
 
-        build_response(JSON.parse(response.body).deep_symbolize_keys)
+        build_response(JSON.parse(response.body))
       rescue Net::OpenTimeout, Net::ReadTimeout => e
         event[:outcome] = :timeout
         event[:error] = e
@@ -79,13 +83,27 @@ module UniversalRenderer
         nil
       end
 
+      # String keys on purpose: `payload` can be a large dehydrated query
+      # cache, and deep-symbolizing the whole response would walk and
+      # re-allocate all of it on every render for no benefit — only these four
+      # top-level keys are read, and both `body_attrs` and `payload` are passed
+      # through untouched.
       def self.build_response(data)
         UniversalRenderer::SSR::Response.new(
-          head: data[:head],
-          body: data[:body],
-          body_attrs: data[:body_attrs],
-          payload: data[:payload]
+          head: data["head"],
+          body: data["body"],
+          body_attrs: data["body_attrs"],
+          payload: data["payload"]
         )
+      end
+
+      # URI.join replaces the base URL's last path segment when the joined path
+      # is relative ("http://host/base" + "render" -> "http://host/render"),
+      # which would silently post renders to the wrong endpoint. Paths are
+      # absolute by convention; enforce it rather than documenting a trap.
+      def self.absolute_path(path)
+        path = path.to_s
+        path.start_with?("/") ? path : "/#{path}"
       end
 
       def self.fail_render(url, uri, event, message, error = nil)
@@ -101,7 +119,8 @@ module UniversalRenderer
         )
       end
 
-      private_class_method :perform, :build_response, :fail_render
+      private_class_method :perform, :build_response, :fail_render,
+                           :absolute_path
     end
   end
 end

@@ -30,10 +30,13 @@ module UniversalRenderer
     #
     # Defaults to nil, meaning "whatever path is already in `url`" — so setting
     # `url` to `http://host/render` keeps working without also setting this.
+    # A relative value is treated as absolute (a leading slash is added), since
+    # joining it relatively would replace the last path segment of `url`.
     attr_accessor :render_path
 
     # Path the streaming renderer is mounted at on the SSR service. Must match
     # the `paths.stream` option given to `createServer` in the NPM package.
+    # Normalized the same way as `render_path`.
     attr_accessor :stream_path
 
     # Whether `ssr_head`/`ssr_body` run the renderer's HTML through Loofah

@@ -85,12 +85,15 @@ module UniversalRenderer
     # issue a second request.
     #
     # @param props [Hash, nil] Props to merge before rendering, for convenience.
+    #   Ignored once a render has happened for this request — merging them then
+    #   would silently change `ssr_props` without affecting the response.
     # @return [UniversalRenderer::SSR::Response, nil] `nil` when SSR is not
     #   configured or the render failed, in which case the caller should let the
     #   client-rendered path stand.
     def render_ssr(props = nil)
-      add_prop(props) if props.present?
       return @_ssr_response if defined?(@_ssr_response)
+
+      add_prop(props) if props.present?
 
       @_ssr_response =
         UniversalRenderer::Client::Base.call(request.original_url, ssr_props)

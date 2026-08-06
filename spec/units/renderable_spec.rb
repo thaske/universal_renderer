@@ -73,6 +73,15 @@ RSpec.describe UniversalRenderer::Renderable do
       expect(controller_class.ssr_enabled).to be(false)
       expect(controller.render_ssr).to eq(payload)
     end
+
+    it "ignores props passed after the render has happened" do
+      allow(UniversalRenderer::Client::Base).to receive(:call).and_return(payload)
+
+      controller.render_ssr(a: 1)
+      controller.render_ssr(b: 2)
+
+      expect(controller.ssr_props).to eq("a" => 1)
+    end
   end
 
   describe "conditional enable_ssr" do

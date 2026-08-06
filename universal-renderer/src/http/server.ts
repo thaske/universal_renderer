@@ -166,7 +166,13 @@ export async function startServer<
   const host = options.host ?? "127.0.0.1";
 
   const server = await new Promise<Server>((resolve, reject) => {
-    const listening = app.listen(port, host, () => resolve(listening));
+    const listening = app.listen(port, host, () => {
+      // Once listening, startup errors can no longer occur — drop the
+      // rejection listener so a later server 'error' surfaces instead of
+      // being swallowed by an already-settled promise.
+      listening.removeListener("error", reject);
+      resolve(listening);
+    });
     listening.once("error", reject);
   });
 

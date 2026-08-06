@@ -53,7 +53,7 @@ RSpec.describe UniversalRenderer::Instrumentation do
 
     response = UniversalRenderer::Client::Base.call("http://example.com/p", {})
 
-    expect(response.payload).to eq({ a: 1 })
+    expect(response.payload).to eq({ "a" => 1 })
     expect(events.size).to eq(1)
     expect(events.first.payload).to include(
       url: "http://example.com/p",

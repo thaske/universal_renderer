@@ -3,6 +3,7 @@ import type { AddressInfo } from "node:net";
 import { request, type Server } from "node:http";
 import { Transform } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { createStreamHandler } from "./handlers/stream";
 import { createServer } from "./server";
 
 async function listen(app: Awaited<ReturnType<typeof createServer>>) {
@@ -34,6 +35,14 @@ afterEach(() => {
 });
 
 describe("HTTP handler hardening", () => {
+  it("requires a setup callback for the streaming handler at boot", () => {
+    expect(() =>
+      createStreamHandler({
+        streamCallbacks: { node: () => createElement("div") },
+      } as any),
+    ).toThrow(/setup callback is required/);
+  });
+
   it("applies custom middleware to built-in routes", async () => {
     const app = await createServer({
       ...basicOptions(),
