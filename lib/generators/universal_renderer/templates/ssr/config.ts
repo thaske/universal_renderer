@@ -25,7 +25,6 @@
 // hooks below free of unbounded waits — an un-timed fetch is the usual cause.
 
 import { renderToString } from "react-dom/server";
-import { hydrateReactQuery } from "universal-renderer/react-query";
 
 import type { SsrConfig } from "universal-renderer";
 
@@ -45,6 +44,7 @@ export default {
     // Seed them before building the tree, then dehydrate so the browser hydrates
     // the same cache the server rendered from.
     //
+    // import { hydrateReactQuery } from "universal-renderer/react-query";
     // hydrateReactQuery(props, queryClient);
 
     // Await the lazy chunk for this route so it renders synchronously instead of

@@ -7,14 +7,26 @@ UniversalRenderer.configure do |c|
   # The gem never reads ENV itself; bind whatever keys you like here. `SSR_PORT`
   # is what the NPM package's startServer reads, so keep the two in agreement.
   c.url = ENV.fetch("UNIVERSAL_RENDERER_URL", "http://localhost:3001")
+
+  # Keep this above the renderer's renderTimeout (10s by default). A render that
+  # outlives this timeout keeps its concurrency slot until it finishes, so giving
+  # up first only fills the renderer's queue with work nobody is waiting for.
   c.timeout = 3
 
-  # Must match the `paths` option passed to createServer on the Node side.
-  # Both default to the paths createServer mounts, so set them only if you moved
-  # the endpoints: render_path defaults to whatever path `url` already carries,
-  # stream_path to "/stream".
-  # c.render_path = "/render"
-  # c.stream_path = "/stream"
+  # Must match the `paths` option passed to createServer on the Node side. Both
+  # default to the paths createServer already mounts, so leave them alone unless
+  # you moved the endpoints — and move both sides together. A mismatch is a 404,
+  # which this gem treats as a failed render and answers with a client-rendered
+  # page, so nothing tells you the paths disagree.
+  #
+  #   # config/initializers/universal_renderer.rb
+  #   c.render_path = "/render"
+  #
+  #   // the SSR entry point
+  #   await startServer({ ...config, paths: { render: "/render" } });
+  #
+  # render_path defaults to whatever path `url` already carries; stream_path to
+  # "/stream".
 
   c.http.pool_size = 5
 

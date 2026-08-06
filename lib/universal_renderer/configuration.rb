@@ -22,6 +22,11 @@ module UniversalRenderer
     attr_accessor :url
 
     # Open and read timeout, in seconds, for every request to the SSR service.
+    #
+    # Keep this above the renderer's own `renderTimeout` (10s by default). A
+    # render that outlives this timeout keeps its concurrency slot until it
+    # finishes, so giving up first only fills the renderer's queue with work
+    # nobody is waiting for.
     attr_accessor :timeout
 
     # Path the blocking renderer is mounted at on the SSR service. Must match

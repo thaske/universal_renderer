@@ -120,32 +120,53 @@ module UniversalRenderer
     # between a hydration entry point and a client-render entry point, and to
     # guard anything that only makes sense on a server-rendered page.
     #
+    # True while streaming as well, even though there is no response object yet.
+    # A streaming page *is* server-rendered — the layout emits the placeholders
+    # and the SSR service splices HTML into them — so a layout that picked its
+    # entry point from a response-only check shipped the client-render bundle
+    # into a server-rendered document and hydration never happened. A failed
+    # stream downgrades `ssr_streaming?` first, so the fallback page reports
+    # false here too.
+    #
     # @return [Boolean]
     def ssr?
-      ssr_response.present?
+      ssr_streaming? || ssr_response.present?
     end
 
     # Whether this *request* is being streamed. Class-level opt-in decides it,
     # but a stream that failed downgrades it: the fallback render must not emit
     # the streaming placeholders into a page nothing will ever stream into.
     #
+    # The conditions are part of the same question. `enable_ssr streaming: true,
+    # only: :show` streams `show` and nothing else, so on any other action this
+    # has to report false — otherwise the layout emits `<!-- SSR_HEAD -->` and
+    # `<!-- SSR_BODY -->` into a page no renderer will ever see, which is the
+    # failure the downgrade path already exists to prevent.
+    #
     # @return [Boolean]
     def ssr_streaming?
       return @_ssr_streaming if defined?(@_ssr_streaming)
 
-      self.class.ssr_streaming_preference.present?
+      self.class.ssr_streaming_preference.present? && ssr_enabled_for_request?
     end
 
     # Render options that mean "this is not a page". Each would otherwise pay a
     # full blocking SSR round trip whose result is discarded, since the request
     # format is still HTML for a `render json:` inside an HTML form post.
+    #
+    # `partial` is here for Turbo: a Frame or Stream response is rendered from an
+    # HTML action, so it satisfies every other condition, and it never reaches the
+    # layout that would emit the payload. On a serialized renderer those renders
+    # also occupy a slot that real page loads queue behind.
     NON_PAGE_RENDER_OPTIONS = %i[
-      body file inline js json nothing plain xml
+      body file inline js json nothing partial plain xml
     ].freeze
 
     def render(*, **options)
       return super unless ssr_enabled_for_request?
       return super if options.keys.intersect?(NON_PAGE_RENDER_OPTIONS)
+      # No layout means nothing calls the SSR helpers, so the payload is unused.
+      return super if options[:layout] == false
 
       if ssr_streaming?
         success = render_ssr_stream(*, **options)
@@ -242,7 +263,22 @@ module UniversalRenderer
     # Whether the automatic (`enable_ssr`) path should run for this request.
     # {#render_ssr} deliberately does not consult this: an explicit call is the
     # caller stating intent.
+    #
+    # Memoized per request. `ssr_streaming?` asks the same question from the
+    # layout, and re-deriving it would evaluate the `if:` / `unless:` callables a
+    # second time — a predicate that is merely slow would then be paid twice, and
+    # one that is not pure could disagree with the decision `render` already made.
+    # rubocop:disable Naming/MemoizedInstanceVariableName -- every ivar this
+    # concern sets into a host controller is `_`-prefixed, so that a concern
+    # included app-wide cannot collide with an application's own ivars.
     def ssr_enabled_for_request?
+      return @_ssr_enabled_for_request if defined?(@_ssr_enabled_for_request)
+
+      @_ssr_enabled_for_request = compute_ssr_enabled_for_request?
+    end
+    # rubocop:enable Naming/MemoizedInstanceVariableName
+
+    def compute_ssr_enabled_for_request?
       return false unless self.class.ssr_enabled
       return false unless request.format.html?
 

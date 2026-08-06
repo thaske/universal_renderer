@@ -72,6 +72,17 @@ get it silently wrong.
   `config.auto_include` is read reliably.
 - Dropped the `body_html` fallback in the response parser — no shipped version of
   the NPM package emits it.
+- The generated `bin/web` takes `SSR_RUNTIME` (default `bun`) and `WEB_CMD`
+  (default the Puma line), so neither default needs a file edit.
+- Documented that `config.timeout` belongs above the renderer's `renderTimeout`.
+  The defaults do not line up — 3s against 10s — and a Rails client that gives up
+  first leaves the render holding its concurrency slot, so the renderer's queue
+  fills with work nobody is waiting for.
+- The generated initializer shows both halves of a `render_path` change together.
+  A mismatch is a 404, which this gem treats as a failed render, so nothing tells
+  you the paths disagree.
+- The generated `ssr/config.ts` no longer imports `hydrateReactQuery` only to
+  reference it in a comment, which failed `noUnusedLocals` on first typecheck.
 
 #### Removed
 
@@ -115,10 +126,42 @@ get it silently wrong.
   format check alone did not cover it.
 - `SSR::Scrubber` requires the ActiveSupport core extension it uses, so it can
   be required outside a booted Rails app.
+- `ssr?` reports true while streaming. A streamed page is server-rendered, but
+  there is no response object during the layout render, so the documented
+  `ssr? ? "hydrate" : "application"` entry-point choice shipped the client-render
+  bundle into a server-rendered document and hydration never happened. A failed
+  stream downgrades first, so the fallback page still reports false.
+- `ssr_streaming?` honours the `enable_ssr` conditions. `enable_ssr streaming:
+  true, only: :show` reported true on every action, so any other action emitted
+  `<!-- SSR_HEAD -->` and `<!-- SSR_BODY -->` into a page no renderer would ever
+  see — the same failure the stream-downgrade path already existed to prevent.
+  The per-request decision is now memoized, so a caller's `if:` / `unless:`
+  predicate is evaluated once however many times the layout asks.
+- `render partial:` and `render ..., layout: false` no longer pay a blocking SSR
+  round trip. A Turbo Frame or Stream response is rendered from an HTML action, so
+  it met every other condition, and it never reaches the layout that emits the
+  payload. On a serialized renderer those renders also took a slot that real page
+  loads queued behind.
+- `Client::Stream` no longer `extend`s its three helper modules. Each defines only
+  singleton methods, so extending imported nothing while reading as though it had
+  — which is what produced the `NoMethodError` above.
+- `sanitize_ssr` and `sanitize_ssr_body_attributes` are private. They back the
+  helpers rather than being a view API, and the module is included into the view
+  context.
 
 #### Security
 
-- **Fixed two working XSS bypasses in the scrubber**, both verified end to end
+- **Fixed a third XSS bypass: namespaced attributes were never inspected under
+  the HTML5 sanitizer**, which is the one Rails 7.1+ apps get by default through
+  `best_supported_vendor`. `clean_attributes` iterated the `attributes` hash,
+  whose keys drop the namespace prefix, so `xlink:href` arrived as `"href"` and
+  the value lookup under that name returned nil. An empty value reads as safe, so
+  the attribute survived intact — and `<svg><a xlink:href="javascript:...">` is a
+  live link. It now iterates attribute *nodes* and matches on the qualified name.
+
+  The specs hid this by testing only a bare `SanitizeHelper`, which defaults to
+  HTML4. Every scrubber example now runs against both vendors.
+- **Fixed two more working XSS bypasses in the scrubber**, both verified end to end
   against a real browser. They predate this release; the mechanism is a parse
   mismatch between Loofah and the browser, on elements that switch parsing
   context:
@@ -246,7 +289,22 @@ get it silently wrong.
 - `startDevServer` resolves Vite from the host application. A bare import lands on
   this package's own copy whenever it is linked, and two Vite instances disagree
   about plugin state — the symptom is not an import error but path aliases failing
-  to resolve mid-render.
+  to resolve mid-render. Resolution now falls back to Vite's own declared ESM
+  entry, because `require.resolve` applies the `require` condition and Vite 7
+  ships no CJS entry — so on a version the peer range allows it threw
+  `ERR_PACKAGE_PATH_NOT_EXPORTED` and dropped through to the copy it was written
+  to avoid. A fallback to the bundled copy now warns at boot.
+- `startDevServer` composes `overrides.middleware` with the Vite middleware stack
+  instead of dropping it. The type accepted it, and the assignment order meant it
+  never ran.
+- The streaming handler writes head content containing `$&`, `$'`, or `$1`
+  literally. `String.replace` with a string pattern treats those as substitution
+  patterns, and `$` is legal in CSS-in-JS class names and JSON-LD values.
+- The default error handler withholds messages and stack traces unless
+  `SSR_VERBOSE_ERRORS=1` or `NODE_ENV` is `development`/`test`. The previous
+  `NODE_ENV !== "production"` check read like a production guard but was not one:
+  nothing in a Rails deploy sets `NODE_ENV` for the renderer process, so every
+  production render returned internals.
 - The README's React Query example read `props.query_data` with `{ key, data }`.
   The gem has always emitted `props.react_query` with `{ query_key, data }`.
 - Corrected the CommonJS entry points and included the MIT license.

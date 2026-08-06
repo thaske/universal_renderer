@@ -86,6 +86,10 @@ export type ExpressServerOptions<
    * *caller*; `/health` then reports 503 so a supervisor can restart the
    * process, which is the only thing that actually clears it. The generated
    * `bin/web` does exactly that.
+   *
+   * Keep the gem's `config.timeout` above this value. The defaults do not line
+   * up (3s against 10s), and a Rails client that gives up first leaves the
+   * render holding its slot, so the queue fills with work nobody is waiting for.
    */
   renderTimeout?: number | false;
 

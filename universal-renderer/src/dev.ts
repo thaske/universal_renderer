@@ -1,11 +1,24 @@
 import { isAbsolute, resolve } from "node:path";
 
 import type { Server } from "node:http";
-import type { Application, ErrorRequestHandler } from "express";
+import type { Application, ErrorRequestHandler, RequestHandler } from "express";
 import type { InlineConfig, ViteDevServer } from "vite";
 
 import { startServer } from "./http/server";
 import type { SsrConfig } from "./http/types";
+
+/** Picks the ESM entry out of a package.json `exports` subpath value. */
+function esmEntry(value: unknown): string | undefined {
+  if (typeof value === "string") return value;
+  if (!value || typeof value !== "object") return undefined;
+
+  const conditions = value as Record<string, unknown>;
+  for (const key of ["module-sync", "import", "default"]) {
+    const entry = esmEntry(conditions[key]);
+    if (entry) return entry;
+  }
+  return undefined;
+}
 
 /**
  * Loads Vite from the host application rather than from this package.
@@ -16,19 +29,74 @@ import type { SsrConfig } from "./http/types";
  * is not an import error — it is path aliases failing to resolve mid-render.
  */
 async function importHostVite(root: string) {
-  try {
-    const { createRequire } = await import("node:module");
-    const { pathToFileURL } = await import("node:url");
+  const { createRequire } = await import("node:module");
+  const { pathToFileURL } = await import("node:url");
+  const { dirname, join } = await import("node:path");
+  const hostRequire = createRequire(resolve(root, "package.json"));
 
-    const hostRequire = createRequire(resolve(root, "package.json"));
-    return (await import(
-      pathToFileURL(hostRequire.resolve("vite")).href
-    )) as typeof import("vite");
+  const load = (path: string) =>
+    import(pathToFileURL(path).href) as Promise<typeof import("vite")>;
+
+  try {
+    return await load(hostRequire.resolve("vite"));
   } catch {
-    // No host copy (or a runtime without createRequire); fall back to whatever
-    // resolution finds.
-    return await import("vite");
+    // `require.resolve` applies the `require` condition, and Vite 7 ships no CJS
+    // entry, so this throws ERR_PACKAGE_PATH_NOT_EXPORTED on a version the
+    // peer range allows. Fall through to the package's own declared ESM entry
+    // rather than to a different copy of Vite.
   }
+
+  try {
+    const manifestPath = hostRequire.resolve("vite/package.json");
+    const manifest = hostRequire(manifestPath) as {
+      exports?: Record<string, unknown>;
+      module?: string;
+      main?: string;
+    };
+    const entry =
+      esmEntry(manifest.exports?.["."]) ?? manifest.module ?? manifest.main;
+
+    if (entry) return await load(join(dirname(manifestPath), entry));
+  } catch {
+    // Not resolvable from the host at all.
+  }
+
+  // Falling back to this package's own Vite works until the two disagree about
+  // plugin state, and the symptom then is path aliases failing to resolve
+  // mid-render rather than an import error. Say so once at boot instead of
+  // leaving it to be discovered.
+  console.warn(
+    `[SSR] could not resolve Vite from ${root}; using the copy bundled with ` +
+      "universal-renderer. Add vite to the app's own dependencies if renders " +
+      "fail to resolve path aliases.",
+  );
+  return await import("vite");
+}
+
+/**
+ * Runs `first`, then `second` if the response is still open.
+ *
+ * Exported for its own test rather than for use: composing the dev server's
+ * middleware with the app's is easy to get subtly wrong, and starting a Vite
+ * server to check it is not worth the cost.
+ *
+ * @internal
+ */
+export function composeMiddleware(
+  first: RequestHandler,
+  second?: RequestHandler,
+): RequestHandler {
+  if (!second) return first;
+
+  return (req, res, next) => {
+    first(req, res, (error?: unknown) => {
+      if (error) return next(error);
+      // Vite's stack answers some requests itself (module transforms, HMR). Only
+      // reach the app's middleware when nothing has been sent.
+      if (res.writableEnded || res.headersSent) return;
+      second(req, res, next);
+    });
+  };
 }
 
 export type DevServerOptions = {
@@ -67,6 +135,10 @@ export type DevServerOptions = {
    * `streamCallbacks` are re-resolved from the entry on every render, so an
    * override for those would be ignored, and a type that accepted them would
    * only advertise something that does not happen.
+   *
+   * `middleware` and `error` compose with the dev server's own rather than
+   * replacing them: yours runs after Vite's stack, and after the handler that
+   * maps stack traces back to source.
    */
   overrides?: Pick<
     SsrConfig,
@@ -207,9 +279,14 @@ export async function startDevServer(options: DevServerOptions): Promise<{
 
     port: options.port,
     host: options.host,
-    // Not overridable: the Vite middleware stack is what makes this a dev
-    // server, and the error handler is what maps stack traces back to source.
-    middleware: vite.middlewares as never,
+    // Composed rather than replaced. The Vite middleware stack is what makes
+    // this a dev server, so it has to run, but an override that was accepted and
+    // then dropped is worse than one that is refused. Same for the error
+    // handler: `fixStacktrace` maps traces back to source and then delegates.
+    middleware: composeMiddleware(
+      vite.middlewares as unknown as RequestHandler,
+      options.overrides?.middleware,
+    ) as never,
     error: fixStacktrace,
 
     setup: async (url, props) => {

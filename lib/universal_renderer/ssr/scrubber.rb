@@ -105,17 +105,32 @@ module UniversalRenderer
         node.name == "meta" && node["http-equiv"]&.casecmp?("refresh")
       end
 
+      # Iterates attribute *nodes* rather than the `attributes` hash. That hash
+      # is keyed by local name and drops the namespace prefix, so under the HTML5
+      # parser `xlink:href` arrives as `"href"` and `node["href"]` then returns
+      # nil — the check saw an empty value and kept the attribute. Rails 7.1+
+      # apps get the HTML5 sanitizer by default, so that path is the normal one,
+      # and `<svg><a xlink:href="javascript:...">` survived it.
       def clean_attributes(node)
-        node.attributes.each_key do |attribute_name|
-          normalized_name = attribute_name.to_s.downcase
+        node.attribute_nodes.each do |attribute|
+          normalized_name = qualified_name(attribute)
           remove_attribute =
             normalized_name.start_with?("on") ||
               normalized_name == "srcdoc" ||
               (URI_ATTRIBUTES.include?(normalized_name) &&
-                unsafe_uri?(node[attribute_name].to_s, normalized_name, node))
+                unsafe_uri?(attribute.value.to_s, normalized_name, node))
 
-          node.remove_attribute(attribute_name) if remove_attribute
+          attribute.remove if remove_attribute
         end
+      end
+
+      # The name as it was written in the markup, so the blocklist can match
+      # `xlink:href` under both parsers. HTML4 keeps the prefix in the name and
+      # reports no namespace; HTML5 splits them.
+      def qualified_name(attribute)
+        prefix = attribute.namespace&.prefix
+        name = attribute.name.to_s
+        (prefix ? "#{prefix}:#{name}" : name).downcase
       end
 
       def unsafe_uri?(value, attribute_name, node)

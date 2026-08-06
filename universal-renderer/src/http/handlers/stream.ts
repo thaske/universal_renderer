@@ -126,9 +126,15 @@ export function createStreamHandler<TContext extends Record<string, any>>(
     };
 
     // Bounds the time from arrival to first byte: queue wait, setup, and shell
-    // render. Once bytes are on the wire the response is the client's problem,
-    // not a wedge, so the timer is cleared there rather than covering the whole
-    // stream.
+    // render. It is cleared once bytes are on the wire, which leaves the rest of
+    // the stream unbounded, and that is worth stating plainly rather than
+    // implying the risk ends at the first byte: the slot is held until the
+    // response finishes or the client disconnects, so a tree that stalls after
+    // the shell (a Suspense boundary awaiting something un-timed) blocks every
+    // render behind it at `concurrency: 1`. The recovery is external — `/health`
+    // reports the held slot through `longestActiveMs` and `bin/web` restarts the
+    // renderer. Keep unbounded waits out of the render rather than relying on
+    // that.
     //
     // If this fires before `setup` settles, `cleanup` is a no-op by design and
     // the slot stays held — the renderer is stuck and `/health` says so. If it
@@ -229,7 +235,10 @@ export function createStreamHandler<TContext extends Record<string, any>>(
 
         if (didRenderError) res.status(500);
         res.setHeader("content-type", "text/html");
-        res.write(head.replace(SSR_MARKERS.HEAD, finalHead ?? ""));
+        // Function replacement, not a string: `$&`, `$'`, and `$1` in the
+        // replacement text are substitution patterns, and head content carries
+        // them — `$` is legal in CSS-in-JS class names and in JSON-LD values.
+        res.write(head.replace(SSR_MARKERS.HEAD, () => finalHead ?? ""));
         // First byte is out; the shell timeout has done its job.
         clearShellTimer();
 

@@ -22,7 +22,15 @@ export function createErrorHandler() {
   return (err: HttpError, _req: Request, res: Response, next: NextFunction) => {
     if (res.headersSent) return next(err);
 
-    const isDev = process.env.NODE_ENV !== "production";
+    // Opt in rather than opt out. `NODE_ENV !== "production"` reads like a
+    // production guard but is not one: nothing in a Rails deploy sets NODE_ENV
+    // for the renderer process, so the previous default returned messages and
+    // stack traces from every production render. Set SSR_VERBOSE_ERRORS=1, or
+    // NODE_ENV=development, to get them back.
+    const isDev =
+      process.env.SSR_VERBOSE_ERRORS === "1" ||
+      process.env.NODE_ENV === "development" ||
+      process.env.NODE_ENV === "test";
 
     const statusCode = err.statusCode || err.status || 500;
 

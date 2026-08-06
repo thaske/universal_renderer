@@ -15,6 +15,11 @@ set -uo pipefail
 SSR_BUNDLE="${SSR_BUNDLE:-ssr-build/server.mjs}"
 export SSR_PORT="${SSR_PORT:-3001}"
 
+# Both overridable, because neither default fits every app: set SSR_RUNTIME=node
+# if you are not on Bun, and WEB_CMD if you do not boot with this Puma line.
+SSR_RUNTIME="${SSR_RUNTIME:-bun}"
+WEB_CMD="${WEB_CMD:-bundle exec puma -C config/puma.rb}"
+
 # The renderer serializes renders by default, so one render that never finishes
 # takes the whole renderer with it: the queue fills and every subsequent request
 # gets a 503. `/health` reports that state (see the `renderTimeout` option), and
@@ -35,8 +40,7 @@ start_ssr() {
     return
   fi
 
-  # Use `node` instead if you are not on Bun.
-  bun "$SSR_BUNDLE" &
+  "$SSR_RUNTIME" "$SSR_BUNDLE" &
   SSR_PID=$!
   echo "[web] SSR renderer started (pid $SSR_PID, port $SSR_PORT)"
 }
@@ -90,7 +94,9 @@ trap 'if [ -n "$SSR_PID" ]; then kill -KILL "$SSR_PID" 2>/dev/null || true; fi' 
 
 start_ssr
 
-bundle exec puma -C config/puma.rb &
+# Unquoted on purpose: WEB_CMD is a command line, not a single argument.
+# shellcheck disable=SC2086
+$WEB_CMD &
 APP_PID=$!
 
 # Ticks once a second and health-checks every SSR_HEALTH_INTERVAL, rather than

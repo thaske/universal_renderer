@@ -3,6 +3,7 @@ import type { AddressInfo } from "node:net";
 import { request, type Server } from "node:http";
 import { Transform } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { createErrorHandler } from "./handlers/error";
 import { createStreamHandler } from "./handlers/stream";
 import { createServer } from "./server";
 
@@ -32,6 +33,45 @@ function basicOptions() {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  // `restoreAllMocks` does not cover stubbed env vars, and this config does not
+  // set `unstubEnvs`. Without this, a stubbed NODE_ENV leaks into every later
+  // test in the file and decides how much detail the error handler returns.
+  vi.unstubAllEnvs();
+});
+
+// `NODE_ENV !== "production"` read like a production guard but was not one:
+// nothing in a Rails deploy sets NODE_ENV for the renderer process, so the
+// default leaked messages and stack traces from every render.
+describe("error detail", () => {
+  function callErrorHandler() {
+    const error = Object.assign(new Error("internal detail"), {
+      statusCode: 500,
+    });
+    const res = {
+      headersSent: false,
+      status: vi.fn(() => res),
+      json: vi.fn(() => res),
+    } as any;
+
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    createErrorHandler()(error, {} as any, res, vi.fn());
+
+    return res.json.mock.calls[0][0];
+  }
+
+  it("withholds messages and stacks unless asked for them", () => {
+    vi.stubEnv("NODE_ENV", undefined as unknown as string);
+    vi.stubEnv("SSR_VERBOSE_ERRORS", undefined as unknown as string);
+
+    expect(callErrorHandler()).toEqual({ error: "Internal Server Error" });
+  });
+
+  it("includes them when SSR_VERBOSE_ERRORS is set", () => {
+    vi.stubEnv("NODE_ENV", undefined as unknown as string);
+    vi.stubEnv("SSR_VERBOSE_ERRORS", "1");
+
+    expect(callErrorHandler()).toMatchObject({ error: "internal detail" });
+  });
 });
 
 describe("HTTP handler hardening", () => {
@@ -122,6 +162,37 @@ describe("HTTP handler hardening", () => {
       expect(response.status).toBe(500);
       expect(await response.json()).toMatchObject({ error: "head failed" });
       await vi.waitFor(() => expect(cleanup).toHaveBeenCalledOnce());
+    } finally {
+      await server.close();
+    }
+  });
+
+  // `String.replace` with a string pattern treats `$&`, `$'`, and `$1` in the
+  // replacement as substitution patterns. Head content carries them: `$` is
+  // legal in CSS-in-JS class names and in JSON-LD values.
+  it("writes head content containing $ substitution patterns literally", async () => {
+    const head = `<style>.a$&b{color:red}</style><meta content="$'x$1">`;
+    const app = await createServer({
+      ...basicOptions(),
+      streamCallbacks: {
+        node: () => createElement("div", null, "streamed"),
+        head: () => head,
+      },
+    });
+    const server = await listen(app);
+
+    try {
+      const response = await fetch(`${server.baseUrl}/stream`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          url: "/test",
+          template:
+            "<html><!-- SSR_HEAD --><body><!-- SSR_BODY --></body></html>",
+        }),
+      });
+
+      expect(await response.text()).toContain(head);
     } finally {
       await server.close();
     }

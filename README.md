@@ -111,7 +111,8 @@ controller called `enable_ssr`.
 Every helper is a no-op when there is nothing to emit, so the layout needs no
 conditionals. `ssr?` is there for the decisions that are not about emitting HTML —
 picking an entry point, skipping a preload — and it never requires reading an
-instance variable.
+instance variable. It is true for streamed pages too, which are server-rendered
+even though the payload arrives after the layout.
 
 `ssr_payload` emits whatever your `render` callback returned as `payload`, as an
 inert `<script type="application/json">`, escaped. That is the channel for
@@ -290,6 +291,13 @@ or turn it off with `SSR_WATCHDOG=0`.
 Development sets `renderTimeout: false` by default — a breakpoint in the render
 outlasts any production budget, and a `504` there is noise.
 
+**Keep `c.timeout` above `renderTimeout`.** The defaults do not: Rails gives up
+after 3s while the renderer holds its slot for up to 10s. A renderer under load
+then spends its capacity finishing renders whose caller stopped listening, and
+the queue behind it fills with more of the same. Disconnected requests are
+dropped from the queue, but a render already running cannot be taken back. Set
+one of the two so that Rails is the one that waits.
+
 ### Entry points
 
 Production runs the prebuilt bundle:
@@ -387,6 +395,14 @@ web: bin/web
 as a separate process type, because PaaS process types get no routable address for
 each other. If the renderer dies, requests fall back to client rendering; that is
 a degraded page, not an outage, so it must not take the process down.
+
+It defaults to Bun and Puma, and both are environment variables rather than edits:
+
+| Variable      | Default                            | Purpose                    |
+| ------------- | ---------------------------------- | -------------------------- |
+| `SSR_RUNTIME` | `bun`                              | Set to `node` if not Bun.  |
+| `WEB_CMD`     | `bundle exec puma -C config/puma.rb` | App server command line. |
+| `SSR_BUNDLE`  | `ssr-build/server.mjs`             | Built renderer entry.      |
 
 ### Sorbet
 

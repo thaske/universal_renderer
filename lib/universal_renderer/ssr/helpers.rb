@@ -78,6 +78,11 @@ module UniversalRenderer
         )
       end
 
+      # Private: these back the helpers above and are not a view API. Included
+      # into the view context, a public method here would be callable from any
+      # template, which is a wider surface than this module means to offer.
+      private
+
       # Sanitizes HTML returned by the SSR service.
       #
       # Honours `config.sanitize` and `config.scrubber`. Sanitizing a full page

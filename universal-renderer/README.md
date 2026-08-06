@@ -131,6 +131,15 @@ given render come from the same reloaded module, so a render never mixes version
 Development and production must not share an entry. A Vite dev server transforming
 modules per render is the single largest cost in the SSR path.
 
+Vite is resolved from the app, not from this package. Two copies disagree about
+plugin state, and the symptom is path aliases failing to resolve mid-render rather
+than an import error, so a fallback to the bundled copy warns at boot.
+
+`overrides` accepts the transport options (`concurrency`, `paths`, `renderTimeout`,
+and so on). `middleware` and `error` compose with the dev server's own instead of
+replacing them: yours runs after Vite's stack, and after the handler that maps
+stack traces back to source.
+
 ## Browser globals
 
 This package does not provide them, deliberately.
@@ -221,6 +230,11 @@ app.post("/render", createSSRHandler({ ...config, limiter: createLimiter(1) }));
 
 Pass the same `limiter` to every handler that renders, or they will not contend
 with each other.
+
+The default error handler answers JSON and withholds the message and stack unless
+`SSR_VERBOSE_ERRORS=1` or `NODE_ENV` is `development`/`test`. Nothing in a Rails
+deploy sets `NODE_ENV` for this process, so a `NODE_ENV !== "production"` check
+would return internals from every production render.
 
 ## License
 
