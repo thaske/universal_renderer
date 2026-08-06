@@ -6,8 +6,6 @@ export default defineConfig({
     "src/http/index.ts",
     "src/dev.ts",
     "src/vite.ts",
-    "src/shim/index.ts",
-    "src/shim/auto.ts",
     "src/react-query.ts",
   ],
   format: ["esm", "cjs"],

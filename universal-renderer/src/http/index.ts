@@ -8,7 +8,8 @@ export type {
 } from "../types";
 export { createErrorHandler } from "./handlers/error";
 export { createHealthHandler } from "./handlers/health";
-export { createSSRHandler } from "./handlers/ssr";
+export type { HealthHandlerOptions } from "./handlers/health";
+export { createSSRHandler, DEFAULT_RENDER_TIMEOUT_MS } from "./handlers/ssr";
 export { createStreamHandler } from "./handlers/stream";
 export {
   createServer,

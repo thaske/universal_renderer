@@ -18,12 +18,18 @@
 // mutations. Only raise it once you know the render touches no shared state.
 // The waiting queue is bounded and drops disconnected requests, so overload
 // cannot leave the renderer working through requests Rails already abandoned.
+//
+// The corollary is that a render which never settles keeps its slot and ends
+// the renderer. `renderTimeout` (server.ts) bounds that: the caller gets a 504
+// and /health starts reporting 503 so bin/web restarts the process. Keep the
+// hooks below free of unbounded waits — an un-timed fetch is the usual cause.
 
 import { renderToString } from "react-dom/server";
 import { hydrateReactQuery } from "universal-renderer/react-query";
-import { setBrowserLocation } from "universal-renderer/shim";
 
 import type { SsrConfig } from "universal-renderer";
+
+import { setBrowserLocation } from "./globals";
 
 // import App from "@/App";
 
@@ -31,8 +37,8 @@ export default {
   setup: async (url, props) => {
     const { pathname, search } = new URL(url);
 
-    // Code that reads window.location during render is common; point the shim at
-    // the page actually being rendered.
+    // Code that reads window.location during render is common; point the stub
+    // at the page actually being rendered. No-op without globals.ts.
     setBrowserLocation(url);
 
     // Rails' `add_query_data(key, data)` entries arrive under `props.react_query`.

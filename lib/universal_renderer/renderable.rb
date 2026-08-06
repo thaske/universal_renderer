@@ -125,17 +125,30 @@ module UniversalRenderer
       ssr_response.present?
     end
 
-    # @return [Boolean, nil] Whether this controller streams its SSR response.
-    #   `nil` (never opted in) behaves as false.
+    # Whether this *request* is being streamed. Class-level opt-in decides it,
+    # but a stream that failed downgrades it: the fallback render must not emit
+    # the streaming placeholders into a page nothing will ever stream into.
+    #
+    # @return [Boolean]
     def ssr_streaming?
-      self.class.ssr_streaming_preference
+      return @_ssr_streaming if defined?(@_ssr_streaming)
+
+      self.class.ssr_streaming_preference.present?
     end
 
-    def render(*, **)
+    # Render options that mean "this is not a page". Each would otherwise pay a
+    # full blocking SSR round trip whose result is discarded, since the request
+    # format is still HTML for a `render json:` inside an HTML form post.
+    NON_PAGE_RENDER_OPTIONS = %i[
+      body file inline js json nothing plain xml
+    ].freeze
+
+    def render(*, **options)
       return super unless ssr_enabled_for_request?
+      return super if options.keys.intersect?(NON_PAGE_RENDER_OPTIONS)
 
       if ssr_streaming?
-        success = render_ssr_stream(*, **)
+        success = render_ssr_stream(*, **options)
         super unless success
       else
         render_ssr
@@ -284,6 +297,8 @@ module UniversalRenderer
     end
 
     def render_ssr_stream(*, **)
+      # Rendered while `ssr_streaming?` is still true, so the layout carries the
+      # markers the SSR service splices into.
       full_layout = render_to_string(*, **)
 
       streaming_succeeded =
@@ -298,6 +313,13 @@ module UniversalRenderer
         response.stream.close unless response.stream.closed?
         true
       else
+        # Nothing was written upstream (the client reports success the moment
+        # any chunk lands), so the caller re-renders normally. Downgrade first:
+        # otherwise the fallback page ships `<!-- SSR_HEAD -->` /
+        # `<!-- SSR_BODY -->` and no content, and `ssr?` disagrees with what the
+        # page actually contains.
+        @_ssr_streaming = false
+
         UniversalRenderer.log do |log|
           log.error(
             "SSR stream fallback: " \

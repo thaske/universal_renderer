@@ -1,9 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   acquire,
   createLimiter,
   QueueAbortedError,
   QueueFullError,
+  RenderTimeoutError,
+  withTimeout,
 } from "./concurrency";
 
 const deferred = () => {
@@ -135,6 +137,8 @@ describe("createLimiter", () => {
 
     await expect(limiter(async () => undefined)).rejects.toBeInstanceOf(
       QueueFullError,
+      RenderTimeoutError,
+      withTimeout,
     );
 
     gate.resolve();
@@ -200,5 +204,78 @@ describe("acquire", () => {
 
     await expect(queued).rejects.toBeInstanceOf(QueueAbortedError);
     release();
+  });
+});
+
+describe("stats", () => {
+  it("reports active, waiting, and how long the oldest render has held its slot", async () => {
+    const limiter = createLimiter(1);
+    const gate = deferred();
+
+    expect(limiter.stats()).toEqual({
+      active: 0,
+      waiting: 0,
+      longestActiveMs: 0,
+    });
+
+    const running = limiter(() => gate.promise);
+    const queued = limiter(() => Promise.resolve());
+    await Promise.resolve();
+
+    const busy = limiter.stats();
+    expect(busy.active).toBe(1);
+    expect(busy.waiting).toBe(1);
+    expect(busy.longestActiveMs).toBeGreaterThanOrEqual(0);
+
+    gate.resolve();
+    await Promise.all([running, queued]);
+
+    expect(limiter.stats().active).toBe(0);
+  });
+
+  it("counts tasks that start in the same millisecond separately", async () => {
+    const limiter = createLimiter("unbounded");
+    const gate = deferred();
+
+    const tasks = [limiter(() => gate.promise), limiter(() => gate.promise)];
+    await Promise.resolve();
+
+    expect(limiter.stats().active).toBe(2);
+
+    gate.resolve();
+    await Promise.all(tasks);
+
+    expect(limiter.stats().active).toBe(0);
+  });
+});
+
+describe("withTimeout", () => {
+  it("passes the value through when the promise settles in time", async () => {
+    await expect(withTimeout(Promise.resolve("ok"), 1000)).resolves.toBe("ok");
+  });
+
+  it("rejects and signals the caller, without disturbing the promise", async () => {
+    const gate = deferred();
+    let settled = false;
+    const slow = gate.promise.then(() => {
+      settled = true;
+      return "late";
+    });
+
+    const onTimeout = vi.fn();
+    await expect(withTimeout(slow, 5, onTimeout)).rejects.toBeInstanceOf(
+      RenderTimeoutError,
+    );
+
+    expect(onTimeout).toHaveBeenCalledOnce();
+    // The underlying work is untouched: a running render still owns its slot.
+    expect(settled).toBe(false);
+    gate.resolve();
+    await expect(slow).resolves.toBe("late");
+  });
+
+  it("is a pass-through when disabled", async () => {
+    await expect(withTimeout(Promise.resolve(1), false)).resolves.toBe(1);
+    await expect(withTimeout(Promise.resolve(1), 0)).resolves.toBe(1);
   });
 });

@@ -21,8 +21,6 @@ covers the JavaScript API.
 | `universal-renderer`            | `createServer`, `startServer`, handlers, types        |
 | `universal-renderer/dev`        | `startDevServer` — Vite-backed development renderer   |
 | `universal-renderer/vite`       | `defineSsrConfig` — the SSR build config              |
-| `universal-renderer/shim`       | Browser globals for server rendering                  |
-| `universal-renderer/shim/auto`  | Same, installed on import                             |
 | `universal-renderer/react-query`| `hydrateReactQuery` — seeds a cache from Rails' props |
 
 ## The render config
@@ -116,7 +114,7 @@ posts renders into a 404 and silently falls back to client rendering.
 
 ```ts
 // app/frontend/ssr/dev.ts
-import "universal-renderer/shim/auto";
+import "./globals";
 
 const { startDevServer } = await import("universal-renderer/dev");
 
@@ -135,34 +133,29 @@ modules per render is the single largest cost in the SSR path.
 
 ## Browser globals
 
-```ts
-import "universal-renderer/shim/auto";   // first import in the entry
-```
+This package does not provide them, deliberately.
 
-`renderToString` never runs effects, but it does evaluate every module in the
-graph, and a client-first app reaches for `window`/`document`/`localStorage` at
-module scope.
+`renderToString` does not run effects, so `useEffect` is safe. It does still
+evaluate every module in the graph and every render body, and a client-first app
+reaches for `window`/`document`/`localStorage` in both — a singleton assigning
+`window.myThing` at module scope, a component reading `window.innerWidth` while
+rendering. None of that survives under Node, and none of it is React's problem.
 
-One hazard, because it is silent: some libraries decide once, at
-module-evaluation time, whether they are in a browser —
-`typeof window !== "undefined" ? null : {...}`. Imported *after* the shim, such a
-library loses its server API for good. Import those statically first, then install
-the shim explicitly:
+Which globals your graph touches is a property of your graph, though, not of
+SSR. A library version would be guesses: too small to boot your app, too large
+to reason about. The gem's install generator scaffolds an
+`app/frontend/ssr/globals.ts` in your app instead, as a starting point you own
+and edit.
 
-```ts
-import "aphrodite";                       // must see a window-less environment
-import { installBrowserGlobals } from "universal-renderer/shim";
+Two things worth knowing whatever you write:
 
-installBrowserGlobals({ viewport: { width: 1280, height: 800 } });
-
-const { default: config } = await import("./config");
-```
-
-Pick a viewport and have the client's first render start from the same numbers,
-or every width-dependent branch disagrees and React discards the server markup.
-
-`setBrowserLocation(url)` points the shimmed `location` at the page being
-rendered; call it at the top of `setup`.
+- Defining `window` makes `typeof window === "undefined"` false process-wide.
+  That check is how libraries detect a server, so they all take the browser
+  path. Prefer fixing the module that reaches for the DOM.
+- Some libraries decide once, at module-evaluation time, whether they are in a
+  browser (`typeof window !== "undefined" ? null : {...}`). Imported after your
+  globals, such a library loses its server API for good. Import those statically
+  above it, and reach the app graph through a dynamic `import()`.
 
 ## React Query
 

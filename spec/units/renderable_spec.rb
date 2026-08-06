@@ -139,5 +139,38 @@ RSpec.describe UniversalRenderer::Renderable do
         /Symbol, String, or Proc/
       )
     end
+
+    # `render json:` inside an HTML-format request would otherwise pay a full
+    # blocking round trip whose result is thrown away.
+    it "skips renders that are not a page" do
+      controller = enable
+
+      controller.render(json: { ok: true })
+      controller.render(plain: "ok")
+      controller.render(nothing: true)
+
+      expect(UniversalRenderer::Client::Base).not_to have_received(:call)
+
+      controller.render(:show)
+      expect(UniversalRenderer::Client::Base).to have_received(:call).once
+    end
+  end
+
+  describe "streaming" do
+    # Set directly rather than via `enable_ssr(streaming: true)`: that mixes in
+    # ActionController::Live, which needs a real controller stack.
+    let(:controller) do
+      controller_class.ssr_enabled = true
+      controller_class.ssr_streaming_preference = true
+      controller_class.new
+    end
+
+    it "downgrades ssr_streaming? when the stream fails, so the fallback page has no placeholders" do
+      allow(UniversalRenderer::Client::Stream).to receive(:call).and_return(false)
+
+      expect(controller.ssr_streaming?).to be(true)
+      expect(controller.render).to eq(:rendered)
+      expect(controller.ssr_streaming?).to be(false)
+    end
   end
 end

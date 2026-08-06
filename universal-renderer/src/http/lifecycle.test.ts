@@ -3,7 +3,7 @@ import type { Server } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createSSRHandler } from "./handlers/ssr";
-import { createServer } from "./server";
+import { createServer, DEFAULT_PORT, resolvePort } from "./server";
 
 let server: Server | undefined;
 
@@ -228,5 +228,94 @@ describe("createSSRHandler", () => {
     expect(() =>
       createSSRHandler({ setup: async () => ({}), render: undefined as any }),
     ).toThrow("render callback is required");
+  });
+});
+
+describe("render timeout", () => {
+  it("answers 504 rather than holding the caller open forever", async () => {
+    const app = await createServer({
+      setup: async () => ({}),
+      render: () => new Promise<never>(() => {}),
+      renderTimeout: 30,
+    });
+    const base = await listen(app);
+
+    const res = await render(base, { url: "http://x/", props: {} });
+
+    expect(res.status).toBe(504);
+  });
+
+  // The stuck render still owns its slot on purpose: it is still touching
+  // module state. Nothing inside the process can clear that, so the only honest
+  // thing to do is say so from outside.
+  it("reports the process as stalled on /health while a render is stuck", async () => {
+    const app = await createServer({
+      setup: async () => ({}),
+      render: () => new Promise<never>(() => {}),
+      renderTimeout: 30,
+    });
+    const base = await listen(app);
+
+    expect((await fetch(`${base}/health`)).status).toBe(200);
+
+    await render(base, { url: "http://x/", props: {} });
+
+    const health = await fetch(`${base}/health`);
+    expect(health.status).toBe(503);
+
+    const body = (await health.json()) as {
+      status: string;
+      renders: { active: number };
+    };
+    expect(body.status).toBe("STALLED");
+    expect(body.renders.active).toBe(1);
+  });
+
+  it("leaves renders alone when the timeout is disabled", async () => {
+    const app = await createServer({
+      setup: async () => ({}),
+      render: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 40));
+        return { body: "<div>slow</div>" };
+      },
+      renderTimeout: false,
+    });
+    const base = await listen(app);
+
+    const res = await render(base, { url: "http://x/", props: {} });
+
+    expect(res.status).toBe(200);
+    expect((await res.json()).body).toBe("<div>slow</div>");
+  });
+});
+
+describe("resolvePort", () => {
+  const original = process.env.SSR_PORT;
+  afterEach(() => {
+    if (original === undefined) delete process.env.SSR_PORT;
+    else process.env.SSR_PORT = original;
+  });
+
+  it("prefers the explicit port, then SSR_PORT, then the default", () => {
+    delete process.env.SSR_PORT;
+    expect(resolvePort()).toBe(DEFAULT_PORT);
+    expect(resolvePort(4000)).toBe(4000);
+
+    process.env.SSR_PORT = "4100";
+    expect(resolvePort()).toBe(4100);
+    expect(resolvePort(4000)).toBe(4000);
+  });
+
+  // `listen` would otherwise fail with an opaque error at boot, long after the
+  // typo that caused it.
+  it("rejects ports that cannot be bound", () => {
+    expect(() => resolvePort(3001.5)).toThrow(/integer/);
+    expect(() => resolvePort(70000)).toThrow(/integer/);
+
+    process.env.SSR_PORT = "not-a-port";
+    expect(() => resolvePort()).toThrow(/SSR_PORT/);
+
+    process.env.SSR_PORT = "";
+    expect(resolvePort()).toBe(DEFAULT_PORT);
   });
 });

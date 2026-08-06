@@ -3,9 +3,15 @@ import { PassThrough } from "node:stream";
 import { renderToPipeableStream } from "react-dom/server.node";
 
 import type { ReactNode } from "react";
-import { acquire, createLimiter, type Limiter } from "../../concurrency";
+import {
+  acquire,
+  createLimiter,
+  RenderTimeoutError,
+  type Limiter,
+} from "../../concurrency";
 import { SSR_MARKERS } from "../../constants";
 import type { ExpressStreamHandlerOptions } from "../types";
+import { DEFAULT_RENDER_TIMEOUT_MS } from "./ssr";
 import { HttpError } from "./error";
 
 function asError(error: unknown): Error {
@@ -27,7 +33,10 @@ function asError(error: unknown): Error {
  * @returns Express route handler for streaming SSR requests
  */
 export function createStreamHandler<TContext extends Record<string, any>>(
-  options: ExpressStreamHandlerOptions<TContext> & { limiter?: Limiter },
+  options: ExpressStreamHandlerOptions<TContext> & {
+    limiter?: Limiter;
+    renderTimeout?: number | false;
+  },
 ): RequestHandler {
   if (!options.streamCallbacks)
     throw new Error("streamCallbacks are required for streaming handler");
@@ -37,6 +46,7 @@ export function createStreamHandler<TContext extends Record<string, any>>(
 
   const { streamCallbacks } = options;
   const limiter = options.limiter ?? createLimiter(1);
+  const renderTimeout = options.renderTimeout ?? DEFAULT_RENDER_TIMEOUT_MS;
 
   return async (req, res, next: NextFunction) => {
     let context: TContext | undefined;
@@ -51,6 +61,12 @@ export function createStreamHandler<TContext extends Record<string, any>>(
 
     let releaseSlot: (() => void) | undefined;
     const disconnected = new AbortController();
+
+    let shellTimer: ReturnType<typeof setTimeout> | undefined;
+    const clearShellTimer = () => {
+      if (shellTimer) clearTimeout(shellTimer);
+      shellTimer = undefined;
+    };
 
     // Runs the context cleanup and releases the concurrency slot, so a stream
     // that dies mid-flight cannot wedge the queue behind it. Idempotent: the
@@ -68,6 +84,7 @@ export function createStreamHandler<TContext extends Record<string, any>>(
     // shared state would break the limiter's isolation guarantee.
     const cleanup = async () => {
       cleanupRequested = true;
+      clearShellTimer();
       if (!setupSettled || cleanupStarted || startupInFlight > 0) return;
       cleanupStarted = true;
 
@@ -86,6 +103,7 @@ export function createStreamHandler<TContext extends Record<string, any>>(
       if (stopped) return;
 
       stopped = true;
+      clearShellTimer();
       abortRender?.();
       void cleanup();
 
@@ -101,10 +119,30 @@ export function createStreamHandler<TContext extends Record<string, any>>(
       if (stopped) return;
 
       stopped = true;
+      clearShellTimer();
       disconnected.abort();
       abortRender?.();
       void cleanup();
     };
+
+    // Bounds the time from arrival to first byte: queue wait, setup, and shell
+    // render. Once bytes are on the wire the response is the client's problem,
+    // not a wedge, so the timer is cleared there rather than covering the whole
+    // stream.
+    //
+    // If this fires before `setup` settles, `cleanup` is a no-op by design and
+    // the slot stays held — the renderer is stuck and `/health` says so. If it
+    // fires after, aborting the React render really does end it, so the slot
+    // comes back.
+    if (renderTimeout && renderTimeout > 0) {
+      shellTimer = setTimeout(() => {
+        console.error(
+          `[SSR] stream shell did not start within ${renderTimeout}ms`,
+        );
+        stopWithError(new RenderTimeoutError(renderTimeout));
+      }, renderTimeout);
+      shellTimer.unref?.();
+    }
 
     let url: string;
     let props: Record<string, any>;
@@ -170,6 +208,7 @@ export function createStreamHandler<TContext extends Record<string, any>>(
       // between — see BaseHandlerOptions.prepare.
       options.prepare?.(context);
     } catch (error) {
+      clearShellTimer();
       await cleanup();
       if (stopped || res.destroyed) return;
       return next(error);
@@ -191,6 +230,8 @@ export function createStreamHandler<TContext extends Record<string, any>>(
         if (didRenderError) res.status(500);
         res.setHeader("content-type", "text/html");
         res.write(head.replace(SSR_MARKERS.HEAD, finalHead ?? ""));
+        // First byte is out; the shell timeout has done its job.
+        clearShellTimer();
 
         const stream = new PassThrough();
         const transform = streamCallbacks.transform?.(context);

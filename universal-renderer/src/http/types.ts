@@ -15,16 +15,15 @@ import type {
 
 /**
  * Express-specific base configuration for handlers.
+ *
+ * Error handling is a server-level concern, not a handler-level one: the
+ * handlers call `next(error)` and Express routes it to whatever is mounted
+ * last. Pass `error` to `createServer` (see {@link ExpressServerOptions}).
+ *
  * @template TContext - The type of context object used throughout the rendering pipeline
  */
 export type ExpressBaseHandlerOptions<TContext extends Record<string, any>> =
-  BaseHandlerOptions<TContext> & {
-    /**
-     * Optional Express error handler to be applied to the server.
-     * This error handler will be applied after the built-in middleware but before the error handler.
-     */
-    error?: ErrorRequestHandler;
-  };
+  BaseHandlerOptions<TContext>;
 
 /**
  * Defines the shape of an Express error handling function, compatible with Express's
@@ -47,24 +46,14 @@ export type ExpressErrorHandler = (
  * @template TContext - The type of context object used throughout the rendering pipeline
  */
 export type ExpressSSRHandlerOptions<TContext extends Record<string, any>> =
-  CoreSSRHandlerOptions<TContext> & {
-    /**
-     * Optional Express error handler.
-     */
-    error?: ErrorRequestHandler;
-  };
+  CoreSSRHandlerOptions<TContext>;
 
 /**
  * Express-specific configuration options for the streaming SSR handler.
  * @template TContext - The type of context object used throughout the rendering pipeline
  */
 export type ExpressStreamHandlerOptions<TContext extends Record<string, any>> =
-  CoreStreamHandlerOptions<TContext> & {
-    /**
-     * Optional Express error handler.
-     */
-    error?: ErrorRequestHandler;
-  };
+  CoreStreamHandlerOptions<TContext>;
 
 /**
  * Express-specific configuration options for creating an SSR server.
@@ -74,10 +63,31 @@ export type ExpressServerOptions<
   TContext extends Record<string, any> = Record<string, any>,
 > = ExpressSSRHandlerOptions<TContext> & {
   /**
+   * Optional Express error handler, mounted last. Replaces the built-in JSON
+   * error handler.
+   */
+  error?: ErrorRequestHandler;
+
+  /**
    * Optional streaming callbacks for React 18+ streaming SSR.
    * When provided, enables the `/stream` endpoint for streaming responses.
    */
   streamCallbacks?: ExpressStreamHandlerOptions<TContext>["streamCallbacks"];
+
+  /**
+   * How long a render may take before the request is answered `504`, in
+   * milliseconds. Defaults to 10000; `false` disables it.
+   *
+   * This is what keeps a bounded `concurrency` from being a single point of
+   * failure. A running render's slot is never revoked — it is still touching
+   * module state, and handing that slot on is the interleaving `concurrency`
+   * exists to prevent — so a render that never settles holds its slot forever
+   * and, at `concurrency: 1`, the renderer is finished. The timeout frees the
+   * *caller*; `/health` then reports 503 so a supervisor can restart the
+   * process, which is the only thing that actually clears it. The generated
+   * `bin/web` does exactly that.
+   */
+  renderTimeout?: number | false;
 
   /**
    * How many renders may be in flight at once. Defaults to `1`.

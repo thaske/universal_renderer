@@ -22,14 +22,73 @@ export class QueueAbortedError extends Error {
   }
 }
 
+export class RenderTimeoutError extends Error {
+  statusCode = 504;
+
+  constructor(timeoutMs: number) {
+    super(`render did not finish within ${timeoutMs}ms`);
+    this.name = "RenderTimeoutError";
+  }
+}
+
+/** A snapshot of what the limiter is doing, for the health endpoint. */
+export type LimiterStats = {
+  /** Tasks holding a slot. */
+  active: number;
+  /** Tasks waiting for one. */
+  waiting: number;
+  /**
+   * How long the longest-running task has held its slot, in milliseconds; 0
+   * when idle. A value past the render timeout means a render is stuck and,
+   * because slots are not revoked from running tasks, is never coming back.
+   */
+  longestActiveMs: number;
+};
+
 /**
  * Runs a task, waiting for a slot when the limiter is saturated.
  * Resolves/rejects with whatever the task does; the slot is always released.
  */
-export type Limiter = <T>(
-  task: () => Promise<T>,
-  options?: LimitOptions,
-) => Promise<T>;
+export type Limiter = {
+  <T>(task: () => Promise<T>, options?: LimitOptions): Promise<T>;
+  stats(): LimiterStats;
+};
+
+/**
+ * Rejects with {@link RenderTimeoutError} if `promise` has not settled in time,
+ * without disturbing `promise` itself — a render that is still running is still
+ * touching module state, so its slot must stay held until it finishes.
+ *
+ * `onTimeout` is where the caller cancels whatever it can (dropping a queued
+ * task, aborting a React render).
+ */
+export function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number | false | undefined,
+  onTimeout?: () => void,
+): Promise<T> {
+  if (!timeoutMs || timeoutMs <= 0) return promise;
+
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      onTimeout?.();
+      reject(new RenderTimeoutError(timeoutMs));
+    }, timeoutMs);
+    // Never hold the process open for a timer whose only job is to fire late.
+    timer.unref?.();
+
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
 
 /**
  * Creates a concurrency limiter for render requests.
@@ -58,13 +117,50 @@ export function createLimiter(
     );
   }
 
+  // Start times of in-flight tasks, so `stats()` can report a stuck render.
+  // Keyed by a counter rather than by the timestamp: two tasks can start in the
+  // same millisecond, and deleting by timestamp would drop both.
+  const startedAt = new Map<number, number>();
+  let nextTaskId = 0;
+
+  const longestActiveMs = () => {
+    let oldest = 0;
+    const now = Date.now();
+    for (const start of startedAt.values()) {
+      const held = now - start;
+      if (held > oldest) oldest = held;
+    }
+    return oldest;
+  };
+
+  const track = async <T>(task: () => Promise<T>): Promise<T> => {
+    const id = nextTaskId++;
+    startedAt.set(id, Date.now());
+    try {
+      return await task();
+    } finally {
+      startedAt.delete(id);
+    }
+  };
+
   if (concurrency === "unbounded") {
-    return (task, options) => {
+    const unbounded = (<T>(
+      task: () => Promise<T>,
+      options?: LimitOptions,
+    ): Promise<T> => {
       if (options?.signal?.aborted) {
         return Promise.reject(new QueueAbortedError());
       }
-      return task();
-    };
+      return track(task);
+    }) as Limiter;
+
+    unbounded.stats = () => ({
+      active: startedAt.size,
+      waiting: 0,
+      longestActiveMs: longestActiveMs(),
+    });
+
+    return unbounded;
   }
 
   if (!Number.isInteger(concurrency) || concurrency < 1) {
@@ -129,18 +225,26 @@ export function createLimiter(
     waiter.resolve();
   };
 
-  return async <T>(
+  const limiter = (async <T>(
     task: () => Promise<T>,
     options?: LimitOptions,
   ): Promise<T> => {
     await acquireSlot(options);
 
     try {
-      return await task();
+      return await track(task);
     } finally {
       release();
     }
-  };
+  }) as Limiter;
+
+  limiter.stats = () => ({
+    active,
+    waiting: waiting.length,
+    longestActiveMs: longestActiveMs(),
+  });
+
+  return limiter;
 }
 
 /**

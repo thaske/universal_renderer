@@ -1,3 +1,4 @@
+require "active_support/core_ext/object/blank"
 require "cgi"
 require "loofah"
 
@@ -5,11 +6,35 @@ module UniversalRenderer
   module SSR
     # Removes executable content from HTML returned by the SSR service while
     # preserving the elements and data attributes needed to hydrate an app.
+    #
+    # This is a blocklist, and a blocklist over the whole HTML grammar cannot be
+    # a boundary against attacker-controlled markup: the sanitizer and the
+    # browser have to agree on how the document parses, and elements that switch
+    # parsing context (see PARSER_CONTEXT_ELEMENTS) are how they stop agreeing.
+    # Treat it as defense in depth over HTML your own renderer produced, not as
+    # a substitute for escaping untrusted data inside the render.
     class Scrubber < ::Loofah::Scrubber
-      BLOCKED_ELEMENTS = %w[
-        base embed frame frameset iframe object script
-        animate animatemotion animatetransform set
+      # Elements that change how the *rest* of the markup is tokenized, so that
+      # the tree this scrubber inspects is not the tree the browser builds.
+      #
+      # `<noscript>` is parsed as raw text when scripting is enabled and as
+      # markup when it is not; the sanitizer is always in the second mode and
+      # the browser is always in the first, so `<noscript><p title="</noscript>
+      # <img src=x onerror=...>">` reaches the browser as a live element.
+      # `<mglyph>`, `<malignmark>`, and `<annotation-xml>` are the MathML
+      # equivalents: they flip the parser between foreign content and HTML
+      # integration points and give the same mismatch. None of them have any
+      # business in a server render, so they are removed outright.
+      PARSER_CONTEXT_ELEMENTS = %w[
+        noscript mglyph malignmark annotation-xml
       ].freeze
+
+      BLOCKED_ELEMENTS = (
+        %w[
+          base embed frame frameset iframe object script
+          animate animatemotion animatetransform set
+        ] + PARSER_CONTEXT_ELEMENTS
+      ).freeze
       # Non-executable data-script MIME types. HTML treats a script whose type
       # is neither a JavaScript MIME type nor one of the special types
       # (`module`, `importmap`, `speculationrules`) as a data block and never
@@ -34,6 +59,10 @@ module UniversalRenderer
       # bundlers routinely inline small SVGs (logos, icons) as data URIs, the
       # server render would otherwise lose those images. SVG data URIs stay
       # blocked on every other element and attribute.
+      #
+      # `<source>` inside `<picture>` feeds the same restricted image mode, so
+      # an inlined icon behind an art-direction breakpoint gets the same
+      # allowance. `<source>` inside `<video>`/`<audio>` does not.
       INLINE_SVG_DATA = %r{\Adata:image/svg\+xml[,;]}i
       IMAGE_SOURCE_ATTRIBUTES = %w[src srcset].freeze
 
@@ -105,9 +134,18 @@ module UniversalRenderer
       end
 
       def inline_svg_image?(uri, attribute_name, node)
-        node.name.downcase == "img" &&
-          IMAGE_SOURCE_ATTRIBUTES.include?(attribute_name) &&
-          uri.match?(INLINE_SVG_DATA)
+        return false unless IMAGE_SOURCE_ATTRIBUTES.include?(attribute_name)
+        return false unless restricted_image_context?(node)
+
+        uri.match?(INLINE_SVG_DATA)
+      end
+
+      def restricted_image_context?(node)
+        case node.name.downcase
+        when "img" then true
+        when "source" then node.parent&.name&.downcase == "picture"
+        else false
+        end
       end
     end
   end

@@ -43,16 +43,6 @@
       "import": "./dist/vite.mjs",
       "require": "./dist/vite.cjs"
     },
-    "./shim": {
-      "types": "./dist/shim/index.d.mts",
-      "import": "./dist/shim/index.mjs",
-      "require": "./dist/shim/index.cjs"
-    },
-    "./shim/auto": {
-      "types": "./dist/shim/auto.d.mts",
-      "import": "./dist/shim/auto.mjs",
-      "require": "./dist/shim/auto.cjs"
-    },
     "./react-query": {
       "types": "./dist/react-query.d.mts",
       "import": "./dist/react-query.mjs",

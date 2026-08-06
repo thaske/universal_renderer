@@ -146,12 +146,22 @@ The suggested prefix is `UNIVERSAL_RENDERER_*`.
 
 ### Sanitization
 
-`ssr_head` and `ssr_body` run the render through Loofah by default. That parses
-and rewrites the whole document on the Rails side of every request, which eats
-into the latency SSR is meant to buy. The SSR service is your own code, so once
-you are confident about what it emits — and especially when it runs on the same
-host — `c.sanitize = false` is a reasonable trade. It defaults to on because
-failing closed is the right default for a security control.
+`ssr_head` and `ssr_body` run the render through Loofah by default.
+
+Be clear about what that buys you. The bundled scrubber is a **blocklist**, and
+a blocklist over the whole HTML grammar cannot be a boundary against
+attacker-controlled markup: the sanitizer and the browser have to agree on how
+the document parses, and elements that switch parsing context are how they stop
+agreeing. The scrubber removes the ones that are known to do this (`noscript`,
+the MathML integration points) and pins them with tests, but treat it as defense
+in depth over HTML your own renderer produced — **escape untrusted data inside
+the render**, which React already does unless you reach for
+`dangerouslySetInnerHTML`.
+
+It also parses and rewrites the whole document on the Rails side of every
+request, which eats into the latency SSR is meant to buy. `c.sanitize = false`
+is a reasonable trade once you are confident about what the renderer emits. It
+defaults to on because the cost is bounded and the mistake it catches is not.
 
 ### Observability
 
@@ -185,8 +195,8 @@ import { StaticRouter } from "react-router";
 import { ServerStyleSheet } from "styled-components";
 import type { SsrConfig } from "universal-renderer";
 import { hydrateReactQuery } from "universal-renderer/react-query";
-import { setBrowserLocation } from "universal-renderer/shim";
 
+import { setBrowserLocation } from "./globals";
 import App from "@/App";
 import { preloadRoute, queryClient } from "@/App";
 
@@ -257,13 +267,36 @@ disconnect while waiting, so a Rails timeout cannot leave stale renders ahead
 of live traffic. Configure `queueLimit` only if the default does not fit your
 traffic and render latency.
 
+### Render timeout and health
+
+Serializing renders has a cost worth naming: a slot is never taken back from a
+running render — it is still touching module state, and handing that slot on is
+the interleaving `concurrency` exists to prevent — so **one render that never
+settles ends the renderer**. At `concurrency: 1` the queue fills, everything
+after it gets `503`, and Rails falls back to client rendering indefinitely.
+
+`renderTimeout` (default `10000`ms, `false` to disable) bounds it from both
+ends:
+
+- the caller gets a `504` instead of hanging, and
+- `GET /health` starts returning `503` with `{ status: "STALLED", renders: {...} }`
+  once a render has held its slot past the timeout.
+
+Nothing inside the process can clear a stuck render, so the health signal is the
+point: the generated `bin/web` polls it and restarts the renderer without
+touching the app server. Tune with `SSR_HEALTH_INTERVAL`, `SSR_HEALTH_FAILURES`,
+or turn it off with `SSR_WATCHDOG=0`.
+
+Development sets `renderTimeout: false` by default — a breakpoint in the render
+outlasts any production budget, and a `504` there is noise.
+
 ### Entry points
 
 Production runs the prebuilt bundle:
 
 ```ts
 // app/frontend/ssr/server.ts
-import "universal-renderer/shim/auto";
+import "./globals";
 
 const { default: config } = await import("./config");
 const { startServer } = await import("universal-renderer");
@@ -276,7 +309,7 @@ transforms the client dev server gives it and edits need no rebuild:
 
 ```ts
 // app/frontend/ssr/dev.ts
-import "universal-renderer/shim/auto";
+import "./globals";
 
 const { startDevServer } = await import("universal-renderer/dev");
 
@@ -288,20 +321,30 @@ is the single largest cost in the SSR path.
 
 Note the **dynamic** imports. The app graph touches browser globals while its
 modules evaluate, and static imports are all evaluated before the entry body runs,
-so the shim would land too late.
+so `./globals` would land too late.
 
 ### Browser globals
 
-`renderToString` never runs effects, but it does evaluate every module in the
-graph. A client-first app will reach for `window`, `document`, `localStorage`, or
-`navigator` at module scope, and none of that exists under Node.
-`universal-renderer/shim` installs inert stubs.
+`renderToString` does not run effects, so `useEffect` is safe. It does still
+evaluate every module in the graph and every render body, and a client-first app
+reaches for `window`, `document`, `localStorage`, or `navigator` in both — a
+singleton assigning `window.myThing` at module scope, a component reading
+`window.innerWidth` while rendering. None of that survives under Node, and none
+of it is React's problem to solve.
 
-One hazard, because it is silent: some libraries decide once, at
-module-evaluation time, whether they are in a browser
-(`typeof window !== "undefined" ? null : {...}`). Imported after the shim, such a
-library loses its server API for good. Import those statically first, then call
-`installBrowserGlobals()` yourself instead of using `/shim/auto`.
+The package does not ship a shim for this, deliberately. Which globals a graph
+touches is a property of that graph, not of SSR, so a library version would be
+guesses: too small to boot your app and too large to reason about. The generator
+scaffolds `app/frontend/ssr/globals.ts` in your app instead, as a starting point
+you own, edit, and delete if it turns out you need none of it. It carries the
+reasoning, including the two things that bite:
+
+- Defining `window` makes `typeof window === "undefined"` false process-wide.
+  That check is how libraries detect a server, so they all take the browser
+  path. Prefer fixing the module that reaches for the DOM.
+- Some libraries decide once, at module-evaluation time, whether they are in a
+  browser (`typeof window !== "undefined" ? null : {...}`). Imported after your
+  globals, such a library loses its server API for good.
 
 ### The SSR build
 

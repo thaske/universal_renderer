@@ -4,7 +4,7 @@ import type { Server } from "node:http";
 import { createLimiter } from "../concurrency";
 import { createErrorHandler } from "./handlers/error";
 import { createHealthHandler } from "./handlers/health";
-import { createSSRHandler } from "./handlers/ssr";
+import { createSSRHandler, DEFAULT_RENDER_TIMEOUT_MS } from "./handlers/ssr";
 import { createStreamHandler } from "./handlers/stream";
 
 import type { ExpressServerOptions } from "./types";
@@ -26,11 +26,32 @@ export const DEFAULT_PORT = 3001;
  * `SSR_PORT` is the documented convention on both sides: the gem's generated
  * initializer defaults `config.url` to `http://localhost:3001`.
  */
-export function resolvePort(port?: number): number {
-  if (typeof port === "number") return port;
+const isUsablePort = (value: number) =>
+  Number.isInteger(value) && value >= 0 && value <= 65535;
 
-  const fromEnv = Number(process.env.SSR_PORT);
-  return Number.isFinite(fromEnv) && fromEnv > 0 ? fromEnv : DEFAULT_PORT;
+export function resolvePort(port?: number): number {
+  // Validated rather than passed through: `listen` rejects a fractional or
+  // out-of-range port with an opaque error at boot, long after the typo.
+  if (typeof port === "number") {
+    if (!isUsablePort(port)) {
+      throw new Error(
+        `port must be an integer between 0 and 65535, got ${String(port)}`,
+      );
+    }
+    return port;
+  }
+
+  const raw = process.env.SSR_PORT;
+  if (raw === undefined || raw.trim() === "") return DEFAULT_PORT;
+
+  const fromEnv = Number(raw);
+  if (!isUsablePort(fromEnv) || fromEnv === 0) {
+    throw new Error(
+      `SSR_PORT must be an integer between 1 and 65535, got ${JSON.stringify(raw)}`,
+    );
+  }
+
+  return fromEnv;
 }
 
 /**
@@ -81,6 +102,7 @@ export async function createServer<
   // One limiter shared by both handlers: a blocking render and a streaming
   // render contend for exactly the same module state.
   const limiter = createLimiter(options.concurrency ?? 1, options.queueLimit);
+  const renderTimeout = options.renderTimeout ?? DEFAULT_RENDER_TIMEOUT_MS;
 
   // Basic middleware
   app.use(express.json({ limit: options.bodyLimit ?? "50mb" }));
@@ -92,8 +114,13 @@ export async function createServer<
     app.use(options.middleware);
   }
 
-  // Health check endpoint using the health handler factory
-  app.get(paths.health as string | string[], createHealthHandler());
+  // Health check endpoint. It reports the limiter so a supervisor can tell a
+  // busy renderer from a wedged one; a render still holding its slot past the
+  // timeout is never finishing, and only a restart clears it.
+  app.get(
+    paths.health as string | string[],
+    createHealthHandler({ limiter, stallAfterMs: renderTimeout }),
+  );
 
   // JSON SSR endpoints using the SSR handler factory
   const ssrHandler = createSSRHandler({
@@ -102,6 +129,7 @@ export async function createServer<
     render: options.render,
     cleanup: options.cleanup,
     limiter,
+    renderTimeout,
   });
   app.post(paths.render as string | string[], ssrHandler);
 
@@ -112,8 +140,8 @@ export async function createServer<
       prepare: options.prepare,
       cleanup: options.cleanup,
       streamCallbacks: options.streamCallbacks,
-      error: options.error,
       limiter,
+      renderTimeout,
     });
     app.post(paths.stream as string | string[], streamHandler);
   }

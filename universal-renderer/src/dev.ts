@@ -59,8 +59,25 @@ export type DevServerOptions = {
   /** Extra inline Vite config, merged over the middleware-mode defaults. */
   viteConfig?: InlineConfig;
 
-  /** Options merged over the loaded config — e.g. `concurrency` while debugging. */
-  overrides?: Partial<SsrConfig>;
+  /**
+   * Transport options merged over the loaded config — e.g. `concurrency` while
+   * debugging.
+   *
+   * Deliberately not `Partial<SsrConfig>`: the lifecycle hooks and
+   * `streamCallbacks` are re-resolved from the entry on every render, so an
+   * override for those would be ignored, and a type that accepted them would
+   * only advertise something that does not happen.
+   */
+  overrides?: Pick<
+    SsrConfig,
+    | "bodyLimit"
+    | "concurrency"
+    | "error"
+    | "middleware"
+    | "paths"
+    | "queueLimit"
+    | "renderTimeout"
+  >;
 };
 
 /**
@@ -87,7 +104,7 @@ export type DevServerOptions = {
  * @example
  * ```ts
  * // app/frontend/ssr/dev.ts
- * import "universal-renderer/shim/auto";
+ * import "./globals";
  *
  * const { startDevServer } = await import("universal-renderer/dev");
  * await startDevServer({ entry: "app/frontend/ssr/config.ts" });
@@ -156,7 +173,9 @@ export async function startDevServer(options: DevServerOptions): Promise<{
 
   const fixStacktrace: ErrorRequestHandler = (error, req, res, next) => {
     if (error instanceof Error) vite.ssrFixStacktrace(error);
-    const downstream = initial.error ?? options.overrides?.error;
+    // `overrides` wins over the loaded config, the same way it does for every
+    // other option below.
+    const downstream = options.overrides?.error ?? initial.error;
     if (downstream) return downstream(error, req, res, next);
     return next(error);
   };
@@ -179,10 +198,17 @@ export async function startDevServer(options: DevServerOptions): Promise<{
     queueLimit: initial.queueLimit,
     paths: initial.paths,
     bodyLimit: initial.bodyLimit,
+    // Off by default in development: a breakpoint in the render, or the first
+    // request paying for the module transform of the whole app graph, routinely
+    // outlasts the production budget, and a 504 there is noise rather than
+    // signal. Override it explicitly to exercise the production behaviour.
+    renderTimeout: initial.renderTimeout ?? false,
     ...options.overrides,
 
     port: options.port,
     host: options.host,
+    // Not overridable: the Vite middleware stack is what makes this a dev
+    // server, and the error handler is what maps stack traces back to source.
     middleware: vite.middlewares as never,
     error: fixStacktrace,
 

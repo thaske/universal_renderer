@@ -86,15 +86,30 @@ module UniversalRenderer
       # String keys on purpose: `payload` can be a large dehydrated query
       # cache, and deep-symbolizing the whole response would walk and
       # re-allocate all of it on every render for no benefit — only these four
-      # top-level keys are read, and both `body_attrs` and `payload` are passed
-      # through untouched.
+      # top-level keys are read, and `payload` is passed through untouched.
+      #
+      # `head`, `body`, and `body_attrs` *are* type-checked, because they are
+      # the three that reach a view helper. Every other failure in this gem
+      # degrades to client-side rendering; a renderer that answers 200 with the
+      # wrong shape must not be the one case that raises mid-layout instead.
+      # Raising here is deliberate: `perform` rescues it, records `:error`, and
+      # falls back like any other failed render.
       def self.build_response(data)
+        unless data.is_a?(Hash)
+          raise TypeError,
+                "SSR service returned #{data.class.name}, expected a JSON object"
+        end
+
         UniversalRenderer::SSR::Response.new(
-          head: data["head"],
-          body: data["body"],
-          body_attrs: data["body_attrs"],
+          head: string_or_nil(data["head"]),
+          body: string_or_nil(data["body"]),
+          body_attrs: (data["body_attrs"] if data["body_attrs"].is_a?(Hash)),
           payload: data["payload"]
         )
+      end
+
+      def self.string_or_nil(value)
+        value if value.is_a?(String)
       end
 
       # URI.join replaces the base URL's last path segment when the joined path
@@ -119,8 +134,8 @@ module UniversalRenderer
         )
       end
 
-      private_class_method :perform, :build_response, :fail_render,
-                           :absolute_path
+      private_class_method :perform, :build_response, :string_or_nil,
+                           :fail_render, :absolute_path
     end
   end
 end

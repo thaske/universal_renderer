@@ -37,11 +37,43 @@ RSpec.describe UniversalRenderer::InstallGenerator do
     end
   end
 
-  def build_web_harness(destination)
+  # A serialized renderer that wedges cannot recover on its own; `/health`
+  # reporting 503 is the only signal, and this loop is what acts on it.
+  it "restarts the renderer when it stops reporting healthy" do
+    Dir.mktmpdir do |destination|
+      harness = build_web_harness(destination, healthy: false)
+      env = harness.fetch(:env).merge("SSR_HEALTH_INTERVAL" => "1",
+                                      "SSR_HEALTH_FAILURES" => "1")
+
+      web_pid =
+        Process.spawn(
+          env,
+          "bash",
+          harness.fetch(:web),
+          chdir: destination,
+          out: File::NULL,
+          err: File::NULL
+        )
+
+      # One tick to notice, one grace period to stop the old process.
+      wait_for_file(harness.fetch(:restarted), attempts: 120, interval: 0.1)
+      expect(File).to exist(harness.fetch(:restarted))
+    ensure
+      if web_pid
+        Process.kill("TERM", web_pid)
+        Process.wait(web_pid)
+      end
+      stop_process_recorded_in(harness[:pid]) if harness
+    end
+  end
+
+  def build_web_harness(destination, healthy: true)
     fake_bin = File.join(destination, "fake-bin")
     bundle = File.join(destination, "ssr-build/server.mjs")
     pid = File.join(destination, "renderer.pid")
     stopped = File.join(destination, "renderer.stopped")
+    started = File.join(destination, "renderer.started")
+    restarted = File.join(destination, "renderer.restarted")
     web = File.join(destination, "web")
 
     FileUtils.mkdir_p(fake_bin)
@@ -50,19 +82,34 @@ RSpec.describe UniversalRenderer::InstallGenerator do
     File.write(bundle, "")
     write_executable(File.join(fake_bin, "bun"), fake_bun)
     write_executable(File.join(fake_bin, "bundle"), fake_bundle)
+    write_executable(File.join(fake_bin, "curl"), fake_curl)
     FileUtils.chmod(0o755, web)
 
     {
       web: web,
       pid: pid,
       stopped: stopped,
+      restarted: restarted,
       env: {
         "PATH" => "#{fake_bin}:#{ENV.fetch("PATH")}",
         "SSR_BUNDLE" => bundle,
         "SSR_TEST_PID" => pid,
-        "SSR_TEST_STOPPED" => stopped
+        "SSR_TEST_STOPPED" => stopped,
+        "SSR_TEST_STARTED" => started,
+        "SSR_TEST_RESTARTED" => restarted,
+        "SSR_TEST_HEALTHY" => healthy ? "1" : "0",
+        # The app server has to outlive the health checks in the restart test.
+        "SSR_TEST_APP_LIFETIME" => healthy ? "0.1" : "30"
       }
     }
+  end
+
+  def fake_curl
+    <<~BASH
+      #!/usr/bin/env bash
+      [ "${SSR_TEST_HEALTHY:-1}" = "1" ] && exit 0
+      exit 22
+    BASH
   end
 
   def web_template
@@ -76,6 +123,8 @@ RSpec.describe UniversalRenderer::InstallGenerator do
     <<~BASH
       #!/usr/bin/env bash
       echo $$ > "$SSR_TEST_PID"
+      if [ -f "$SSR_TEST_STARTED" ]; then touch "$SSR_TEST_RESTARTED"; fi
+      touch "$SSR_TEST_STARTED"
       trap 'touch "$SSR_TEST_STOPPED"; exit 0' TERM
       while true; do sleep 0.05; done
     BASH
@@ -84,7 +133,7 @@ RSpec.describe UniversalRenderer::InstallGenerator do
   def fake_bundle
     <<~BASH
       #!/usr/bin/env bash
-      sleep 0.1
+      sleep "${SSR_TEST_APP_LIFETIME:-0.1}"
       exit 7
     BASH
   end
@@ -94,11 +143,11 @@ RSpec.describe UniversalRenderer::InstallGenerator do
     FileUtils.chmod(0o755, path)
   end
 
-  def wait_for_file(path)
-    100.times do
+  def wait_for_file(path, attempts: 100, interval: 0.01)
+    attempts.times do
       return if File.exist?(path)
 
-      sleep 0.01
+      sleep interval
     end
 
     raise "timed out waiting for #{path}"

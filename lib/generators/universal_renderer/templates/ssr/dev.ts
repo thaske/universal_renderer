@@ -8,7 +8,7 @@
 // Production does NOT go through this file — see server.ts, which runs the
 // prebuilt bundle. A Vite dev server transforming modules per render is the
 // single largest cost in the SSR path and has no place in production.
-import "universal-renderer/shim/auto";
+import "./globals";
 
 const { startDevServer } = await import("universal-renderer/dev");
 

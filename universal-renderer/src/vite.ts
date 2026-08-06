@@ -76,6 +76,16 @@ export function defineSsrConfig(options: SsrBuildOptions): UserConfig {
   const absolute = (path: string) =>
     isAbsolute(path) ? path : resolve(root, path);
 
+  // An array of outputs would be spread into an object below and silently
+  // become `{ "0": {...} }`, losing the pinned entry filename with it. The SSR
+  // bundle is a single entry, so there is nothing to support here — say so.
+  if (Array.isArray(build?.rollupOptions?.output)) {
+    throw new Error(
+      "defineSsrConfig does not support an array of rollup outputs; the SSR " +
+        "bundle is a single entry. Pass a single output object.",
+    );
+  }
+
   // Pinned rather than left to Vite, which picks `.js` or `.mjs` depending on
   // whether package.json declares `"type": "module"`. The process supervisor has
   // to name this file, so it must not change under you.

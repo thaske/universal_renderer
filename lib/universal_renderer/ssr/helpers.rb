@@ -38,11 +38,18 @@ module UniversalRenderer
       # When sanitization is enabled, executable and malformed attribute names
       # are removed before Rails escapes and serializes the remaining values.
       #
+      # Anything other than a Hash is dropped rather than raised on: a renderer
+      # that answers 200 with the wrong shape should degrade the page the same
+      # way an unreachable renderer does, not blow up inside the layout.
+      # {UniversalRenderer::Client::Base} already filters this, but a helper
+      # that can take the page down is worth guarding at both ends.
+      #
       # @return [ActiveSupport::SafeBuffer] Escaped `name="value"` pairs, or an
       #   empty buffer when the renderer sent none.
       def ssr_body_attributes
         attrs = ssr_response&.body_attrs
-        return "".html_safe if attrs.blank?
+        return "".html_safe unless attrs.is_a?(Hash)
+        return "".html_safe if attrs.empty?
 
         attrs = sanitize_ssr_body_attributes(attrs) if UniversalRenderer.config.sanitize
         tag.attributes(attrs)
@@ -104,25 +111,6 @@ module UniversalRenderer
         end
       end
 
-      # @deprecated The props Rails sent are already known to Rails; what the
-      #   client needs is the state the *render* produced. Return `payload` from
-      #   your render callback and emit it with {#ssr_payload}.
-      def ssr_props_json(props = nil)
-        raw_props =
-          props ||
-            (controller.ssr_props if controller.respond_to?(:ssr_props)) || {}
-        ERB::Util.json_escape(raw_props.to_json)
-      end
-
-      # @deprecated See {#ssr_props_json}. Use {#ssr_payload}.
-      def ssr_props(id: "ssr-props", props: nil)
-        content_tag(
-          :script,
-          ssr_props_json(props),
-          { id: id, type: "application/json" },
-          false
-        )
-      end
     end
   end
 end

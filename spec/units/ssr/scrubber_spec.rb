@@ -121,12 +121,54 @@ RSpec.describe UniversalRenderer::SSR::Scrubber do
     html = <<~HTML
       <img src="data:image/svg+xml,%3csvg%3e%3c/svg%3e" alt="logo">
       <img srcset="data:image/svg+xml;base64,PHN2Zy8+ 1x" alt="logo 2x">
+      <picture><source srcset="data:image/svg+xml;base64,PHN2Zy8+ 1x"><img src="/logo.png"></picture>
     HTML
 
     result = sanitize(html)
 
     expect(result).to include('src="data:image/svg+xml,%3csvg%3e%3c/svg%3e"')
     expect(result).to include("srcset=\"data:image/svg+xml;base64,PHN2Zy8+ 1x\"")
+    # <source> inside <picture> feeds the same restricted image mode as <img>.
+    expect(result).to include("<source srcset=")
+  end
+
+  it "blocks inline SVG data URIs outside the restricted image modes" do
+    html = <<~HTML
+      <video><source src="data:image/svg+xml,%3csvg%3e%3c/svg%3e"></video>
+      <a href="data:image/svg+xml,%3csvg%3e%3c/svg%3e">document</a>
+    HTML
+
+    result = sanitize(html)
+
+    expect(result).not_to include("data:image/svg+xml")
+  end
+
+  # Both of these were verified against a real browser: the payload the
+  # sanitizer emits executes. They are the reason this scrubber removes elements
+  # that switch parsing context rather than trusting its own parse of them.
+  it "removes noscript, which the browser and the sanitizer tokenize differently" do
+    # The sanitizer parses <noscript> as markup (scripting disabled), so the
+    # `</noscript>` inside the title attribute is inert to it. The browser parses
+    # it as raw text (scripting enabled), so that string closes the element early
+    # and the <img> that follows becomes a live element.
+    html = %(<noscript><p title="</noscript><img src=x onerror=alert(1)>"></noscript>)
+
+    result = sanitize(html)
+
+    expect(result).not_to include("noscript")
+    expect(result).not_to include("onerror")
+  end
+
+  it "removes the MathML integration points that flip the parser into HTML" do
+    html = <<~HTML
+      <math><mtext><mglyph><style><img src=x onerror=alert(1)></style></mglyph><table></table></mtext></math>
+      <math><annotation-xml encoding="text/html"><style><img src=x onerror=alert(1)></style></annotation-xml></math>
+    HTML
+
+    result = sanitize(html)
+
+    expect(result).not_to include("mglyph", "annotation-xml")
+    expect(result).not_to include("onerror")
   end
 
   it "preserves hydration attributes and safe URLs" do

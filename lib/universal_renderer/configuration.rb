@@ -42,12 +42,16 @@ module UniversalRenderer
     # Whether `ssr_head`/`ssr_body` run the renderer's HTML through Loofah
     # before embedding it.
     #
-    # Sanitizing a full page render is not free: it parses and rewrites the
+    # This is defense in depth over HTML your own renderer produced, not a
+    # boundary against attacker-controlled markup. {SSR::Scrubber} is a
+    # blocklist, and a blocklist cannot survive a parser mismatch between Loofah
+    # and the browser. Escape untrusted data inside the render — React already
+    # does, unless you reach for `dangerouslySetInnerHTML`.
+    #
+    # Sanitizing a full page render is also not free: it parses and rewrites the
     # entire document on the Rails side of every request, which eats into the
-    # latency SSR is meant to buy. The SSR service is first-party code, so when
-    # you control what it emits (and especially when it runs on the same host)
-    # turning this off is a reasonable trade. It defaults to on because failing
-    # closed is the right default for a security control.
+    # latency SSR is meant to buy. Defaults to on, because the cost is bounded
+    # and the mistake it catches is not.
     attr_accessor :sanitize
 
     # Scrubber instance used when `sanitize` is true. Defaults to
@@ -58,9 +62,10 @@ module UniversalRenderer
     # Whether the Rails engine includes {UniversalRenderer::Renderable} into
     # every ActionController::Base descendant.
     #
-    # The concern adds a before_action, two class attributes, and a `render`
-    # override to whatever it is included in. That is a lot of surface to add
-    # application-wide for something a handful of controllers use, so apps can
+    # The concern adds three class attributes, a handful of public instance
+    # methods, and a `render` override to whatever it is included in. That is a
+    # lot of surface to add application-wide for something a handful of
+    # controllers use, so apps can
     # turn the automatic include off and `include UniversalRenderer::Renderable`
     # in just the controllers that render server-side.
     #

@@ -31,5 +31,15 @@ module FakeController
     def render(*, **)
       :rendered
     end
+
+    # Present so the streaming path can be exercised without a real controller
+    # stack; the concern renders the layout to a string before handing it over.
+    def render_to_string(*, **)
+      "<html></html>"
+    end
+
+    def response
+      @response ||= Struct.new(:stream).new(nil)
+    end
   end
 end

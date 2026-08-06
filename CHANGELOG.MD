@@ -50,6 +50,16 @@ get it silently wrong.
 - The install generator now scaffolds the whole working setup: both renderer entry
   points, `vite.config.ssr.mts`, the `assets:precompile` hook, and `bin/web`.
   Takes `--frontend-dir`, `--skip-frontend`, `--skip-deploy`.
+  - The generated `ssr:build` task goes through the package script
+    (`bun run build:ssr`) rather than invoking `vite` directly:
+    `node_modules/.bin` is not on `PATH` during a deploy build, so a bare `vite`
+    failed there while working fine in a shell. It also no longer depends on
+    `:environment`; bundling the frontend does not need Rails booted.
+  - The generated `bin/web` waits for the app server to drain on `SIGTERM`
+    instead of killing it and exiting immediately, and supervises the renderer:
+    it polls `/health` and restarts the renderer, without touching the app
+    server, when the renderer stops reporting healthy. `SSR_WATCHDOG=0`,
+    `SSR_HEALTH_INTERVAL`, and `SSR_HEALTH_FAILURES` tune it.
 
 #### Changed
 
@@ -63,10 +73,16 @@ get it silently wrong.
 - Dropped the `body_html` fallback in the response parser — no shipped version of
   the NPM package emits it.
 
-#### Deprecated
+#### Removed
 
-- `ssr_props` / `ssr_props_json` view helpers. They emit the props Rails already
-  knows; what the client needs is what the render produced. Use `ssr_payload`.
+- The `ssr_props` and `ssr_props_json` **view helpers** (the controller-side
+  `ssr_props` hash is unaffected and now public). They emitted the props Rails
+  had just sent, which the client already has; what it actually needs is the
+  state the render produced. Use `payload` and `ssr_payload`.
+
+  Removed outright rather than deprecated: the gem is pre-1.0 with no known
+  users of these two, and carrying a deprecation cycle for nobody costs more
+  than it saves.
 
 #### Fixed
 
@@ -83,9 +99,43 @@ get it silently wrong.
   `"/render"`) is treated as absolute. `URI.join` replaces the base URL's last
   path segment with a relative path, so a path-prefix mount would have posted
   renders to the wrong endpoint and silently fallen back.
+- A renderer answering `200` with the wrong shape no longer raises inside the
+  layout. `body_attrs` that is not a Hash reached `tag.attributes`, which calls
+  `to_h` on it — a `NoMethodError` on a live page, and the one failure mode in
+  this gem that did not degrade to client-side rendering. The response parser
+  now type-checks `head`, `body`, and `body_attrs`, a non-object response is
+  reported as `:error` and falls back, and `ssr_body_attributes` drops anything
+  that is not a Hash.
+- A failed stream no longer emits `<!-- SSR_HEAD -->` / `<!-- SSR_BODY -->` into
+  the fallback page. `ssr_streaming?` is now request-scoped and downgrades when
+  the stream fails, so the fallback render behaves like a non-streaming one.
+- `render json:`, `render plain:`, and the other non-page render options no
+  longer trigger a blocking SSR round trip whose result is discarded. The
+  request format is still HTML for a `render json:` inside a form post, so the
+  format check alone did not cover it.
+- `SSR::Scrubber` requires the ActiveSupport core extension it uses, so it can
+  be required outside a booted Rails app.
 
 #### Security
 
+- **Fixed two working XSS bypasses in the scrubber**, both verified end to end
+  against a real browser. They predate this release; the mechanism is a parse
+  mismatch between Loofah and the browser, on elements that switch parsing
+  context:
+  - `<noscript>` is parsed as markup with scripting disabled (what the sanitizer
+    always sees) and as raw text with scripting enabled (what the browser always
+    sees), so `<noscript><p title="</noscript><img src=x onerror=...>">` reached
+    the browser as a live element.
+  - `<mglyph>`, `<malignmark>`, and `<annotation-xml>` flip the parser between
+    MathML foreign content and HTML integration points, giving the same
+    mismatch inside `<math>`.
+
+  All four elements are now removed outright. None has any business in a server
+  render, and both payloads are pinned by tests.
+- Documented what the scrubber is, since the previous framing overclaimed: it is
+  a blocklist, so it is defense in depth over HTML your own renderer produced,
+  not a boundary against attacker-controlled markup. Escape untrusted data
+  inside the render.
 - Hardened SSR HTML sanitization against embedded documents, event handlers,
   executable URL protocols, SVG data payloads, and meta refresh redirects.
 - Relaxed it in two narrow places, because the previous rules made SSR
@@ -101,7 +151,9 @@ get it silently wrong.
     scripts and loads no external references, and bundlers routinely inline icons
     this way, so otherwise every inlined logo vanished from the server render.
     They remain blocked on `<a href>`, `<object data>`, and every other element
-    and attribute, where the SVG *would* execute as a document.
+    and attribute, where the SVG *would* execute as a document. `<source>`
+    inside `<picture>` gets the same allowance, since it feeds the same
+    restricted image mode; `<source>` inside `<video>`/`<audio>` does not.
 
 #### Known limitations
 
@@ -124,6 +176,19 @@ get it silently wrong.
   perf bug. Previously every consumer had to hand-roll this. `"unbounded"` opts
   out. The limiter spans `setup` through `cleanup` and is shared with the
   streaming handler.
+- `renderTimeout`, defaulting to `10000`ms — the other half of the `concurrency`
+  decision. A running render's slot is never revoked (it is still touching module
+  state), so a render that never settles holds its slot forever and, at
+  `concurrency: 1`, ends the renderer: the queue fills and everything after it
+  gets `503` until a restart. The timeout answers the caller `504`, and
+  `GET /health` then reports `503` with `{ status: "STALLED", renders: {...} }`,
+  which is what the generated `bin/web` watches. `false` disables it, and
+  `startDevServer` defaults it off.
+- `Limiter.stats()`, reporting active and waiting renders plus how long the
+  oldest has held its slot, and `withTimeout` / `RenderTimeoutError` for callers
+  composing their own handlers.
+- `createHealthHandler` takes a `limiter` and `stallAfterMs`, so the health
+  endpoint distinguishes a busy renderer from a wedged one.
 - `queueLimit`, defaulting to ten waiting requests per concurrency slot. The
   renderer returns `503` when full and removes requests that disconnect while
   waiting, so overload cannot leave stale renders ahead of live traffic.
@@ -145,16 +210,34 @@ get it silently wrong.
   `vite-plugin-rails`, matching the client build's asset prefix, disabling
   `publicDir`, and putting the bundle outside `public/`. Output filename is pinned
   rather than left to depend on `"type": "module"`.
-- `universal-renderer/shim` and `/shim/auto` — inert browser globals, with the
-  module-evaluation-order hazard documented.
 - `universal-renderer/react-query` — `hydrateReactQuery`, matching the gem's
   `add_query_data` wire shape.
 - `SsrConfig` type for the render config module.
 - `bodyLimit` option.
 
+#### Removed
+
+- `universal-renderer/shim` and `/shim/auto`. Server rendering does need browser
+  globals — `renderToString` evaluates every module in the graph and every render
+  body, and a client-first app reaches for `window` in both — but *which* globals
+  is a property of the graph, not of SSR. A library version is guesses: too small
+  to boot the app, too large to reason about, and defining `window` at all flips
+  `typeof window === "undefined"` process-wide, which is how every library
+  detects a server.
+
+  The gem's install generator now scaffolds `app/frontend/ssr/globals.ts` into
+  the app instead, with the reasoning and the two hazards in comments. It is
+  app code: edit it, or delete it if your graph does not need it.
+
 #### Changed
 
 - Restored React 18 compatibility and made Vite a development-only dependency.
+- `error` moved off the per-handler option types onto `ExpressServerOptions`,
+  where it is the only place it ever took effect. `createServer` was passing it
+  into `createStreamHandler`, which never read it.
+- `startDevServer`'s `overrides` is typed to the options it can actually
+  override. The lifecycle hooks and `streamCallbacks` are re-resolved from the
+  entry per render, so overriding them was silently ignored.
 
 #### Fixed
 
@@ -178,6 +261,13 @@ get it silently wrong.
 - `startServer` drops its startup error listener once listening, so a later
   server `error` event surfaces instead of being swallowed by an
   already-settled promise.
+- `resolvePort` validates its result instead of passing a fractional or
+  out-of-range value to `listen`, which failed at boot with an opaque error long
+  after the typo that caused it.
+- `startDevServer`'s `overrides.error` takes precedence over the loaded
+  config's, matching every other option.
+- `defineSsrConfig` rejects an array of rollup outputs instead of spreading it
+  into an object and silently losing the pinned entry filename.
 
 ### Tooling
 

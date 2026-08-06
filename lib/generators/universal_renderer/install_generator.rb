@@ -32,6 +32,7 @@ module UniversalRenderer
     def copy_frontend
       return if options[:skip_frontend]
 
+      template "ssr/globals.ts", "#{frontend_dir}/ssr/globals.ts"
       template "ssr/config.ts", "#{frontend_dir}/ssr/config.ts"
       template "ssr/server.ts", "#{frontend_dir}/ssr/server.ts"
       template "ssr/dev.ts", "#{frontend_dir}/ssr/dev.ts"
@@ -64,7 +65,7 @@ module UniversalRenderer
       say_status "",
                  '       "build:ssr": "vite -c vite.config.ssr.mts build"'
       say_status "", "  5. Opt a controller in with `enable_ssr` or `render_ssr`"
-      return if options[:skip_deploy] || options[:skip_frontend]
+      return if options[:skip_deploy]
 
       say_status "", "  6. Point Procfile's web process at bin/web, which runs"
       say_status "", "     the renderer alongside your app server"

@@ -57,6 +57,21 @@ RSpec.describe UniversalRenderer::SSR::Helpers do
       expect(view.ssr_body_attributes).to eq('class="dark" data-page="home"')
     end
 
+    # Every other failure in this gem degrades to client-side rendering. A
+    # renderer answering 200 with the wrong shape must not be the one case that
+    # raises inside the layout instead.
+    it "drops body attributes that are not a hash rather than raising" do
+      [%w[class dark], "class=dark", 42].each do |malformed|
+        view.ssr_response =
+          UniversalRenderer::SSR::Response.new(
+            body: "<div></div>",
+            body_attrs: malformed
+          )
+
+        expect(view.ssr_body_attributes).to eq("")
+      end
+    end
+
     it "removes executable and malformed body attributes when sanitizing" do
       view.ssr_response =
         UniversalRenderer::SSR::Response.new(

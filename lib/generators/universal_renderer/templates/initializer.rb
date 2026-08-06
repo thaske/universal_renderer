@@ -10,18 +10,21 @@ UniversalRenderer.configure do |c|
   c.timeout = 3
 
   # Must match the `paths` option passed to createServer on the Node side.
-  # render_path defaults to whatever path `url` already carries; set it only if
-  # you mount the renderer somewhere other than the root of that URL.
+  # Both default to the paths createServer mounts, so set them only if you moved
+  # the endpoints: render_path defaults to whatever path `url` already carries,
+  # stream_path to "/stream".
   # c.render_path = "/render"
-  c.stream_path = "/stream"
+  # c.stream_path = "/stream"
 
   c.http.pool_size = 5
 
-  # Sanitizing the render costs real CPU on every request, since it parses and
-  # rewrites the whole document. The SSR service is your own code, so once you
-  # are confident about what it emits — and especially when it runs on the same
-  # host as Rails — turning this off is a reasonable trade. It defaults to true
-  # because failing closed is the right default for a security control.
+  # Sanitizing the render is defense in depth over HTML your own renderer
+  # produced — it is a blocklist, so it is not a boundary against
+  # attacker-controlled markup. Escape untrusted data inside the render itself.
+  #
+  # It also costs real CPU on every request, since it parses and rewrites the
+  # whole document. Turning it off is a reasonable trade once you are confident
+  # about what the renderer emits:
   #
   # c.sanitize = false
   #

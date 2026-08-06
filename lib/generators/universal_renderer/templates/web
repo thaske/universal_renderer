@@ -4,8 +4,8 @@
 # These deliberately share a process rather than being separate Procfile process
 # types. On Heroku (and most PaaS) process types get no routable address for each
 # other, so a standalone `ssr:` type could not be reached at the configured URL —
-# while on one dyno the loopback default just works, and each web dyno gets its
-# own renderer, so SSR capacity scales with the web process count.
+# while on one process the loopback default just works, and each web process gets
+# its own renderer, so SSR capacity scales with the web process count.
 #
 # If the renderer dies, the Rails client fails open and those requests fall back
 # to client-side rendering. That is a degraded page, not an outage, so it must not
@@ -15,8 +15,19 @@ set -uo pipefail
 SSR_BUNDLE="${SSR_BUNDLE:-ssr-build/server.mjs}"
 export SSR_PORT="${SSR_PORT:-3001}"
 
+# The renderer serializes renders by default, so one render that never finishes
+# takes the whole renderer with it: the queue fills and every subsequent request
+# gets a 503. `/health` reports that state (see the `renderTimeout` option), and
+# this loop is what acts on it. Set SSR_WATCHDOG=0 to disable.
+SSR_WATCHDOG="${SSR_WATCHDOG:-1}"
+SSR_HEALTH_URL="${SSR_HEALTH_URL:-http://127.0.0.1:${SSR_PORT}/health}"
+SSR_HEALTH_INTERVAL="${SSR_HEALTH_INTERVAL:-10}"
+SSR_HEALTH_FAILURES="${SSR_HEALTH_FAILURES:-3}"
+
 SSR_PID=""
 APP_PID=""
+shutting_down=0
+health_failures=0
 
 start_ssr() {
   if [ ! -f "$SSR_BUNDLE" ]; then
@@ -30,20 +41,77 @@ start_ssr() {
   echo "[web] SSR renderer started (pid $SSR_PID, port $SSR_PORT)"
 }
 
-start_ssr
+stop_ssr() {
+  [ -n "$SSR_PID" ] || return 0
+
+  # TERM first, but a wedged renderer is wedged precisely because its event loop
+  # is not turning, so it may never see the handler. KILL after a grace period.
+  kill -TERM "$SSR_PID" 2>/dev/null || true
+  for _ in 1 2 3 4 5; do
+    kill -0 "$SSR_PID" 2>/dev/null || break
+    sleep 1
+  done
+  kill -KILL "$SSR_PID" 2>/dev/null || true
+  wait "$SSR_PID" 2>/dev/null || true
+  SSR_PID=""
+}
+
+# Restarting the renderer never touches Puma: a wedged renderer degrades pages,
+# and bouncing the app server over it would turn that into dropped requests.
+check_ssr_health() {
+  [ "$SSR_WATCHDOG" = "1" ] || return 0
+  [ -n "$SSR_PID" ] || return 0
+  command -v curl >/dev/null 2>&1 || return 0
+
+  if curl -fsS --max-time 5 "$SSR_HEALTH_URL" >/dev/null 2>&1; then
+    health_failures=0
+    return 0
+  fi
+
+  health_failures=$((health_failures + 1))
+  [ "$health_failures" -ge "$SSR_HEALTH_FAILURES" ] || return 0
+
+  echo "[web] SSR renderer unhealthy after ${health_failures} checks — restarting." >&2
+  stop_ssr
+  health_failures=0
+  start_ssr
+}
 
 # Keep this shell as the supervisor. An EXIT trap is discarded by `exec`, which
-# would leave the renderer orphaned when Puma exits normally. Forward shutdown
-# signals to both children, then preserve Puma's exit status for the platform.
-stop_children() {
-  if [ -n "$APP_PID" ]; then kill "$APP_PID" 2>/dev/null || true; fi
-  if [ -n "$SSR_PID" ]; then kill "$SSR_PID" 2>/dev/null || true; fi
+# would leave the renderer orphaned when Puma exits normally.
+on_signal() {
+  shutting_down=1
+  # Forward to Puma and then *wait* for it below: killing it and exiting
+  # immediately cuts every in-flight request instead of letting Puma drain.
+  if [ -n "$APP_PID" ]; then kill -TERM "$APP_PID" 2>/dev/null || true; fi
 }
-trap stop_children EXIT INT TERM
+trap on_signal INT TERM
+trap 'if [ -n "$SSR_PID" ]; then kill -KILL "$SSR_PID" 2>/dev/null || true; fi' EXIT
+
+start_ssr
 
 bundle exec puma -C config/puma.rb &
 APP_PID=$!
+
+# Ticks once a second and health-checks every SSR_HEALTH_INTERVAL, rather than
+# sleeping the whole interval: this loop is also what notices the app server
+# exiting, and a long sleep would delay the process exit by that much.
+elapsed=0
+while [ "$shutting_down" -eq 0 ] && kill -0 "$APP_PID" 2>/dev/null; do
+  # `sleep` is interrupted by a signal, so the traps above still run promptly.
+  sleep 1
+  elapsed=$((elapsed + 1))
+  if [ "$shutting_down" -eq 0 ] && [ "$elapsed" -ge "$SSR_HEALTH_INTERVAL" ]; then
+    elapsed=0
+    check_ssr_health
+  fi
+done
+
+# Blocks until Puma has finished draining, and yields its exit status for the
+# platform.
 wait "$APP_PID"
 APP_STATUS=$?
 APP_PID=""
+
+stop_ssr
 exit "$APP_STATUS"
