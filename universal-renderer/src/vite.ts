@@ -86,13 +86,13 @@ export function defineSsrConfig(options: SsrBuildOptions): UserConfig {
     base,
     // Rails' public/ is this root's default publicDir.
     publicDir: false,
+    ...rest,
     define: {
       // Bundled browser-oriented modules reference `global`; under Node/Bun it
       // does not exist as a bare identifier in ESM.
       global: "globalThis",
       ...rest.define,
     },
-    ...rest,
     build: {
       ssr: absolute(entry),
       outDir: absolute(outDir),

@@ -16,6 +16,7 @@ SSR_BUNDLE="${SSR_BUNDLE:-ssr-build/server.mjs}"
 export SSR_PORT="${SSR_PORT:-3001}"
 
 SSR_PID=""
+APP_PID=""
 
 start_ssr() {
   if [ ! -f "$SSR_BUNDLE" ]; then
@@ -31,8 +32,18 @@ start_ssr() {
 
 start_ssr
 
-# The app server is what keeps the process alive; when it exits, so does the
-# renderer.
-trap 'if [ -n "$SSR_PID" ]; then kill "$SSR_PID" 2>/dev/null; fi' EXIT
+# Keep this shell as the supervisor. An EXIT trap is discarded by `exec`, which
+# would leave the renderer orphaned when Puma exits normally. Forward shutdown
+# signals to both children, then preserve Puma's exit status for the platform.
+stop_children() {
+  if [ -n "$APP_PID" ]; then kill "$APP_PID" 2>/dev/null || true; fi
+  if [ -n "$SSR_PID" ]; then kill "$SSR_PID" 2>/dev/null || true; fi
+}
+trap stop_children EXIT INT TERM
 
-exec bundle exec puma -C config/puma.rb
+bundle exec puma -C config/puma.rb &
+APP_PID=$!
+wait "$APP_PID"
+APP_STATUS=$?
+APP_PID=""
+exit "$APP_STATUS"

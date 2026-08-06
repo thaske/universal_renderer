@@ -6,6 +6,8 @@ module UniversalRenderer
     # `helper_method` (see {UniversalRenderer::Renderable}); everything here is
     # built on top of them, so no view ever needs to read an instance variable.
     module Helpers
+      SAFE_BODY_ATTRIBUTE_NAME = /\A[a-z_:][a-z0-9:._-]*\z/i
+
       # Server-rendered <head> content, or the streaming placeholder.
       #
       # @return [String] Sanitized head HTML, the `<!-- SSR_HEAD -->` marker
@@ -33,12 +35,16 @@ module UniversalRenderer
       #
       #   <body class="app" <%= ssr_body_attributes %>>
       #
+      # When sanitization is enabled, executable and malformed attribute names
+      # are removed before Rails escapes and serializes the remaining values.
+      #
       # @return [ActiveSupport::SafeBuffer] Escaped `name="value"` pairs, or an
       #   empty buffer when the renderer sent none.
       def ssr_body_attributes
         attrs = ssr_response&.body_attrs
         return "".html_safe if attrs.blank?
 
+        attrs = sanitize_ssr_body_attributes(attrs) if UniversalRenderer.config.sanitize
         tag.attributes(attrs)
       end
 
@@ -82,6 +88,20 @@ module UniversalRenderer
         # rubocop:enable Rails/OutputSafety
 
         sanitize(html, scrubber: config.scrubber || Scrubber.new)
+      end
+
+      # Attribute values are escaped by `tag.attributes`, but Rails deliberately
+      # does not reject executable names such as `onload`. Keep the body-attribute
+      # channel inside the same security boundary as `ssr_head` and `ssr_body`
+      # whenever sanitization is enabled.
+      def sanitize_ssr_body_attributes(attrs)
+        attrs.each_with_object({}) do |(name, value), safe|
+          normalized = name.to_s.downcase
+          next unless normalized.match?(SAFE_BODY_ATTRIBUTE_NAME)
+          next if normalized.start_with?("on") || normalized == "srcdoc"
+
+          safe[name] = value
+        end
       end
 
       # @deprecated The props Rails sent are already known to Rails; what the

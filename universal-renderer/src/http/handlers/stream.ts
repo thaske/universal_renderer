@@ -40,7 +40,9 @@ export function createStreamHandler<TContext extends Record<string, any>>(
     let reactNode: ReactNode | undefined;
     let abortRender: (() => void) | undefined;
     let cleanupStarted = false;
+    let cleanupRequested = false;
     let setupSettled = false;
+    let startupInFlight = 0;
     let stopped = false;
     let didRenderError = false;
 
@@ -57,8 +59,13 @@ export function createStreamHandler<TContext extends Record<string, any>>(
     // context setup is about to return and hand the slot to the next render
     // while this one is still touching module state. The post-setup check
     // notices `stopped` and finalizes then.
+    //
+    // Cleanup also waits for asynchronous stream startup (notably the `head`
+    // callback), because releasing the slot while that callback still reads
+    // shared state would break the limiter's isolation guarantee.
     const cleanup = async () => {
-      if (!setupSettled || cleanupStarted) return;
+      cleanupRequested = true;
+      if (!setupSettled || cleanupStarted || startupInFlight > 0) return;
       cleanupStarted = true;
 
       try {
@@ -87,6 +94,15 @@ export function createStreamHandler<TContext extends Record<string, any>>(
       }
     };
 
+    const stopForDisconnect = () => {
+      if (stopped) return;
+
+      stopped = true;
+      disconnected.abort();
+      abortRender?.();
+      void cleanup();
+    };
+
     let url: string;
     let props: Record<string, any>;
     let template: string;
@@ -96,13 +112,9 @@ export function createStreamHandler<TContext extends Record<string, any>>(
     res.once("finish", () => {
       void cleanup();
     });
+    req.once("aborted", stopForDisconnect);
     res.once("close", () => {
-      if (!res.writableFinished) {
-        stopped = true;
-        disconnected.abort();
-        abortRender?.();
-        void cleanup();
-      }
+      if (!res.writableFinished) stopForDisconnect();
     });
 
     try {
@@ -163,35 +175,42 @@ export function createStreamHandler<TContext extends Record<string, any>>(
     const startStreaming = async (
       pipe: (destination: NodeJS.WritableStream) => void,
     ) => {
-      const bodyMarkerIndex = template.indexOf(SSR_MARKERS.BODY);
-      const head = template.slice(0, bodyMarkerIndex);
-      const tail = template.slice(bodyMarkerIndex + SSR_MARKERS.BODY.length);
-      const finalHead = await streamCallbacks.head?.(context);
+      startupInFlight += 1;
 
-      if (stopped || res.destroyed) return;
+      try {
+        const bodyMarkerIndex = template.indexOf(SSR_MARKERS.BODY);
+        const head = template.slice(0, bodyMarkerIndex);
+        const tail = template.slice(bodyMarkerIndex + SSR_MARKERS.BODY.length);
+        const finalHead = await streamCallbacks.head?.(context);
 
-      if (didRenderError) res.status(500);
-      res.setHeader("content-type", "text/html");
-      res.write(head.replace(SSR_MARKERS.HEAD, finalHead ?? ""));
+        if (stopped || res.destroyed) return;
 
-      const stream = new PassThrough();
-      const transform = streamCallbacks.transform?.(context);
-      // Widened deliberately: PassThrough and ReadWriteStream have overload sets
-      // TypeScript cannot reconcile into one callable `once`.
-      const output: NodeJS.ReadableStream = transform
-        ? stream.pipe(transform)
-        : stream;
+        if (didRenderError) res.status(500);
+        res.setHeader("content-type", "text/html");
+        res.write(head.replace(SSR_MARKERS.HEAD, finalHead ?? ""));
 
-      const handleOutputError = (error: unknown) => stopWithError(error);
-      stream.once("error", handleOutputError);
-      if (output !== stream) output.once("error", handleOutputError);
+        const stream = new PassThrough();
+        const transform = streamCallbacks.transform?.(context);
+        // Widened deliberately: PassThrough and ReadWriteStream have overload sets
+        // TypeScript cannot reconcile into one callable `once`.
+        const output: NodeJS.ReadableStream = transform
+          ? stream.pipe(transform)
+          : stream;
 
-      output.pipe(res, { end: false });
-      output.once("end", () => {
-        if (!stopped && !res.destroyed) res.end(tail);
-      });
+        const handleOutputError = (error: unknown) => stopWithError(error);
+        stream.once("error", handleOutputError);
+        if (output !== stream) output.once("error", handleOutputError);
 
-      pipe(stream);
+        output.pipe(res, { end: false });
+        output.once("end", () => {
+          if (!stopped && !res.destroyed) res.end(tail);
+        });
+
+        pipe(stream);
+      } finally {
+        startupInFlight -= 1;
+        if (cleanupRequested || stopped || res.destroyed) await cleanup();
+      }
     };
 
     try {

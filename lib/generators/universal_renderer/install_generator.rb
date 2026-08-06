@@ -39,7 +39,7 @@ module UniversalRenderer
     end
 
     def copy_deploy_files
-      return if options[:skip_deploy]
+      return if options[:skip_deploy] || options[:skip_frontend]
 
       template "ssr.rake", "lib/tasks/ssr.rake"
       template "web", "bin/web"
@@ -49,6 +49,13 @@ module UniversalRenderer
     def show_installation_notes
       say_status "info", "Universal Renderer installed."
       say_status "note", "Next steps:"
+      if options[:skip_frontend]
+        say_status "", "  1. Review config/initializers/universal_renderer.rb"
+        say_status "", "  2. Connect your existing renderer to that endpoint"
+        say_status "", "  3. Opt a controller in with `enable_ssr` or `render_ssr`"
+        return
+      end
+
       say_status "", "  1. bun add universal-renderer   (or npm/yarn)"
       say_status "", "  2. Fill in #{frontend_dir}/ssr/config.ts — the render itself"
       say_status "", "  3. Add the renderer to Procfile.dev:"
@@ -57,7 +64,7 @@ module UniversalRenderer
       say_status "",
                  '       "build:ssr": "vite -c vite.config.ssr.mts build"'
       say_status "", "  5. Opt a controller in with `enable_ssr` or `render_ssr`"
-      return if options[:skip_deploy]
+      return if options[:skip_deploy] || options[:skip_frontend]
 
       say_status "", "  6. Point Procfile's web process at bin/web, which runs"
       say_status "", "     the renderer alongside your app server"

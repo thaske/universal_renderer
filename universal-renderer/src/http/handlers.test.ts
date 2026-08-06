@@ -337,6 +337,83 @@ describe("HTTP handler hardening", () => {
     }
   });
 
+  it("holds the render slot until an async head callback settles after disconnect", async () => {
+    let headStarted!: () => void;
+    let finishHead!: () => void;
+    const headHasStarted = new Promise<void>((resolve) => {
+      headStarted = resolve;
+    });
+    const headCanFinish = new Promise<void>((resolve) => {
+      finishHead = resolve;
+    });
+    const events: string[] = [];
+    const app = await createServer({
+      setup: async (url) => {
+        events.push(`setup:${url}`);
+        return { url };
+      },
+      render: ({ url }) => ({ body: `<div>${url}</div>` }),
+      cleanup: async ({ url }) => void events.push(`cleanup:${url}`),
+      streamCallbacks: {
+        node: () => createElement("div", null, "streamed"),
+        head: async ({ url }) => {
+          events.push(`head-start:${url}`);
+          headStarted();
+          await headCanFinish;
+          events.push(`head-end:${url}`);
+          return "";
+        },
+      },
+    });
+    const server = await listen(app);
+
+    try {
+      const streaming = request(`${server.baseUrl}/stream`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+      });
+      streaming.once("error", () => {});
+      streaming.end(
+        JSON.stringify({
+          url: "/streaming",
+          template:
+            "<html><!-- SSR_HEAD --><body><!-- SSR_BODY --></body></html>",
+        }),
+      );
+
+      await headHasStarted;
+      streaming.destroy();
+
+      const blocking = fetch(`${server.baseUrl}/`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url: "/blocking" }),
+      });
+      await new Promise((resolve) => setTimeout(resolve, 30));
+
+      expect(events).toEqual(["setup:/streaming", "head-start:/streaming"]);
+
+      finishHead();
+      const response = await blocking;
+      expect(response.status).toBe(200);
+      await response.text();
+
+      await vi.waitFor(() =>
+        expect(events).toEqual([
+          "setup:/streaming",
+          "head-start:/streaming",
+          "head-end:/streaming",
+          "cleanup:/streaming",
+          "setup:/blocking",
+          "cleanup:/blocking",
+        ]),
+      );
+    } finally {
+      finishHead();
+      await server.close();
+    }
+  });
+
   it("cleans up when React cannot produce a shell", async () => {
     const cleanup = vi.fn(async () => {});
     vi.spyOn(console, "error").mockImplementation(() => {});

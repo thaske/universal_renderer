@@ -57,6 +57,28 @@ RSpec.describe UniversalRenderer::SSR::Helpers do
       expect(view.ssr_body_attributes).to eq('class="dark" data-page="home"')
     end
 
+    it "removes executable and malformed body attributes when sanitizing" do
+      view.ssr_response =
+        UniversalRenderer::SSR::Response.new(
+          body_attrs: {
+            "class" => "dark",
+            "ONLOAD" => "steal()",
+            "srcdoc" => "<script>steal()</script>",
+            "bad name" => "value"
+          }
+        )
+
+      expect(view.ssr_body_attributes).to eq('class="dark"')
+    end
+
+    it "allows trusted body attributes when sanitization is disabled" do
+      UniversalRenderer.config.sanitize = false
+      view.ssr_response =
+        UniversalRenderer::SSR::Response.new(body_attrs: { "onload" => "trusted()" })
+
+      expect(view.ssr_body_attributes).to eq('onload="trusted()"')
+    end
+
     it "emits the payload as an inert JSON script tag" do
       expect(view.ssr_payload).to eq(
         '<script id="ssr-payload" type="application/json">' \
