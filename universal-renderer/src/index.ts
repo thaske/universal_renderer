@@ -1,6 +1,16 @@
 export { SSR_MARKERS } from "./constants";
-export { acquire, createLimiter } from "./concurrency";
-export type { Concurrency, Limiter } from "./concurrency";
+export {
+  acquire,
+  createLimiter,
+  QueueAbortedError,
+  QueueFullError,
+} from "./concurrency";
+export type {
+  Concurrency,
+  Limiter,
+  LimitOptions,
+  QueueLimit,
+} from "./concurrency";
 export {
   createErrorHandler,
   createHealthHandler,

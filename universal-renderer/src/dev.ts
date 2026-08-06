@@ -176,6 +176,7 @@ export async function startDevServer(options: DevServerOptions): Promise<{
 
   const started = await startServer({
     concurrency: initial.concurrency,
+    queueLimit: initial.queueLimit,
     paths: initial.paths,
     bodyLimit: initial.bodyLimit,
     ...options.overrides,

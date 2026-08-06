@@ -110,17 +110,13 @@ export function setViewport(next: Viewport): void {
 }
 
 function makeStorage(): Storage {
-  const backing = new Map<string, string>();
   return {
-    get length() {
-      return backing.size;
-    },
-    clear: () => backing.clear(),
-    getItem: (key: string) => backing.get(key) ?? null,
-    key: (index: number) => Array.from(backing.keys())[index] ?? null,
-    removeItem: (key: string) => void backing.delete(key),
-    setItem: (key: string, value: string) =>
-      void backing.set(key, String(value)),
+    length: 0,
+    clear: noop,
+    getItem: () => null,
+    key: () => null,
+    removeItem: noop,
+    setItem: noop,
   } as unknown as Storage;
 }
 

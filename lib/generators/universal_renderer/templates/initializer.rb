@@ -36,7 +36,8 @@ UniversalRenderer.configure do |c|
   #                   tags: ["outcome:#{event.payload[:outcome]}"])
   #   end
   #
-  # ...and/or route the errors to your exception tracker:
+  # ...and/or route configured-render errors to your exception tracker
+  # (`:not_configured` is notification-only):
   # c.on_error = ->(error, context) { Sentry.capture_exception(error, extra: context) }
 
   # The concern is included into every ActionController::Base descendant by

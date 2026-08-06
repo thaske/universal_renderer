@@ -96,6 +96,12 @@ Only raise it once you have verified the render touches no shared mutable state.
 The limiter covers `setup` through `cleanup`, so the `prepare`/`cleanup` window is
 guaranteed not to overlap another render.
 
+The waiting queue is capped at ten requests per concurrency slot by default.
+Once full, new requests receive `503`; requests that disconnect while waiting
+are removed instead of being rendered after their caller has gone away. Set
+`queueLimit` explicitly, or use `"unbounded"`, only when the caller's timeout
+and your own admission control make a larger backlog safe.
+
 ### Paths
 
 ```ts

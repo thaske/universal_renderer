@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { acquire, createLimiter } from "./concurrency";
+import {
+  acquire,
+  createLimiter,
+  QueueAbortedError,
+  QueueFullError,
+} from "./concurrency";
 
 const deferred = () => {
   let resolve!: () => void;
@@ -93,6 +98,53 @@ describe("createLimiter", () => {
     expect(() => createLimiter(-1)).toThrow(/positive integer/);
     expect(() => createLimiter(1.5)).toThrow(/positive integer/);
   });
+
+  it("removes an aborted task from the queue", async () => {
+    const limiter = createLimiter(1);
+    const gate = deferred();
+    let staleTaskRan = false;
+
+    const active = limiter(async () => gate.promise);
+    await Promise.resolve();
+
+    const controller = new AbortController();
+    const stale = limiter(
+      async () => {
+        staleTaskRan = true;
+      },
+      { signal: controller.signal },
+    );
+
+    controller.abort();
+    await expect(stale).rejects.toBeInstanceOf(QueueAbortedError);
+
+    gate.resolve();
+    await active;
+    await limiter(async () => undefined);
+
+    expect(staleTaskRan).toBe(false);
+  });
+
+  it("rejects excess work once the queue is full", async () => {
+    const limiter = createLimiter(1, 1);
+    const gate = deferred();
+
+    const active = limiter(async () => gate.promise);
+    await Promise.resolve();
+    const queued = limiter(async () => undefined);
+
+    await expect(limiter(async () => undefined)).rejects.toBeInstanceOf(
+      QueueFullError,
+    );
+
+    gate.resolve();
+    await Promise.all([active, queued]);
+  });
+
+  it("validates the queue limit", () => {
+    expect(() => createLimiter(1, -1)).toThrow(/non-negative integer/);
+    expect(() => createLimiter(1, 1.5)).toThrow(/non-negative integer/);
+  });
 });
 
 describe("acquire", () => {
@@ -136,5 +188,17 @@ describe("acquire", () => {
     await Promise.all(tasks);
 
     expect(peak).toBe(1);
+  });
+
+  it("rejects instead of hanging when an acquisition is aborted", async () => {
+    const limiter = createLimiter(1);
+    const release = await acquire(limiter);
+    const controller = new AbortController();
+
+    const queued = acquire(limiter, { signal: controller.signal });
+    controller.abort();
+
+    await expect(queued).rejects.toBeInstanceOf(QueueAbortedError);
+    release();
   });
 });

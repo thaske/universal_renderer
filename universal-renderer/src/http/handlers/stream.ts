@@ -45,6 +45,7 @@ export function createStreamHandler<TContext extends Record<string, any>>(
     let didRenderError = false;
 
     let releaseSlot: (() => void) | undefined;
+    const disconnected = new AbortController();
 
     // Runs the context cleanup and releases the concurrency slot, so a stream
     // that dies mid-flight cannot wedge the queue behind it. Idempotent: the
@@ -98,6 +99,7 @@ export function createStreamHandler<TContext extends Record<string, any>>(
     res.once("close", () => {
       if (!res.writableFinished) {
         stopped = true;
+        disconnected.abort();
         abortRender?.();
         void cleanup();
       }
@@ -127,7 +129,7 @@ export function createStreamHandler<TContext extends Record<string, any>>(
         throw new HttpError(`Template missing ${SSR_MARKERS.BODY} marker`, 400);
       }
 
-      releaseSlot = await acquire(limiter);
+      releaseSlot = await acquire(limiter, { signal: disconnected.signal });
       try {
         context = await options.setup(url, props);
       } finally {
@@ -154,6 +156,7 @@ export function createStreamHandler<TContext extends Record<string, any>>(
       options.prepare?.(context);
     } catch (error) {
       await cleanup();
+      if (stopped || res.destroyed) return;
       return next(error);
     }
 

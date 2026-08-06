@@ -5,7 +5,7 @@ import type {
   RequestHandler,
   Response,
 } from "express";
-import type { Concurrency } from "../concurrency";
+import type { Concurrency, QueueLimit } from "../concurrency";
 import type {
   BaseHandlerOptions,
   ServerPaths,
@@ -89,6 +89,13 @@ export type ExpressServerOptions<
    * touches no shared mutable state. `"unbounded"` removes the limit.
    */
   concurrency?: Concurrency;
+
+  /**
+   * Maximum requests waiting for a render slot. Defaults to ten per slot.
+   * Once full, new requests receive 503 rather than growing an unbounded stale
+   * backlog. `"unbounded"` restores the old behavior.
+   */
+  queueLimit?: QueueLimit;
 
   /**
    * Paths to mount the endpoints at. Must agree with the gem's

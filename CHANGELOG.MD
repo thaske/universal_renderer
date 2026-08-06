@@ -42,7 +42,8 @@ get it silently wrong.
   callback. Every failure mode here is a silent fallback to client rendering,
   which is right for availability and useless for operations — without a signal
   you cannot tell a healthy renderer from one that has been down for a week.
-  Streaming failures report too.
+  Streaming failures report too, including partial transfers that cannot safely
+  fall back after bytes have already been written.
 - `config.auto_include`, to stop including the concern into every
   `ActionController::Base` descendant.
 - `config.render_path`, matching the existing `stream_path`.
@@ -112,6 +113,10 @@ get it silently wrong.
   perf bug. Previously every consumer had to hand-roll this. `"unbounded"` opts
   out. The limiter spans `setup` through `cleanup` and is shared with the
   streaming handler.
+- `queueLimit`, defaulting to ten waiting requests per concurrency slot. The
+  renderer returns `503` when full and removes requests that disconnect while
+  waiting, so overload cannot leave stale renders ahead of live traffic.
+  `"unbounded"` opts out for callers with external admission control.
 - `prepare` hook, run synchronously immediately before the render with no await in
   between. `setup` is async, so mutations made there stay visible for as long as
   the await lasts; `prepare`/`cleanup` is the window that is actually safe.

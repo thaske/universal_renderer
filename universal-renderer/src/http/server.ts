@@ -80,7 +80,7 @@ export async function createServer<
 
   // One limiter shared by both handlers: a blocking render and a streaming
   // render contend for exactly the same module state.
-  const limiter = createLimiter(options.concurrency ?? 1);
+  const limiter = createLimiter(options.concurrency ?? 1, options.queueLimit);
 
   // Basic middleware
   app.use(express.json({ limit: options.bodyLimit ?? "50mb" }));

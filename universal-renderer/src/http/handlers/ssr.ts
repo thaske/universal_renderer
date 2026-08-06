@@ -1,5 +1,9 @@
 import type { NextFunction, Request, Response } from "express";
-import { createLimiter, type Limiter } from "../../concurrency";
+import {
+  createLimiter,
+  QueueAbortedError,
+  type Limiter,
+} from "../../concurrency";
 import type { SSRHandlerOptions } from "../../types";
 import { HttpError } from "./error";
 
@@ -29,6 +33,10 @@ export function createSSRHandler<TContext extends Record<string, any>>(
   const limiter = options.limiter ?? createLimiter(1);
 
   return async (req: Request, res: Response, next: NextFunction) => {
+    const disconnected = new AbortController();
+    req.once("aborted", () => disconnected.abort());
+    res.once("close", () => disconnected.abort());
+
     let url: string;
     let props: Record<string, any>;
 
@@ -57,27 +65,32 @@ export function createSSRHandler<TContext extends Record<string, any>>(
     }
 
     try {
-      const result = await limiter(async () => {
-        let context: TContext | undefined;
+      const result = await limiter(
+        async () => {
+          let context: TContext | undefined;
 
-        try {
-          context = await options.setup(url, props);
-          options.prepare?.(context);
-          return await options.render(context);
-        } finally {
-          // Inside the limiter on purpose: cleanup is what restores whatever
-          // prepare mutated, so it has to run before the next render starts.
-          if (context && options.cleanup) {
-            try {
-              await options.cleanup(context);
-            } catch (error) {
-              // Cleanup must never turn a completed response into an unhandled
-              // rejection. Rendering errors propagate from the try above.
-              console.error("[SSR] Cleanup error:", error);
+          try {
+            context = await options.setup(url, props);
+            options.prepare?.(context);
+            return await options.render(context);
+          } finally {
+            // Inside the limiter on purpose: cleanup is what restores whatever
+            // prepare mutated, so it has to run before the next render starts.
+            if (context && options.cleanup) {
+              try {
+                await options.cleanup(context);
+              } catch (error) {
+                // Cleanup must never turn a completed response into an unhandled
+                // rejection. Rendering errors propagate from the try above.
+                console.error("[SSR] Cleanup error:", error);
+              }
             }
           }
-        }
-      });
+        },
+        { signal: disconnected.signal },
+      );
+
+      if (res.destroyed) return;
 
       res.json({
         head: result.head ?? "",
@@ -86,6 +99,9 @@ export function createSSRHandler<TContext extends Record<string, any>>(
         payload: result.payload ?? null,
       });
     } catch (error) {
+      if (error instanceof QueueAbortedError && disconnected.signal.aborted) {
+        return;
+      }
       return next(error);
     }
   };

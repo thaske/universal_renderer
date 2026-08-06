@@ -16,6 +16,8 @@
 // Renders are serialized by default (`concurrency: 1` in server.ts), which is
 // what makes the prepare/cleanup window safe: no other render can observe your
 // mutations. Only raise it once you know the render touches no shared state.
+// The waiting queue is bounded and drops disconnected requests, so overload
+// cannot leave the renderer working through requests Rails already abandoned.
 
 import { renderToString } from "react-dom/server";
 import { hydrateReactQuery } from "universal-renderer/react-query";

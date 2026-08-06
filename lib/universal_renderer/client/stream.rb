@@ -20,16 +20,19 @@ module UniversalRenderer
       # @return [Boolean] True if streaming was initiated, false otherwise.
       def self.call(url, props, template, response)
         Instrumentation.instrument(url: url, mode: :streaming) do |event|
-          succeeded = perform(url, props, template, response)
-          event[:outcome] = :error unless succeeded
+          succeeded = perform(url, props, template, response, event)
+          event[:outcome] = :error if !succeeded && event[:outcome] == :ok
           succeeded
         end
       end
 
-      def self.perform(url, props, template, response)
+      def self.perform(url, props, template, response, event = {})
+        initialize_event(event, url)
+
         config = UniversalRenderer.config
 
         unless Setup.ensure_ssr_server_url_configured?(config)
+          event[:outcome] = :not_configured
           UniversalRenderer.log do |log|
             log.warn(
               "Stream: SSR URL (config.url) is not configured. Falling back."
@@ -51,14 +54,14 @@ module UniversalRenderer
 
           full_ssr_url_for_log = actual_stream_uri.to_s # Update for more specific logging
         rescue URI::InvalidURIError => e
-          UniversalRenderer.log do |log|
-            log.error(
-              "Stream: SSR stream failed due to invalid URI ('#{config.url}'): #{e.message}"
-            )
-          end
+          event[:outcome] = :error
+          event[:error] = e
+          ErrorLogger.log_setup_error(e, config.url.to_s, event)
           return false
         rescue StandardError => e
-          ErrorLogger.log_setup_error(e, full_ssr_url_for_log)
+          event[:outcome] = :error
+          event[:error] = e
+          ErrorLogger.log_setup_error(e, full_ssr_url_for_log, event)
           return false
         end
 
@@ -67,7 +70,14 @@ module UniversalRenderer
           http_post_request,
           response,
           stream_uri_obj
-        )
+        ) do |error, details|
+          event.merge!(details)
+          event[:error] = error
+          Instrumentation.report(
+            error,
+            event.merge(target: stream_uri_obj.to_s)
+          )
+        end
       rescue Errno::ECONNREFUSED,
              Errno::EHOSTUNREACH,
              Net::OpenTimeout,
@@ -77,21 +87,41 @@ module UniversalRenderer
         uri_str_for_conn_error =
           stream_uri_obj ? stream_uri_obj.to_s : full_ssr_url_for_log
 
-        ErrorLogger.log_connection_error(e, uri_str_for_conn_error)
+        event[:outcome] = failure_outcome(e)
+        event[:error] = e
+        ErrorLogger.log_connection_error(e, uri_str_for_conn_error, event)
 
         false
       rescue StandardError => e
         uri_str_for_unexpected_error =
           stream_uri_obj ? stream_uri_obj.to_s : full_ssr_url_for_log
 
+        event[:outcome] = :error
+        event[:error] = e
         ErrorLogger.log_unexpected_error(
           e,
           uri_str_for_unexpected_error,
-          "Stream: Unexpected error during SSR stream process"
+          "Stream: Unexpected error during SSR stream process",
+          event
         )
 
         false
       end
+
+      def self.initialize_event(event, url)
+        event[:url] ||= url
+        event[:mode] ||= :streaming
+        event[:outcome] ||= :ok
+      end
+
+      def self.failure_outcome(error)
+        return :timeout if error.is_a?(Net::OpenTimeout) ||
+                           error.is_a?(Net::ReadTimeout)
+
+        :error
+      end
+
+      private_class_method :initialize_event, :failure_outcome
     end
   end
 end

@@ -99,4 +99,118 @@ RSpec.describe UniversalRenderer::Instrumentation do
     expect { UniversalRenderer::Client::Base.call("http://example.com/p", {}) }
       .not_to raise_error
   end
+
+  it "records an unconfigured stream distinctly without reporting an error" do
+    UniversalRenderer.config.url = nil
+
+    expect(
+      UniversalRenderer::Client::Stream.call(
+        "http://example.com/p",
+        {},
+        "<html></html>",
+        double("response")
+      )
+    ).to be(false)
+
+    expect(events.first.payload).to include(
+      url: "http://example.com/p",
+      mode: :streaming,
+      outcome: :not_configured
+    )
+    expect(reported).to be_empty
+  end
+
+  it "reports stream HTTP errors with the request URL and status" do
+    stream_uri = URI.parse("http://ssr.example.test/stream")
+    allow(UniversalRenderer::Client::Stream::Setup)
+      .to receive(:build_stream_request_components)
+      .and_return([stream_uri, double("http"), double("request")])
+    allow(UniversalRenderer::Client::Stream::Execution)
+      .to receive(:perform_streaming) do |*, &failure|
+        failure.call(
+          StandardError.new("SSR stream server responded with 503 Unavailable"),
+          outcome: :http_error,
+          status: 503,
+          stage: :response
+        )
+        false
+      end
+
+    result =
+      UniversalRenderer::Client::Stream.call(
+        "http://example.com/p",
+        {},
+        "<html></html>",
+        double("response")
+      )
+
+    expect(result).to be(false)
+    expect(events.first.payload).to include(
+      url: "http://example.com/p",
+      mode: :streaming,
+      outcome: :http_error,
+      status: 503
+    )
+    expect(reported.first.last).to include(
+      url: "http://example.com/p",
+      outcome: :http_error,
+      status: 503,
+      stage: :response,
+      target: "http://ssr.example.test/stream"
+    )
+  end
+
+  it "reports an invalid streaming target" do
+    UniversalRenderer.config.url = "://invalid"
+
+    result =
+      UniversalRenderer::Client::Stream.call(
+        "http://example.com/p",
+        {},
+        "<html></html>",
+        double("response")
+      )
+
+    expect(result).to be(false)
+    expect(events.first.payload).to include(
+      url: "http://example.com/p",
+      mode: :streaming,
+      outcome: :error,
+      error: an_instance_of(URI::InvalidURIError)
+    )
+    expect(reported.first.last).to include(
+      url: "http://example.com/p",
+      outcome: :error,
+      stage: :setup,
+      target: "://invalid"
+    )
+  end
+
+  it "does not report a partial stream failure as successful" do
+    stream_uri = URI.parse("http://ssr.example.test/stream")
+    allow(UniversalRenderer::Client::Stream::Setup)
+      .to receive(:build_stream_request_components)
+      .and_return([stream_uri, double("http"), double("request")])
+    allow(UniversalRenderer::Client::Stream::Execution)
+      .to receive(:perform_streaming) do |*, &failure|
+        failure.call(IOError.new("transfer failed"), outcome: :error, stage: :transfer)
+        true
+      end
+
+    result =
+      UniversalRenderer::Client::Stream.call(
+        "http://example.com/p",
+        {},
+        "<html></html>",
+        double("response")
+      )
+
+    expect(result).to be(true)
+    expect(events.first.payload).to include(outcome: :error, error: an_instance_of(IOError))
+    expect(reported.first.last).to include(
+      url: "http://example.com/p",
+      outcome: :error,
+      stage: :transfer
+    )
+  end
 end

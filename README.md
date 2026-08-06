@@ -155,8 +155,8 @@ failing closed is the right default for a security control.
 
 ### Observability
 
-Every failure is a silent fallback, so without a signal you cannot tell a healthy
-renderer from one that has been down for a week:
+Every failed render is a silent fallback, so without a signal you cannot tell a
+healthy renderer from one that has been down for a week:
 
 ```ruby
 ActiveSupport::Notifications.subscribe("render.universal_renderer") do |event|
@@ -168,6 +168,8 @@ c.on_error = ->(error, context) { Sentry.capture_exception(error, extra: context
 ```
 
 `outcome` is one of `:ok`, `:not_configured`, `:http_error`, `:timeout`, `:error`.
+The notification fires even when no renderer URL is configured; `on_error` is
+reserved for failures after a configured render is attempted.
 
 ## The renderer
 
@@ -248,6 +250,12 @@ process, so SSR capacity tracks your web dyno count.
 
 Raise `concurrency` (or pass `"unbounded"`) only once you have verified the render
 touches no shared mutable state.
+
+The renderer admits at most ten waiting requests per concurrency slot by
+default. It returns `503` when that queue is full and removes requests that
+disconnect while waiting, so a Rails timeout cannot leave stale renders ahead
+of live traffic. Configure `queueLimit` only if the default does not fit your
+traffic and render latency.
 
 ### Entry points
 

@@ -64,10 +64,11 @@ module UniversalRenderer
     # Read when ActionController::Base loads, which is after initializers run.
     attr_accessor :auto_include
 
-    # Optional callable invoked as `call(error, context)` whenever a render
-    # request fails, where `context` is a hash carrying at least `:url` and
-    # `:outcome`. Errors are always logged; this exists so failures can also
-    # reach an exception tracker.
+    # Optional callable invoked as `call(error, context)` whenever a configured
+    # render request fails, where `context` is a hash carrying at least `:url`
+    # and `:outcome`. A missing `url` is reported as `:not_configured` through
+    # ActiveSupport::Notifications but does not call this hook. Errors are
+    # always logged; this exists so failures can also reach an exception tracker.
     #
     # Every failure mode is a silent fall back to client-side rendering, so
     # without either this hook or the `render.universal_renderer` notification
