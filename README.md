@@ -276,7 +276,7 @@ the interleaving `concurrency` exists to prevent — so **one render that never
 settles ends the renderer**. At `concurrency: 1` the queue fills, everything
 after it gets `503`, and Rails falls back to client rendering indefinitely.
 
-`renderTimeout` (default `10000`ms, `false` to disable) bounds it from both
+`renderTimeout` (default `2500`ms, `false` to disable) bounds it from both
 ends:
 
 - the caller gets a `504` instead of hanging, and
@@ -291,12 +291,10 @@ or turn it off with `SSR_WATCHDOG=0`.
 Development sets `renderTimeout: false` by default — a breakpoint in the render
 outlasts any production budget, and a `504` there is noise.
 
-**Keep `c.timeout` above `renderTimeout`.** The defaults do not: Rails gives up
-after 3s while the renderer holds its slot for up to 10s. A renderer under load
-then spends its capacity finishing renders whose caller stopped listening, and
-the queue behind it fills with more of the same. Disconnected requests are
-dropped from the queue, but a render already running cannot be taken back. Set
-one of the two so that Rails is the one that waits.
+**Keep `c.timeout` above `renderTimeout`.** The defaults are 3s and 2.5s, so
+the renderer gives up before Rails falls back. Disconnected requests are dropped
+from the queue, but a render already running cannot be taken back; preserve that
+ordering when tuning either timeout.
 
 ### Entry points
 

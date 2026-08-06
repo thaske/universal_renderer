@@ -74,10 +74,8 @@ get it silently wrong.
   the NPM package emits it.
 - The generated `bin/web` takes `SSR_RUNTIME` (default `bun`) and `WEB_CMD`
   (default the Puma line), so neither default needs a file edit.
-- Documented that `config.timeout` belongs above the renderer's `renderTimeout`.
-  The defaults do not line up — 3s against 10s — and a Rails client that gives up
-  first leaves the render holding its concurrency slot, so the renderer's queue
-  fills with work nobody is waiting for.
+- The default `renderTimeout` is 2.5s, below the gem's 3s client timeout, so
+  Rails does not abandon a render that still holds the concurrency slot.
 - The generated initializer shows both halves of a `render_path` change together.
   A mismatch is a 404, which this gem treats as a failed render, so nothing tells
   you the paths disagree.
@@ -219,7 +217,7 @@ get it silently wrong.
   perf bug. Previously every consumer had to hand-roll this. `"unbounded"` opts
   out. The limiter spans `setup` through `cleanup` and is shared with the
   streaming handler.
-- `renderTimeout`, defaulting to `10000`ms — the other half of the `concurrency`
+- `renderTimeout`, defaulting to `2500`ms — the other half of the `concurrency`
   decision. A running render's slot is never revoked (it is still touching module
   state), so a render that never settles holds its slot forever and, at
   `concurrency: 1`, ends the renderer: the queue fills and everything after it

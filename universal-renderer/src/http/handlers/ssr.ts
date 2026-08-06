@@ -9,8 +9,10 @@ import {
 import type { SSRHandlerOptions } from "../../types";
 import { HttpError } from "./error";
 
-/** Renders longer than this answer 504 rather than holding the caller open. */
-export const DEFAULT_RENDER_TIMEOUT_MS = 10_000;
+// Keep this below the gem's three-second default client timeout. Once Rails has
+// fallen back, a still-running render holds its concurrency slot and delays live
+// requests, so the renderer must give up first.
+export const DEFAULT_RENDER_TIMEOUT_MS = 2_500;
 
 /**
  * Creates a Server-Side Rendering route handler for Express.

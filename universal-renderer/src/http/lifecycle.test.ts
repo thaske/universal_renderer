@@ -2,7 +2,7 @@ import express from "express";
 import type { Server } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createSSRHandler } from "./handlers/ssr";
+import { createSSRHandler, DEFAULT_RENDER_TIMEOUT_MS } from "./handlers/ssr";
 import { createServer, DEFAULT_PORT, resolvePort } from "./server";
 
 let server: Server | undefined;
@@ -232,6 +232,10 @@ describe("createSSRHandler", () => {
 });
 
 describe("render timeout", () => {
+  it("defaults below the gem's three-second client timeout", () => {
+    expect(DEFAULT_RENDER_TIMEOUT_MS).toBeLessThan(3_000);
+  });
+
   it("answers 504 rather than holding the caller open forever", async () => {
     const app = await createServer({
       setup: async () => ({}),

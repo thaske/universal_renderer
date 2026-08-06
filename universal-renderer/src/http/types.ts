@@ -75,15 +75,15 @@ export type ExpressServerOptions<
 
   /**
    * How long a render may take before the request is answered `504`, in
-   * milliseconds. Defaults to 10000; `false` disables it.
+   * milliseconds. Defaults to 2500; `false` disables it.
    *
    * A running render's slot is never revoked, since it is still touching module
    * state, so a render that never settles ends the renderer at `concurrency: 1`.
    * This frees the caller only; `/health` then reports 503 so a supervisor can
    * restart the process, which is the only thing that clears it.
    *
-   * Keep the gem's `config.timeout` above this value. The defaults do not line
-   * up (3s against 10s), so Rails gives up while the render keeps its slot.
+   * Keep the gem's `config.timeout` above this value. The defaults are 3s and
+   * 2.5s, so the renderer gives up before Rails falls back.
    */
   renderTimeout?: number | false;
 

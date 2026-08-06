@@ -6,9 +6,8 @@ UniversalRenderer.configure do |c|
   # here. `SSR_PORT` is what startServer reads, so keep the two in agreement.
   c.url = ENV.fetch("UNIVERSAL_RENDERER_URL", "http://localhost:3001")
 
-  # Keep this above the renderer's renderTimeout (10s by default). A render keeps
-  # its slot until it finishes, so giving up first fills the queue with work
-  # nobody is waiting for.
+  # Keep this above the renderer's renderTimeout (2.5s by default). A render
+  # keeps its slot until it finishes, so the renderer must give up first.
   c.timeout = 3
 
   # Must match the `paths` option passed to createServer. Both default to what

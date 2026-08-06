@@ -20,10 +20,9 @@ module UniversalRenderer
 
     # Open and read timeout, in seconds, for every request to the SSR service.
     #
-    # Keep this above the renderer's own `renderTimeout` (10s by default). A
+    # Keep this above the renderer's own `renderTimeout` (2.5s by default). A
     # render that outlives this timeout keeps its concurrency slot until it
-    # finishes, so giving up first only fills the renderer's queue with work
-    # nobody is waiting for.
+    # finishes, so the renderer must give up first.
     attr_accessor :timeout
 
     # Path the blocking renderer is mounted at. Must match the `paths.render`

@@ -19,6 +19,18 @@ RSpec.describe UniversalRenderer::InstallGenerator do
     end
   end
 
+  it "generates timeouts with the renderer finishing first" do
+    Dir.mktmpdir do |destination|
+      described_class.start([], destination_root: destination)
+
+      initializer = File.read(File.join(destination, "config/initializers/universal_renderer.rb"))
+      server = File.read(File.join(destination, "app/frontend/ssr/server.ts"))
+
+      expect(initializer).to include("c.timeout = 3")
+      expect(server).to include("renderTimeout: 2_500")
+    end
+  end
+
   it "stops the renderer and preserves the app server exit status" do
     Dir.mktmpdir do |destination|
       harness = build_web_harness(destination)

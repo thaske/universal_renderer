@@ -18,7 +18,7 @@ await startServer({
   ...config,
   // Serialized on purpose. See config.ts.
   concurrency: 1,
-  // With one slot, a render that never settles holds it forever. This answers the
-  // caller 504 and makes /health report 503, which bin/web watches.
-  renderTimeout: 10_000,
+  // Keep this below the gem's three-second default timeout: a running render
+  // holds its slot, so the renderer must give up before Rails falls back.
+  renderTimeout: 2_500,
 });
