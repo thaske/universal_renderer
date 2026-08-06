@@ -7,7 +7,6 @@ import type { InlineConfig, ViteDevServer } from "vite";
 import { startServer } from "./http/server";
 import type { SsrConfig } from "./http/types";
 
-/** Picks the ESM entry out of a package.json `exports` subpath value. */
 function esmEntry(value: unknown): string | undefined {
   if (typeof value === "string") return value;
   if (!value || typeof value !== "object") return undefined;
@@ -40,8 +39,7 @@ async function importHostVite(root: string) {
   try {
     return await load(hostRequire.resolve("vite"));
   } catch {
-    // `require.resolve` applies the `require` condition, and Vite 7 ships no CJS
-    // entry, so this throws on a version the peer range allows.
+    // Vite 7 has no CJS entry.
   }
 
   try {
@@ -56,11 +54,9 @@ async function importHostVite(root: string) {
 
     if (entry) return await load(join(dirname(manifestPath), entry));
   } catch {
-    // Not resolvable from the host at all.
+    // Fall back to this package's copy.
   }
 
-  // Warn rather than fail: the bundled copy usually works, and the failure it
-  // does cause is hard to trace back here.
   console.warn(
     `[SSR] could not resolve Vite from ${root}; using the copy bundled with ` +
       "universal-renderer. Add vite to the app's own dependencies if renders " +
@@ -69,12 +65,6 @@ async function importHostVite(root: string) {
   return await import("vite");
 }
 
-/**
- * Runs `first`, then `second` if the response is still open. Exported for its
- * test only; starting a Vite server to cover it is not worth the cost.
- *
- * @internal
- */
 export function composeMiddleware(
   first: RequestHandler,
   second?: RequestHandler,
@@ -84,7 +74,6 @@ export function composeMiddleware(
   return (req, res, next) => {
     first(req, res, (error?: unknown) => {
       if (error) return next(error);
-      // Vite answers module transforms and HMR itself.
       if (res.writableEnded || res.headersSent) return;
       second(req, res, next);
     });
@@ -169,8 +158,6 @@ export async function startDevServer(options: DevServerOptions): Promise<{
 }> {
   const root = options.root ?? process.cwd();
 
-  // vite-plugin-erb shells out to `bin/rails runner`, which needs the Rails root
-  // for credentials to resolve.
   process.env.VITE_RUBY_ROOT ||= root;
 
   const { createServer: createViteServer } = await importHostVite(root);
@@ -202,12 +189,8 @@ export async function startDevServer(options: DevServerOptions): Promise<{
     return config;
   };
 
-  // Up front, to fail fast on a broken entry and to learn whether the stream
-  // route should be mounted.
   const initial = await loadConfig();
 
-  // Keyed by the context rather than stored on it, which would flatten class
-  // instances the render depends on.
   const configs = new WeakMap<object, SsrConfig>();
 
   const configFor = (context: object): SsrConfig => {
@@ -233,7 +216,6 @@ export async function startDevServer(options: DevServerOptions): Promise<{
           configFor(context).streamCallbacks?.node?.(context),
         head: (context: any) =>
           configFor(context).streamCallbacks?.head?.(context) ?? "",
-        // Delegated like the others, so adding or removing it needs no restart.
         transform: (context: any) =>
           configFor(context).streamCallbacks?.transform?.(context),
       }
@@ -244,15 +226,12 @@ export async function startDevServer(options: DevServerOptions): Promise<{
     queueLimit: initial.queueLimit,
     paths: initial.paths,
     bodyLimit: initial.bodyLimit,
-    // Off by default: a breakpoint, or the first request paying for the module
-    // transform, routinely outlasts the production budget.
+    // Development renders can legitimately outlast the production budget.
     renderTimeout: initial.renderTimeout ?? false,
     ...options.overrides,
 
     port: options.port,
     host: options.host,
-    // Composed, not replaced: the Vite stack has to run for this to be a dev
-    // server, but a dropped override is worse than a refused one.
     middleware: composeMiddleware(
       vite.middlewares as unknown as RequestHandler,
       options.overrides?.middleware,

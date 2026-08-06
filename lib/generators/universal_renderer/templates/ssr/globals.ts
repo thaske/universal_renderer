@@ -1,33 +1,12 @@
-// Browser globals for server rendering. **This is your code, grow it.**
-//
-// Scaffolded rather than shipped by the package, because which globals a graph
-// touches is a property of that graph. Add what your render reaches for, and
-// delete the file if it needs none.
-//
-// Why any of this is needed: `renderToString` runs no effects, but it does
-// evaluate every module and every render body, and in a client-first app those
-// touch the DOM (a singleton assigning `window.x`, a component reading
-// `window.innerWidth`).
-//
-// The cost: defining `window` makes `typeof window === "undefined"` false for the
-// whole process, which is how libraries detect a server. Prefer fixing the module
-// that reaches for the DOM.
-//
-// Import order: a library that snapshots the environment at module-evaluation
-// time loses its server API for good if it is imported after this file. Import
-// those *above* this module, and reach the app graph through a dynamic
-// `import()` (see server.ts).
+// App-owned browser stubs for SSR. Add only what your graph needs. Defining
+// `window` makes browser-detection checks false process-wide; prefer fixing DOM
+// access in the app where possible.
 
 const noop = () => undefined;
 const g = globalThis as any;
-
 const MARKER = "__ssrBrowserGlobals";
 
-/** True when these globals are stubs rather than a real browser. */
 export const isShimmed = (): boolean => g[MARKER] === true;
-
-// Nothing about the device is knowable at render time. The client's first render
-// must start from the same numbers, or React throws the server markup away.
 export const SSR_VIEWPORT = { width: 1024, height: 768 };
 
 const makeLocation = (value: string) => {
@@ -49,8 +28,6 @@ const makeLocation = (value: string) => {
   };
 };
 
-// Deliberately forgetful: these globals live for the life of the process, so a
-// backing store would carry one visitor's writes into the next visitor's render.
 const makeStorage = (): Storage =>
   ({
     length: 0,
@@ -78,13 +55,6 @@ const makeElement = (): any => ({
   contains: () => false,
 });
 
-/**
- * Points the stub `location` at the URL being rendered. Call it at the top of
- * `setup`, or a stale location renders the wrong page.
- *
- * A no-op in a real browser. The marker lives on `globalThis`, so this is safe
- * from a module that gets evaluated more than once.
- */
 export function setBrowserLocation(url: string): void {
   if (!isShimmed()) return;
 
@@ -101,9 +71,7 @@ export function installBrowserGlobals(): boolean {
   }
 
   g[MARKER] = true;
-
   const location = makeLocation("http://localhost:3000/");
-
   const win: any = {
     location,
     localStorage: makeStorage(),
@@ -117,7 +85,6 @@ export function installBrowserGlobals(): boolean {
       documentElement: makeElement(),
       body: makeElement(),
       head: makeElement(),
-      // What the browser reports on first paint, so this hydrates cleanly.
       hidden: false,
       visibilityState: "visible",
       createElement: () => makeElement(),
@@ -137,8 +104,6 @@ export function installBrowserGlobals(): boolean {
       removeEventListener: noop,
     }),
     getComputedStyle: () => ({ getPropertyValue: () => "" }),
-    // Never invoked: real timers would fire after the render returns, outside the
-    // prepare/cleanup window, and mutate the state `concurrency: 1` protects.
     requestAnimationFrame: (_cb: () => void) => 0,
     cancelAnimationFrame: noop,
     innerWidth: SSR_VIEWPORT.width,
@@ -169,14 +134,6 @@ export function installBrowserGlobals(): boolean {
   ]) {
     if (!(key in g)) g[key] = win[key];
   }
-
-  // Add your own here. Common cases:
-  //
-  //   - DOM constructors a library references at module scope. Inert classes are
-  //     enough: `class DomElement {}; g.HTMLElement ??= DomElement;`
-  //   - globals your Rails layout injects, e.g. `g.gon ??= {}`.
-  //   - runtime workarounds, e.g. Bun's Error.captureStackTrace rejecting a
-  //     non-Error `this`, which breaks follow-redirects under axios.
 
   return true;
 }

@@ -1,25 +1,15 @@
 #!/usr/bin/env bash
-# Boots the web process: the SSR renderer alongside the app server.
-#
-# One process, not two Procfile types: on most PaaS, process types get no routable
-# address for each other. On one process loopback works, and each web process gets
-# its own renderer, so SSR capacity tracks the web process count.
-#
-# If the renderer dies, requests fall back to client rendering. That is a degraded
-# page, not an outage, so it must not take the process down.
+# Boots the SSR renderer alongside the app server.
 set -uo pipefail
 
 SSR_BUNDLE="${SSR_BUNDLE:-ssr-build/server.mjs}"
 export SSR_PORT="${SSR_PORT:-3001}"
 
-# Both overridable, because neither default fits every app: set SSR_RUNTIME=node
-# if you are not on Bun, and WEB_CMD if you do not boot with this Puma line.
+# Override these for non-Bun runtimes or non-Puma app servers.
 SSR_RUNTIME="${SSR_RUNTIME:-bun}"
 WEB_CMD="${WEB_CMD:-bundle exec puma -C config/puma.rb}"
 
-# One render that never finishes takes the whole renderer with it, since renders
-# are serialized. `/health` reports that state and this loop acts on it. Set
-# SSR_WATCHDOG=0 to disable.
+# Set SSR_WATCHDOG=0 to disable health-based renderer restarts.
 SSR_WATCHDOG="${SSR_WATCHDOG:-1}"
 SSR_HEALTH_URL="${SSR_HEALTH_URL:-http://127.0.0.1:${SSR_PORT}/health}"
 SSR_HEALTH_INTERVAL="${SSR_HEALTH_INTERVAL:-10}"
@@ -44,8 +34,6 @@ start_ssr() {
 stop_ssr() {
   [ -n "$SSR_PID" ] || return 0
 
-  # TERM first, but a wedged renderer's event loop is not turning, so it may never
-  # see the handler. KILL after a grace period.
   kill -TERM "$SSR_PID" 2>/dev/null || true
   for _ in 1 2 3 4 5; do
     kill -0 "$SSR_PID" 2>/dev/null || break
@@ -56,8 +44,6 @@ stop_ssr() {
   SSR_PID=""
 }
 
-# Never touches the app server: a wedged renderer degrades pages, and bouncing the
-# app server over it would drop requests instead.
 check_ssr_health() {
   [ "$SSR_WATCHDOG" = "1" ] || return 0
   [ -n "$SSR_PID" ] || return 0
@@ -77,12 +63,8 @@ check_ssr_health() {
   start_ssr
 }
 
-# Keep this shell as the supervisor: `exec` discards the EXIT trap, which would
-# orphan the renderer when the app server exits normally.
 on_signal() {
   shutting_down=1
-  # Forward it, then *wait* below: exiting immediately cuts in-flight requests
-  # instead of letting the app server drain.
   if [ -n "$APP_PID" ]; then kill -TERM "$APP_PID" 2>/dev/null || true; fi
 }
 trap on_signal INT TERM
@@ -90,16 +72,12 @@ trap 'if [ -n "$SSR_PID" ]; then kill -KILL "$SSR_PID" 2>/dev/null || true; fi' 
 
 start_ssr
 
-# Unquoted on purpose: WEB_CMD is a command line, not a single argument.
 # shellcheck disable=SC2086
 $WEB_CMD &
 APP_PID=$!
 
-# Ticks once a second rather than sleeping the whole interval, because this loop
-# is also what notices the app server exiting.
 elapsed=0
 while [ "$shutting_down" -eq 0 ] && kill -0 "$APP_PID" 2>/dev/null; do
-  # `sleep` is interrupted by a signal, so the traps above still run promptly.
   sleep 1
   elapsed=$((elapsed + 1))
   if [ "$shutting_down" -eq 0 ] && [ "$elapsed" -ge "$SSR_HEALTH_INTERVAL" ]; then
@@ -108,7 +86,6 @@ while [ "$shutting_down" -eq 0 ] && kill -0 "$APP_PID" 2>/dev/null; do
   fi
 done
 
-# Blocks until the app server has drained, and yields its status.
 wait "$APP_PID"
 APP_STATUS=$?
 APP_PID=""
