@@ -22,6 +22,7 @@ export {
   createStreamHandler,
   DEFAULT_PORT,
   DEFAULT_RENDER_TIMEOUT_MS,
+  DEFAULT_STALL_AFTER_MS,
   resolvePort,
   startServer,
   createServer as default,

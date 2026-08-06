@@ -7,7 +7,10 @@ export type {
   StreamHandlerOptions,
 } from "../types";
 export { createErrorHandler } from "./handlers/error";
-export { createHealthHandler } from "./handlers/health";
+export {
+  createHealthHandler,
+  DEFAULT_STALL_AFTER_MS,
+} from "./handlers/health";
 export type { HealthHandlerOptions } from "./handlers/health";
 export { createSSRHandler, DEFAULT_RENDER_TIMEOUT_MS } from "./handlers/ssr";
 export { createStreamHandler } from "./handlers/stream";

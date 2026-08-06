@@ -114,7 +114,7 @@ export async function createServer<
   // one. Only a restart clears the latter.
   app.get(
     paths.health as string | string[],
-    createHealthHandler({ limiter, stallAfterMs: renderTimeout }),
+    createHealthHandler({ limiter, stallAfterMs: options.stallAfterMs }),
   );
 
   // JSON SSR endpoints using the SSR handler factory

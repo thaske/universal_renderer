@@ -136,7 +136,7 @@ plugin state, and the symptom is path aliases failing to resolve mid-render rath
 than an import error, so a fallback to the bundled copy warns at boot.
 
 `overrides` accepts the transport options (`concurrency`, `paths`, `renderTimeout`,
-and so on). `middleware` and `error` compose with the dev server's own instead of
+`stallAfterMs`, and so on). `middleware` and `error` compose with the dev server's own instead of
 replacing them: yours runs after Vite's stack, and after the handler that maps
 stack traces back to source.
 
@@ -223,13 +223,18 @@ import express from "express";
 import { createHealthHandler, createSSRHandler, createLimiter } from "universal-renderer";
 
 const app = express();
+const limiter = createLimiter(1);
+
 app.use(express.json({ limit: "50mb" }));
-app.get("/health", createHealthHandler());
-app.post("/render", createSSRHandler({ ...config, limiter: createLimiter(1) }));
+app.get("/health", createHealthHandler({ limiter, stallAfterMs: 30_000 }));
+app.post("/render", createSSRHandler({ ...config, limiter }));
 ```
 
 Pass the same `limiter` to every handler that renders, or they will not contend
-with each other.
+with each other. Give `createHealthHandler` a `stallAfterMs` well above your
+slowest legitimate render — it reports how long a slot has been held, and a
+streaming response holds its slot until its last chunk, so a threshold near
+`renderTimeout` flags healthy streams as stalled.
 
 The default error handler answers JSON and withholds the message and stack unless
 `SSR_VERBOSE_ERRORS=1` or `NODE_ENV` is `development`/`test`. Nothing in a Rails

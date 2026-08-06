@@ -124,6 +124,7 @@ export type DevServerOptions = {
     | "paths"
     | "queueLimit"
     | "renderTimeout"
+    | "stallAfterMs"
   >;
 };
 
@@ -228,6 +229,7 @@ export async function startDevServer(options: DevServerOptions): Promise<{
     bodyLimit: initial.bodyLimit,
     // Development renders can legitimately outlast the production budget.
     renderTimeout: initial.renderTimeout ?? false,
+    stallAfterMs: initial.stallAfterMs ?? false,
     ...options.overrides,
 
     port: options.port,

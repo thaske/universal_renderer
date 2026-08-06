@@ -1,7 +1,11 @@
 import express from "express";
 import type { Server } from "node:http";
+import { Transform } from "node:stream";
+import { createElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { SSR_MARKERS } from "../constants";
+import { DEFAULT_STALL_AFTER_MS } from "./handlers/health";
 import { createSSRHandler, DEFAULT_RENDER_TIMEOUT_MS } from "./handlers/ssr";
 import { createServer, DEFAULT_PORT, resolvePort } from "./server";
 
@@ -257,6 +261,7 @@ describe("render timeout", () => {
       setup: async () => ({}),
       render: () => new Promise<never>(() => {}),
       renderTimeout: 30,
+      stallAfterMs: 30,
     });
     const base = await listen(app);
 
@@ -277,6 +282,60 @@ describe("render timeout", () => {
 
     expect(body.status).toBe("STALLED");
     expect(body.renders.active).toBe(1);
+  });
+
+  it("does not tie the stall threshold to the render budget", () => {
+    expect(DEFAULT_STALL_AFTER_MS).toBeGreaterThan(DEFAULT_RENDER_TIMEOUT_MS);
+  });
+
+  it("keeps /health green while a slow stream is still producing chunks", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    const app = await createServer({
+      setup: async () => ({}),
+      render: async () => ({ body: "<div/>" }),
+      renderTimeout: 30,
+      streamCallbacks: {
+        node: () => createElement("div", null, "streamed"),
+        transform: () =>
+          new Transform({
+            transform(chunk, _encoding, callback) {
+              void gate.then(() => callback(null, chunk));
+            },
+          }),
+      },
+    });
+    const base = await listen(app);
+
+    const streaming = fetch(`${base}/stream`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        url: "http://x/",
+        template: `<html><body>${SSR_MARKERS.BODY}</body></html>`,
+      }),
+    });
+
+    const shell = await streaming;
+    expect(shell.status).toBe(200);
+
+    await new Promise((resolve) => setTimeout(resolve, 60));
+
+    const health = await fetch(`${base}/health`);
+    const body = (await health.json()) as {
+      status: string;
+      renders: { active: number };
+    };
+
+    expect(health.status).toBe(200);
+    expect(body.status).toBe("OK");
+    expect(body.renders.active).toBe(1);
+
+    release();
+    await shell.text();
   });
 
   it("leaves renders alone when the timeout is disabled", async () => {

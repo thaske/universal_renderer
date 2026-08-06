@@ -276,20 +276,30 @@ the interleaving `concurrency` exists to prevent — so **one render that never
 settles ends the renderer**. At `concurrency: 1` the queue fills, everything
 after it gets `503`, and Rails falls back to client rendering indefinitely.
 
-`renderTimeout` (default `2500`ms, `false` to disable) bounds it from both
-ends:
+Two separate settings bound it, because "over budget" and "never finishing" are
+different questions:
 
-- the caller gets a `504` instead of hanging, and
-- `GET /health` starts returning `503` with `{ status: "STALLED", renders: {...} }`
-  once a render has held its slot past the timeout.
+- `renderTimeout` (default `2500`ms, `false` to disable) answers the caller with
+  `504` instead of hanging. For a streaming render it caps time to first byte,
+  not the whole response.
+- `stallAfterMs` (default `30000`ms, `false` to disable) is how long one render
+  may hold its slot before `GET /health` returns `503` with
+  `{ status: "STALLED", renders: {...} }`.
+
+Do not collapse these into one value. A streaming response holds its slot until
+its last chunk, so a stall threshold near `renderTimeout` reports perfectly
+healthy streams as stalled and invites a supervisor to restart the renderer
+mid-response. Raise `stallAfterMs` above your slowest legitimate stream; the 30s
+default is also roughly where Heroku's router and most ALB defaults have already
+abandoned the request.
 
 Nothing inside the process can clear a stuck render, so the health signal is the
 point: the generated `bin/web` polls it and restarts the renderer without
 touching the app server. Tune with `SSR_HEALTH_INTERVAL`, `SSR_HEALTH_FAILURES`,
 or turn it off with `SSR_WATCHDOG=0`.
 
-Development sets `renderTimeout: false` by default — a breakpoint in the render
-outlasts any production budget, and a `504` there is noise.
+Development sets both to `false` — a breakpoint in the render outlasts any
+production budget, and a `504` or a restart there is noise.
 
 **Keep `c.timeout` above `renderTimeout`.** The defaults are 3s and 2.5s, so
 the renderer gives up before Rails falls back. Disconnected requests are dropped

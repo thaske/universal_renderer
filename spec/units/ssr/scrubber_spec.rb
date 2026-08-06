@@ -108,6 +108,21 @@ RSpec.describe UniversalRenderer::SSR::Scrubber do
       expect(result).not_to include("javascript", "vbscript", "data:", "refresh")
     end
 
+    it "blocks a meta refresh however the tag and value are cased or padded" do
+      html = <<~HTML
+        <META HTTP-EQUIV="REFRESH" content="0;url=https://evil.test">
+        <meta http-equiv=" refresh " content="0;url=https://evil.test">
+      HTML
+
+      expect(sanitize(html)).not_to include("evil.test")
+    end
+
+    it "leaves an escaped ampersand in a query string intact" do
+      html = '<a href="https://example.test/?a=1&amp;b=2">link</a>'
+
+      expect(sanitize(html)).to include("a=1&amp;b=2")
+    end
+
     it "keeps inline SVG data URIs on images, where browsers cannot execute them" do
       html = <<~HTML
         <img src="data:image/svg+xml,%3csvg%3e%3c/svg%3e" alt="logo">

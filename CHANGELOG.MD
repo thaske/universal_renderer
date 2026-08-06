@@ -221,10 +221,16 @@ get it silently wrong.
   decision. A running render's slot is never revoked (it is still touching module
   state), so a render that never settles holds its slot forever and, at
   `concurrency: 1`, ends the renderer: the queue fills and everything after it
-  gets `503` until a restart. The timeout answers the caller `504`, and
-  `GET /health` then reports `503` with `{ status: "STALLED", renders: {...} }`,
-  which is what the generated `bin/web` watches. `false` disables it, and
-  `startDevServer` defaults it off.
+  gets `503` until a restart. The timeout answers the caller `504`. For a
+  streaming render it caps time to first byte, not the whole response. `false`
+  disables it, and `startDevServer` defaults it off.
+- `stallAfterMs`, defaulting to `30000`ms — how long one render may hold its slot
+  before `GET /health` reports `503` with
+  `{ status: "STALLED", renders: {...} }`, which is what the generated `bin/web`
+  watches. Deliberately separate from `renderTimeout`: a streaming response holds
+  its slot until its last chunk, so a threshold near the render budget reports
+  healthy streams as stalled and invites a supervisor to restart the renderer
+  mid-response. `false` disables it, and `startDevServer` defaults it off.
 - `Limiter.stats()`, reporting active and waiting renders plus how long the
   oldest has held its slot, and `withTimeout` / `RenderTimeoutError` for callers
   composing their own handlers.

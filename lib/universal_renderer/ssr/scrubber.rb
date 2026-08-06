@@ -1,5 +1,4 @@
 require "active_support/core_ext/object/blank"
-require "cgi"
 require "loofah"
 
 module UniversalRenderer
@@ -86,7 +85,8 @@ module UniversalRenderer
       end
 
       def refreshing_meta?(node)
-        node.name == "meta" && node["http-equiv"]&.casecmp?("refresh")
+        node.name.downcase == "meta" &&
+          node["http-equiv"]&.strip&.casecmp?("refresh")
       end
 
       # Attribute *nodes*, not the `attributes` hash: that hash is keyed by local
@@ -114,8 +114,11 @@ module UniversalRenderer
         (prefix ? "#{prefix}:#{name}" : name).downcase
       end
 
+      # The parser has already resolved character references, so `value` is literal
+      # text. Decoding it again would only corrupt URLs that legitimately contain
+      # an escaped entity.
       def unsafe_uri?(value, attribute_name, node)
-        normalized = CGI.unescapeHTML(value).gsub(/[\u0000-\u0020]/, "")
+        normalized = value.gsub(/[\u0000-\u0020]/, "")
         return true if normalized.match?(DANGEROUS_PROTOCOL)
         return false if inline_svg_image?(normalized, attribute_name, node)
         return true if normalized.match?(DANGEROUS_DATA)

@@ -79,13 +79,27 @@ export type ExpressServerOptions<
    *
    * A running render's slot is never revoked, since it is still touching module
    * state, so a render that never settles ends the renderer at `concurrency: 1`.
-   * This frees the caller only; `/health` then reports 503 so a supervisor can
-   * restart the process, which is the only thing that clears it.
+   * This frees the caller only; `stallAfterMs` is what makes it visible.
+   *
+   * Streaming is bounded separately: this caps time to first byte, not the whole
+   * response.
    *
    * Keep the gem's `config.timeout` above this value. The defaults are 3s and
    * 2.5s, so the renderer gives up before Rails falls back.
    */
   renderTimeout?: number | false;
+
+  /**
+   * How long one render may hold its concurrency slot before `/health` answers
+   * 503, in milliseconds. Defaults to 30s; `false` disables the check.
+   *
+   * Separate from `renderTimeout` because it answers a different question: not
+   * "is this render over budget" but "is this process wedged". A streaming
+   * response holds its slot until the last chunk, so a threshold near
+   * `renderTimeout` would flag healthy streams. Raise it above your slowest
+   * legitimate stream.
+   */
+  stallAfterMs?: number | false;
 
   /**
    * How many renders may be in flight at once. Defaults to `1`.
