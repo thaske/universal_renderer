@@ -1,60 +1,100 @@
 module UniversalRenderer
   module SSR
+    # View helpers for emitting what the SSR service returned.
+    #
+    # `ssr?`, `ssr_response`, and `ssr_streaming?` come from the controller via
+    # `helper_method` (see {UniversalRenderer::Renderable}); everything here is
+    # built on top of them, so no view ever needs to read an instance variable.
     module Helpers
-      # @!method ssr_head
-      #   Outputs a head placeholder for SSR content.
-      #   This placeholder is used by the rendering process to inject SSR metadata.
-      #   @return [String] The HTML-safe string "<!-- SSR_HEAD -->".
+      # Server-rendered <head> content, or the streaming placeholder.
+      #
+      # @return [String] Sanitized head HTML, the `<!-- SSR_HEAD -->` marker
+      #   when streaming, or an empty string when there is nothing to emit.
       def ssr_head
-        if ssr_streaming?
-          Placeholders::HEAD
-        elsif @ssr && @ssr.head.present?
-          sanitize_ssr(@ssr.head)
-        else
-          ""
-        end
+        return Placeholders::HEAD if ssr_streaming?
+
+        html = ssr_response&.head
+        html.present? ? sanitize_ssr(html) : ""
       end
 
-      # @!method ssr_body
-      #   Outputs a body placeholder for SSR content.
-      #   This placeholder is used by the rendering process to inject the main SSR body.
-      #   @return [String] The HTML-safe string "<!-- SSR_BODY -->".
+      # Server-rendered body content, or the streaming placeholder.
+      #
+      # @return [String] Sanitized body HTML, the `<!-- SSR_BODY -->` marker
+      #   when streaming, or an empty string when there is nothing to emit.
       def ssr_body
-        if ssr_streaming?
-          Placeholders::BODY
-        elsif @ssr && @ssr.body.present?
-          sanitize_ssr(@ssr.body)
-        else
-          ""
-        end
+        return Placeholders::BODY if ssr_streaming?
+
+        html = ssr_response&.body
+        html.present? ? sanitize_ssr(html) : ""
       end
 
-      # @!method sanitize_ssr(html)
-      #   Sanitizes HTML content rendered by the SSR service.
-      #   Uses a custom scrubber ({UniversalRenderer::SSR::Scrubber}) to remove potentially
-      #   harmful elements like scripts and event handlers, while allowing safe tags
-      #   like stylesheets and meta tags.
-      #   @param html [String] The HTML string to sanitize.
-      #   @return [String] The sanitized HTML string.
+      # Attributes the renderer asked to be applied to the `<body>` tag,
+      # ready to interpolate into the tag itself.
+      #
+      #   <body class="app" <%= ssr_body_attributes %>>
+      #
+      # @return [ActiveSupport::SafeBuffer] Escaped `name="value"` pairs, or an
+      #   empty buffer when the renderer sent none.
+      def ssr_body_attributes
+        attrs = ssr_response&.body_attrs
+        return "".html_safe if attrs.blank?
+
+        tag.attributes(attrs)
+      end
+
+      # Renders the renderer's hydration payload as an inert JSON script tag.
+      #
+      # The payload travels back from the SSR service rather than out from
+      # Rails, because only the render knows it: a dehydrated query cache, the
+      # class names a CSS-in-JS library already emitted into <head>, a resolved
+      # route. Return it as `payload` from your `render` callback and read it on
+      # the client with `JSON.parse(el.textContent)`.
+      #
+      # @param id [String] DOM id for the script element.
+      # @return [ActiveSupport::SafeBuffer, nil] The script tag, or nil when the
+      #   renderer sent no payload.
+      def ssr_payload(id: "ssr-payload")
+        payload = ssr_response&.payload
+        return if payload.nil?
+
+        content_tag(
+          :script,
+          ERB::Util.json_escape(payload.to_json),
+          { id: id, type: "application/json" },
+          false
+        )
+      end
+
+      # Sanitizes HTML returned by the SSR service.
+      #
+      # Honours `config.sanitize` and `config.scrubber`. Sanitizing a full page
+      # render costs real CPU on every request; see the `sanitize` option for
+      # when turning it off is reasonable.
+      #
+      # @param html [String] The HTML string to sanitize.
+      # @return [String] The sanitized HTML string, or the input marked
+      #   html_safe when sanitization is disabled.
       def sanitize_ssr(html)
-        sanitize(html, scrubber: Scrubber.new)
+        config = UniversalRenderer.config
+        # rubocop:disable Rails/OutputSafety -- opting out of sanitization is the
+        # documented meaning of config.sanitize = false.
+        return html.to_s.html_safe unless config.sanitize
+        # rubocop:enable Rails/OutputSafety
+
+        sanitize(html, scrubber: config.scrubber || Scrubber.new)
       end
 
-      # @!method ssr_props_json(props = nil)
-      #   Serializes and JSON-escapes SSR props for safe embedding in HTML attributes.
-      #   Defaults to `@universal_renderer_props` from the current controller/view context.
-      #   @param props [Hash, nil] Optional props hash to serialize.
-      #   @return [String] JSON string escaped for safe HTML embedding.
+      # @deprecated The props Rails sent are already known to Rails; what the
+      #   client needs is the state the *render* produced. Return `payload` from
+      #   your render callback and emit it with {#ssr_payload}.
       def ssr_props_json(props = nil)
-        raw_props = props || @universal_renderer_props || {}
+        raw_props =
+          props ||
+            (controller.ssr_props if controller.respond_to?(:ssr_props)) || {}
         ERB::Util.json_escape(raw_props.to_json)
       end
 
-      # @!method ssr_props(id: "ssr-props", props: nil)
-      #   Renders a JSON script tag containing SSR props for client hydration.
-      #   @param id [String] DOM id for the script element.
-      #   @param props [Hash, nil] Optional props hash to serialize.
-      #   @return [ActiveSupport::SafeBuffer] Script tag with serialized JSON payload.
+      # @deprecated See {#ssr_props_json}. Use {#ssr_payload}.
       def ssr_props(id: "ssr-props", props: nil)
         content_tag(
           :script,
@@ -63,17 +103,6 @@ module UniversalRenderer
           false
         )
       end
-
-      # @!method ssr_streaming?
-      #   Determines if SSR streaming should be used for the current request.
-      #   The decision is based solely on the `ssr_streaming_preference` class attribute
-      #   set on the controller.
-      #   - If `ssr_streaming_preference` is `true`, streaming is enabled.
-      #   - If `ssr_streaming_preference` is `false`, streaming is disabled.
-      #   - If `ssr_streaming_preference` is `nil` (not set), streaming is disabled.
-      #   @return [Boolean, nil] The value of `ssr_streaming_preference` (true, false, or nil).
-      #     In conditional contexts, `nil` will behave as `false`.
-      delegate :ssr_streaming?, to: :controller
     end
   end
 end
