@@ -1,19 +1,37 @@
 import type { NextFunction, Request, Response } from "express";
+import {
+  createLimiter,
+  QueueAbortedError,
+  RenderTimeoutError,
+  withTimeout,
+  type Limiter,
+} from "../../concurrency";
 import type { SSRHandlerOptions } from "../../types";
 import { HttpError } from "./error";
+
+// Keep this below the gem's three-second default client timeout. Once Rails has
+// fallen back, a still-running render holds its concurrency slot and delays live
+// requests, so the renderer must give up first.
+export const DEFAULT_RENDER_TIMEOUT_MS = 2_500;
 
 /**
  * Creates a Server-Side Rendering route handler for Express.
  *
  * This handler expects POST requests with `{ url: string, props?: any }` and
- * returns JSON responses with `{ head: string, body: string, body_attrs: object }`.
+ * returns JSON responses with `{ head, body, body_attrs, payload }`.
+ *
+ * Renders are serialized by default; pass a `limiter` (or use `createServer`'s
+ * `concurrency` option) to change that.
  *
  * @template TContext - The type of context object used throughout the rendering pipeline
  * @param options - Configuration options for SSR
  * @returns SSR handler
  */
 export function createSSRHandler<TContext extends Record<string, any>>(
-  options: SSRHandlerOptions<TContext>,
+  options: SSRHandlerOptions<TContext> & {
+    limiter?: Limiter;
+    renderTimeout?: number | false;
+  },
 ) {
   if (!options.render) {
     throw new Error("render callback is required");
@@ -22,8 +40,16 @@ export function createSSRHandler<TContext extends Record<string, any>>(
     throw new Error("setup callback is required");
   }
 
+  const limiter = options.limiter ?? createLimiter(1);
+  const renderTimeout = options.renderTimeout ?? DEFAULT_RENDER_TIMEOUT_MS;
+
   return async (req: Request, res: Response, next: NextFunction) => {
-    let context: TContext | undefined;
+    const disconnected = new AbortController();
+    req.once("aborted", () => disconnected.abort());
+    res.once("close", () => disconnected.abort());
+
+    let url: string;
+    let props: Record<string, any>;
 
     try {
       if (
@@ -34,7 +60,7 @@ export function createSSRHandler<TContext extends Record<string, any>>(
         throw new HttpError("JSON request body is required", 400);
       }
 
-      const { url, props = {} } = req.body;
+      ({ url, props = {} } = req.body);
 
       if (!url || typeof url !== "string") {
         throw new HttpError("URL string is required", 400);
@@ -42,27 +68,60 @@ export function createSSRHandler<TContext extends Record<string, any>>(
       if (props === null || typeof props !== "object" || Array.isArray(props)) {
         throw new HttpError("Props must be an object", 400);
       }
+    } catch (error) {
+      // Outside the limiter, so a burst of malformed requests cannot queue behind
+      // real renders.
+      return next(error);
+    }
 
-      context = await options.setup(url, props);
-      const result = await options.render(context);
+    try {
+      // The timeout wraps the limiter call, so queue time counts towards it. On
+      // expiry the abort drops the request if it is still queued; if it is
+      // already rendering, the slot stays held and `/health` reports a stall.
+      const result = await withTimeout(
+        limiter(
+          async () => {
+            let context: TContext | undefined;
+
+            try {
+              context = await options.setup(url, props);
+              options.prepare?.(context);
+              return await options.render(context);
+            } finally {
+              // Inside the limiter: cleanup restores what prepare mutated, so it
+              // has to run before the next render starts.
+              if (context && options.cleanup) {
+                try {
+                  await options.cleanup(context);
+                } catch (error) {
+                  // Never turn a completed response into an unhandled rejection.
+                  console.error("[SSR] Cleanup error:", error);
+                }
+              }
+            }
+          },
+          { signal: disconnected.signal },
+        ),
+        renderTimeout,
+        () => disconnected.abort(),
+      );
+
+      if (res.destroyed) return;
 
       res.json({
         head: result.head ?? "",
         body: result.body,
         body_attrs: result.bodyAttrs ?? {},
+        payload: result.payload ?? null,
       });
     } catch (error) {
-      return next(error);
-    } finally {
-      if (context && options.cleanup) {
-        try {
-          await options.cleanup(context);
-        } catch (error) {
-          // Cleanup must never turn a completed response into an unhandled
-          // rejection. Rendering errors have already been delegated above.
-          console.error("[SSR] Cleanup error:", error);
-        }
+      if (error instanceof QueueAbortedError && disconnected.signal.aborted) {
+        return;
       }
+      if (error instanceof RenderTimeoutError) {
+        console.error(`[SSR] ${error.message} (${url})`);
+      }
+      return next(error);
     }
   };
 }

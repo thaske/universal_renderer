@@ -1,12 +1,15 @@
 # frozen_string_literal: true
 
 UniversalRenderer.configure do |c|
-  # External Node.js/Bun SSR server. Supports streaming via the /stream endpoint.
-  c.url = "http://localhost:3001"
+  c.url = ENV.fetch("UNIVERSAL_RENDERER_URL", "http://localhost:3001")
+
+  # Keep this above the renderer's 2.5-second default.
   c.timeout = 3
-  c.stream_path = "/stream"
+
   c.http.pool_size = 5
 
-  # Blocking SSR is the default. Enable streaming per controller only when needed:
-  # enable_ssr streaming: true
+  # c.sanitize = false
+  # c.scrubber = MyScrubber.new
+  # c.auto_include = false
+  # c.on_error = ->(error, context) { Sentry.capture_exception(error, extra: context) }
 end

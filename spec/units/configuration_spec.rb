@@ -11,7 +11,12 @@ RSpec.describe UniversalRenderer::Configuration do
     it "sets default values" do
       expect(subject.url).to be_nil
       expect(subject.timeout).to eq(3)
+      expect(subject.render_path).to be_nil
       expect(subject.stream_path).to eq("/stream")
+      expect(subject.sanitize).to be(true)
+      expect(subject.scrubber).to be_nil
+      expect(subject.auto_include).to be(true)
+      expect(subject.on_error).to be_nil
       expect(subject.http).to be_a(described_class::Http)
     end
 

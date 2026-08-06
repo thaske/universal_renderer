@@ -3,8 +3,15 @@ import { PassThrough } from "node:stream";
 import { renderToPipeableStream } from "react-dom/server.node";
 
 import type { ReactNode } from "react";
+import {
+  acquire,
+  createLimiter,
+  RenderTimeoutError,
+  type Limiter,
+} from "../../concurrency";
 import { SSR_MARKERS } from "../../constants";
 import type { ExpressStreamHandlerOptions } from "../types";
+import { DEFAULT_RENDER_TIMEOUT_MS } from "./ssr";
 import { HttpError } from "./error";
 
 function asError(error: unknown): Error {
@@ -17,36 +24,63 @@ function asError(error: unknown): Error {
  * This handler expects POST requests with `{ url: string, props?: any, template: string }`
  * and returns streamed HTML responses for faster perceived performance.
  *
+ * A streaming render holds its concurrency slot until the response finishes or
+ * the client disconnects, not just until the shell is ready — the tree is still
+ * reading module state for as long as it is producing chunks.
+ *
  * @template TContext - The type of context object used throughout the rendering pipeline
  * @param options - Configuration options for streaming SSR
  * @returns Express route handler for streaming SSR requests
  */
 export function createStreamHandler<TContext extends Record<string, any>>(
-  options: ExpressStreamHandlerOptions<TContext>,
+  options: ExpressStreamHandlerOptions<TContext> & {
+    limiter?: Limiter;
+    renderTimeout?: number | false;
+  },
 ): RequestHandler {
   if (!options.streamCallbacks)
     throw new Error("streamCallbacks are required for streaming handler");
+  if (!options.setup) {
+    throw new Error("setup callback is required");
+  }
 
   const { streamCallbacks } = options;
+  const limiter = options.limiter ?? createLimiter(1);
+  const renderTimeout = options.renderTimeout ?? DEFAULT_RENDER_TIMEOUT_MS;
 
   return async (req, res, next: NextFunction) => {
     let context: TContext | undefined;
     let reactNode: ReactNode | undefined;
     let abortRender: (() => void) | undefined;
     let cleanupStarted = false;
+    let cleanupRequested = false;
+    let setupSettled = false;
+    let startupInFlight = 0;
     let stopped = false;
     let didRenderError = false;
 
-    const cleanup = async () => {
-      if (cleanupStarted || !context || !options.cleanup) return;
+    let releaseSlot: (() => void) | undefined;
+    const disconnected = new AbortController();
 
+    let shellTimer: ReturnType<typeof setTimeout> | undefined;
+    const clearShellTimer = () => {
+      if (shellTimer) clearTimeout(shellTimer);
+      shellTimer = undefined;
+    };
+
+    // Wait for setup and async startup before releasing shared render state.
+    const cleanup = async () => {
+      cleanupRequested = true;
+      clearShellTimer();
+      if (!setupSettled || cleanupStarted || startupInFlight > 0) return;
       cleanupStarted = true;
+
       try {
-        await options.cleanup(context);
+        if (context && options.cleanup) await options.cleanup(context);
       } catch (error) {
-        // Cleanup runs after the response lifecycle and cannot safely be sent
-        // through Express once headers have been written.
         console.error("[SSR] Cleanup error:", error);
+      } finally {
+        releaseSlot?.();
       }
     };
 
@@ -54,6 +88,7 @@ export function createStreamHandler<TContext extends Record<string, any>>(
       if (stopped) return;
 
       stopped = true;
+      clearShellTimer();
       abortRender?.();
       void cleanup();
 
@@ -65,21 +100,38 @@ export function createStreamHandler<TContext extends Record<string, any>>(
       }
     };
 
+    const stopForDisconnect = () => {
+      if (stopped) return;
+
+      stopped = true;
+      clearShellTimer();
+      disconnected.abort();
+      abortRender?.();
+      void cleanup();
+    };
+
+    // Bound queueing, setup, and time to first byte. The slot remains held until
+    // the response finishes, so `/health` must recover a stalled stream.
+    if (renderTimeout && renderTimeout > 0) {
+      shellTimer = setTimeout(() => {
+        console.error(
+          `[SSR] stream shell did not start within ${renderTimeout}ms`,
+        );
+        stopWithError(new RenderTimeoutError(renderTimeout));
+      }, renderTimeout);
+      shellTimer.unref?.();
+    }
+
     let url: string;
     let props: Record<string, any>;
     let template: string;
 
-    // Listen before setup: setup may be asynchronous, and a client can
-    // disconnect before it returns a context that must be cleaned up.
     res.once("finish", () => {
       void cleanup();
     });
+    req.once("aborted", stopForDisconnect);
     res.once("close", () => {
-      if (!res.writableFinished) {
-        stopped = true;
-        abortRender?.();
-        void cleanup();
-      }
+      if (!res.writableFinished) stopForDisconnect();
     });
 
     try {
@@ -106,7 +158,12 @@ export function createStreamHandler<TContext extends Record<string, any>>(
         throw new HttpError(`Template missing ${SSR_MARKERS.BODY} marker`, 400);
       }
 
-      context = await options.setup(url, props);
+      releaseSlot = await acquire(limiter, { signal: disconnected.signal });
+      try {
+        context = await options.setup(url, props);
+      } finally {
+        setupSettled = true;
+      }
 
       if (stopped || res.destroyed) {
         await cleanup();
@@ -122,39 +179,54 @@ export function createStreamHandler<TContext extends Record<string, any>>(
       } else {
         throw new HttpError("No app callback provided", 400);
       }
+
+      options.prepare?.(context);
     } catch (error) {
+      clearShellTimer();
       await cleanup();
+      if (stopped || res.destroyed) return;
       return next(error);
     }
 
     const startStreaming = async (
       pipe: (destination: NodeJS.WritableStream) => void,
     ) => {
-      const bodyMarkerIndex = template.indexOf(SSR_MARKERS.BODY);
-      const head = template.slice(0, bodyMarkerIndex);
-      const tail = template.slice(bodyMarkerIndex + SSR_MARKERS.BODY.length);
-      const finalHead = await streamCallbacks.head?.(context);
+      startupInFlight += 1;
 
-      if (stopped || res.destroyed) return;
+      try {
+        const bodyMarkerIndex = template.indexOf(SSR_MARKERS.BODY);
+        const head = template.slice(0, bodyMarkerIndex);
+        const tail = template.slice(bodyMarkerIndex + SSR_MARKERS.BODY.length);
+        const finalHead = await streamCallbacks.head?.(context);
 
-      if (didRenderError) res.status(500);
-      res.setHeader("content-type", "text/html");
-      res.write(head.replace(SSR_MARKERS.HEAD, finalHead ?? ""));
+        if (stopped || res.destroyed) return;
 
-      const stream = new PassThrough();
-      const transform = streamCallbacks.transform?.(context);
-      const output = transform ? stream.pipe(transform) : stream;
+        if (didRenderError) res.status(500);
+        res.setHeader("content-type", "text/html");
+        // Preserve literal `$` sequences in head content.
+        res.write(head.replace(SSR_MARKERS.HEAD, () => finalHead ?? ""));
+        clearShellTimer();
 
-      const handleOutputError = (error: unknown) => stopWithError(error);
-      stream.once("error", handleOutputError);
-      if (output !== stream) output.once("error", handleOutputError);
+        const stream = new PassThrough();
+        const transform = streamCallbacks.transform?.(context);
+        const output: NodeJS.ReadableStream = transform
+          ? stream.pipe(transform)
+          : stream;
 
-      output.pipe(res, { end: false });
-      output.once("end", () => {
-        if (!stopped && !res.destroyed) res.end(tail);
-      });
+        const handleOutputError = (error: unknown) => stopWithError(error);
+        stream.once("error", handleOutputError);
+        if (output !== stream) output.once("error", handleOutputError);
 
-      pipe(stream);
+        output.pipe(res, { end: false });
+        output.once("end", () => {
+          if (!stopped && !res.destroyed) res.end(tail);
+        });
+
+        pipe(stream);
+      } finally {
+        startupInFlight -= 1;
+        if (cleanupRequested || stopped || res.destroyed) await cleanup();
+      }
     };
 
     try {

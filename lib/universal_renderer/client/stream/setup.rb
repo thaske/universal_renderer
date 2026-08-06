@@ -14,7 +14,12 @@ module UniversalRenderer
           raise ArgumentError, "SSR URL is not configured." if config.url.blank?
 
           parsed_ssr_url = URI.parse(config.url)
-          stream_uri = URI.join(parsed_ssr_url, config.stream_path)
+
+          # URI.join with a relative path replaces the base URL's last path
+          # segment; see Client::Base.absolute_path.
+          stream_path = config.stream_path.to_s
+          stream_path = "/#{stream_path}" unless stream_path.start_with?("/")
+          stream_uri = URI.join(parsed_ssr_url, stream_path)
 
           http = HttpPool.client(stream_uri, config.timeout)
 

@@ -36,7 +36,7 @@ RSpec.describe UniversalRenderer::Client::Stream::Execution do
     allow(Rails.logger).to receive(:error)
   end
 
-  def perform_with(node_response, upstream_connection = nil)
+  def perform_with(node_response, upstream_connection = nil, &on_failure)
     allow(http_client).to receive(:request)
       .with(http_request)
       .and_yield(node_response, upstream_connection)
@@ -45,7 +45,8 @@ RSpec.describe UniversalRenderer::Client::Stream::Execution do
       http_client,
       http_request,
       response,
-      stream_uri
+      stream_uri,
+      &on_failure
     )
   end
 
@@ -68,12 +69,18 @@ RSpec.describe UniversalRenderer::Client::Stream::Execution do
       raise IOError, "client disconnected"
     end
 
-    result = perform_with(node_response, upstream_connection)
+    failures = []
+    result =
+      perform_with(node_response, upstream_connection) do |error, details|
+        failures << [error, details]
+      end
 
     expect(result).to be true
     expect(stream.body).to eq("<html>")
     expect(stream).to be_closed
     expect(upstream_connection).to have_received(:finish)
+    expect(failures.first.first).to be_a(IOError)
+    expect(failures.first.last).to include(outcome: :error, stage: :transfer)
   end
 
   it "returns true when Net::HTTP fails while finalizing a partial response" do
@@ -113,10 +120,19 @@ RSpec.describe UniversalRenderer::Client::Stream::Execution do
   it "returns false and leaves the stream open for non-success responses" do
     node_response = Net::HTTPInternalServerError.new("1.1", "500", "Server Error")
 
-    result = perform_with(node_response)
+    failures = []
+    result = perform_with(node_response) do |error, details|
+      failures << [error, details]
+    end
 
     expect(result).to be false
     expect(stream.body).to eq("")
     expect(stream).not_to be_closed
+    expect(failures.first.first.message).to include("500 Server Error")
+    expect(failures.first.last).to include(
+      outcome: :http_error,
+      status: 500,
+      stage: :response
+    )
   end
 end

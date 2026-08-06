@@ -1,0 +1,281 @@
+import { describe, expect, it, vi } from "vitest";
+import {
+  acquire,
+  createLimiter,
+  QueueAbortedError,
+  QueueFullError,
+  RenderTimeoutError,
+  withTimeout,
+} from "./concurrency";
+
+const deferred = () => {
+  let resolve!: () => void;
+  const promise = new Promise<void>((r) => {
+    resolve = r;
+  });
+  return { promise, resolve };
+};
+
+describe("createLimiter", () => {
+  it("serializes by default", async () => {
+    const limiter = createLimiter();
+    const order: string[] = [];
+    const first = deferred();
+
+    const a = limiter(async () => {
+      order.push("a:start");
+      await first.promise;
+      order.push("a:end");
+    });
+    const b = limiter(async () => {
+      order.push("b:start");
+    });
+
+    // b must not have started while a holds the only slot.
+    await Promise.resolve();
+    expect(order).toEqual(["a:start"]);
+
+    first.resolve();
+    await Promise.all([a, b]);
+
+    expect(order).toEqual(["a:start", "a:end", "b:start"]);
+  });
+
+  it("releases the slot when a task throws", async () => {
+    const limiter = createLimiter(1);
+
+    await expect(
+      limiter(async () => Promise.reject(new Error("boom"))),
+    ).rejects.toThrow("boom");
+
+    await expect(limiter(async () => "next")).resolves.toBe("next");
+  });
+
+  it("allows the configured number of concurrent tasks", async () => {
+    const limiter = createLimiter(2);
+    let active = 0;
+    let peak = 0;
+    const gate = deferred();
+
+    const tasks = Array.from({ length: 5 }, () =>
+      limiter(async () => {
+        active += 1;
+        peak = Math.max(peak, active);
+        await gate.promise;
+        active -= 1;
+      }),
+    );
+
+    await Promise.resolve();
+    gate.resolve();
+    await Promise.all(tasks);
+
+    expect(peak).toBe(2);
+  });
+
+  it("does not limit when unbounded", async () => {
+    const limiter = createLimiter("unbounded");
+    let active = 0;
+    let peak = 0;
+    const gate = deferred();
+
+    const tasks = Array.from({ length: 4 }, () =>
+      limiter(async () => {
+        active += 1;
+        peak = Math.max(peak, active);
+        await gate.promise;
+        active -= 1;
+      }),
+    );
+
+    await Promise.resolve();
+    gate.resolve();
+    await Promise.all(tasks);
+
+    expect(peak).toBe(4);
+  });
+
+  it("rejects a nonsensical limit rather than silently serializing", () => {
+    expect(() => createLimiter(0)).toThrow(/positive integer/);
+    expect(() => createLimiter(-1)).toThrow(/positive integer/);
+    expect(() => createLimiter(1.5)).toThrow(/positive integer/);
+  });
+
+  it("removes an aborted task from the queue", async () => {
+    const limiter = createLimiter(1);
+    const gate = deferred();
+    let staleTaskRan = false;
+
+    const active = limiter(async () => gate.promise);
+    await Promise.resolve();
+
+    const controller = new AbortController();
+    const stale = limiter(
+      async () => {
+        staleTaskRan = true;
+      },
+      { signal: controller.signal },
+    );
+
+    controller.abort();
+    await expect(stale).rejects.toBeInstanceOf(QueueAbortedError);
+
+    gate.resolve();
+    await active;
+    await limiter(async () => undefined);
+
+    expect(staleTaskRan).toBe(false);
+  });
+
+  it("rejects excess work once the queue is full", async () => {
+    const limiter = createLimiter(1, 1);
+    const gate = deferred();
+
+    const active = limiter(async () => gate.promise);
+    await Promise.resolve();
+    const queued = limiter(async () => undefined);
+
+    await expect(limiter(async () => undefined)).rejects.toBeInstanceOf(
+      QueueFullError,
+      RenderTimeoutError,
+      withTimeout,
+    );
+
+    gate.resolve();
+    await Promise.all([active, queued]);
+  });
+
+  it("validates the queue limit", () => {
+    expect(() => createLimiter(1, -1)).toThrow(/non-negative integer/);
+    expect(() => createLimiter(1, 1.5)).toThrow(/non-negative integer/);
+  });
+});
+
+describe("acquire", () => {
+  it("holds the slot until released", async () => {
+    const limiter = createLimiter(1);
+    const release = await acquire(limiter);
+
+    let ran = false;
+    const queued = limiter(async () => {
+      ran = true;
+    });
+
+    await Promise.resolve();
+    expect(ran).toBe(false);
+
+    release();
+    await queued;
+    expect(ran).toBe(true);
+  });
+
+  it("is idempotent, so a double release cannot over-admit", async () => {
+    const limiter = createLimiter(1);
+    const release = await acquire(limiter);
+    release();
+    release();
+
+    let active = 0;
+    let peak = 0;
+    const gate = deferred();
+    const tasks = Array.from({ length: 2 }, () =>
+      limiter(async () => {
+        active += 1;
+        peak = Math.max(peak, active);
+        await gate.promise;
+        active -= 1;
+      }),
+    );
+
+    await Promise.resolve();
+    gate.resolve();
+    await Promise.all(tasks);
+
+    expect(peak).toBe(1);
+  });
+
+  it("rejects instead of hanging when an acquisition is aborted", async () => {
+    const limiter = createLimiter(1);
+    const release = await acquire(limiter);
+    const controller = new AbortController();
+
+    const queued = acquire(limiter, { signal: controller.signal });
+    controller.abort();
+
+    await expect(queued).rejects.toBeInstanceOf(QueueAbortedError);
+    release();
+  });
+});
+
+describe("stats", () => {
+  it("reports active, waiting, and how long the oldest render has held its slot", async () => {
+    const limiter = createLimiter(1);
+    const gate = deferred();
+
+    expect(limiter.stats()).toEqual({
+      active: 0,
+      waiting: 0,
+      longestActiveMs: 0,
+    });
+
+    const running = limiter(() => gate.promise);
+    const queued = limiter(() => Promise.resolve());
+    await Promise.resolve();
+
+    const busy = limiter.stats();
+    expect(busy.active).toBe(1);
+    expect(busy.waiting).toBe(1);
+    expect(busy.longestActiveMs).toBeGreaterThanOrEqual(0);
+
+    gate.resolve();
+    await Promise.all([running, queued]);
+
+    expect(limiter.stats().active).toBe(0);
+  });
+
+  it("counts tasks that start in the same millisecond separately", async () => {
+    const limiter = createLimiter("unbounded");
+    const gate = deferred();
+
+    const tasks = [limiter(() => gate.promise), limiter(() => gate.promise)];
+    await Promise.resolve();
+
+    expect(limiter.stats().active).toBe(2);
+
+    gate.resolve();
+    await Promise.all(tasks);
+
+    expect(limiter.stats().active).toBe(0);
+  });
+});
+
+describe("withTimeout", () => {
+  it("passes the value through when the promise settles in time", async () => {
+    await expect(withTimeout(Promise.resolve("ok"), 1000)).resolves.toBe("ok");
+  });
+
+  it("rejects and signals the caller, without disturbing the promise", async () => {
+    const gate = deferred();
+    let settled = false;
+    const slow = gate.promise.then(() => {
+      settled = true;
+      return "late";
+    });
+
+    const onTimeout = vi.fn();
+    await expect(withTimeout(slow, 5, onTimeout)).rejects.toBeInstanceOf(
+      RenderTimeoutError,
+    );
+
+    expect(onTimeout).toHaveBeenCalledOnce();
+    // The underlying work is untouched: a running render still owns its slot.
+    expect(settled).toBe(false);
+    gate.resolve();
+    await expect(slow).resolves.toBe("late");
+  });
+
+  it("is a pass-through when disabled", async () => {
+    await expect(withTimeout(Promise.resolve(1), false)).resolves.toBe(1);
+    await expect(withTimeout(Promise.resolve(1), 0)).resolves.toBe(1);
+  });
+});

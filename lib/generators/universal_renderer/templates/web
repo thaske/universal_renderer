@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+# Boots the SSR renderer alongside the app server.
+set -uo pipefail
+
+SSR_BUNDLE="${SSR_BUNDLE:-ssr-build/server.mjs}"
+export SSR_PORT="${SSR_PORT:-3001}"
+
+# Override these for non-Bun runtimes or non-Puma app servers.
+SSR_RUNTIME="${SSR_RUNTIME:-bun}"
+WEB_CMD="${WEB_CMD:-bundle exec puma -C config/puma.rb}"
+
+# Set SSR_WATCHDOG=0 to disable health-based renderer restarts.
+SSR_WATCHDOG="${SSR_WATCHDOG:-1}"
+SSR_HEALTH_URL="${SSR_HEALTH_URL:-http://127.0.0.1:${SSR_PORT}/health}"
+SSR_HEALTH_INTERVAL="${SSR_HEALTH_INTERVAL:-10}"
+SSR_HEALTH_FAILURES="${SSR_HEALTH_FAILURES:-3}"
+
+SSR_PID=""
+APP_PID=""
+shutting_down=0
+health_failures=0
+
+start_ssr() {
+  if [ ! -f "$SSR_BUNDLE" ]; then
+    echo "[web] $SSR_BUNDLE missing — serving client-rendered pages only." >&2
+    return
+  fi
+
+  "$SSR_RUNTIME" "$SSR_BUNDLE" &
+  SSR_PID=$!
+  echo "[web] SSR renderer started (pid $SSR_PID, port $SSR_PORT)"
+}
+
+stop_ssr() {
+  [ -n "$SSR_PID" ] || return 0
+
+  kill -TERM "$SSR_PID" 2>/dev/null || true
+  for _ in 1 2 3 4 5; do
+    kill -0 "$SSR_PID" 2>/dev/null || break
+    sleep 1
+  done
+  kill -KILL "$SSR_PID" 2>/dev/null || true
+  wait "$SSR_PID" 2>/dev/null || true
+  SSR_PID=""
+}
+
+check_ssr_health() {
+  [ "$SSR_WATCHDOG" = "1" ] || return 0
+  [ -n "$SSR_PID" ] || return 0
+  command -v curl >/dev/null 2>&1 || return 0
+
+  if curl -fsS --max-time 5 "$SSR_HEALTH_URL" >/dev/null 2>&1; then
+    health_failures=0
+    return 0
+  fi
+
+  health_failures=$((health_failures + 1))
+  [ "$health_failures" -ge "$SSR_HEALTH_FAILURES" ] || return 0
+
+  echo "[web] SSR renderer unhealthy after ${health_failures} checks — restarting." >&2
+  stop_ssr
+  health_failures=0
+  start_ssr
+}
+
+on_signal() {
+  shutting_down=1
+  if [ -n "$APP_PID" ]; then kill -TERM "$APP_PID" 2>/dev/null || true; fi
+}
+trap on_signal INT TERM
+trap 'if [ -n "$SSR_PID" ]; then kill -KILL "$SSR_PID" 2>/dev/null || true; fi' EXIT
+
+start_ssr
+
+# shellcheck disable=SC2086
+$WEB_CMD &
+APP_PID=$!
+
+elapsed=0
+while [ "$shutting_down" -eq 0 ] && kill -0 "$APP_PID" 2>/dev/null; do
+  sleep 1
+  elapsed=$((elapsed + 1))
+  if [ "$shutting_down" -eq 0 ] && [ "$elapsed" -ge "$SSR_HEALTH_INTERVAL" ]; then
+    elapsed=0
+    check_ssr_health
+  fi
+done
+
+wait "$APP_PID"
+APP_STATUS=$?
+APP_PID=""
+
+stop_ssr
+exit "$APP_STATUS"

@@ -22,7 +22,12 @@ export function createErrorHandler() {
   return (err: HttpError, _req: Request, res: Response, next: NextFunction) => {
     if (res.headersSent) return next(err);
 
-    const isDev = process.env.NODE_ENV !== "production";
+    // Opt in, not out: nothing in a Rails deploy sets NODE_ENV for this process,
+    // so a `!== "production"` check leaks internals from every render.
+    const isDev =
+      process.env.SSR_VERBOSE_ERRORS === "1" ||
+      process.env.NODE_ENV === "development" ||
+      process.env.NODE_ENV === "test";
 
     const statusCode = err.statusCode || err.status || 500;
 

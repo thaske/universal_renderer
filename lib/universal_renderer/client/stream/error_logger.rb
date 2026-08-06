@@ -2,7 +2,7 @@ module UniversalRenderer
   module Client
     class Stream
       module ErrorLogger
-        def self.log_setup_error(error, target_uri_string)
+        def self.log_setup_error(error, target_uri_string, context = {})
           backtrace_info = error.backtrace&.first || "No backtrace available"
           UniversalRenderer.log do |log|
             log.error(
@@ -10,17 +10,24 @@ module UniversalRenderer
                 "#{error.class.name} - #{error.message} at #{backtrace_info}"
             )
           end
+          report(error, target_uri_string, :setup, context)
         end
 
-        def self.log_connection_error(error, target_uri_string)
+        def self.log_connection_error(error, target_uri_string, context = {})
           UniversalRenderer.log do |log|
             log.error(
               "SSR stream connection to #{target_uri_string} failed: #{error.class.name} - #{error.message}"
             )
           end
+          report(error, target_uri_string, :connection, context)
         end
 
-        def self.log_unexpected_error(error, target_uri_string, context_message)
+        def self.log_unexpected_error(
+          error,
+          target_uri_string,
+          context_message,
+          context = {}
+        )
           backtrace_info = error.backtrace&.first || "No backtrace available"
           UniversalRenderer.log do |log|
             log.error(
@@ -28,6 +35,21 @@ module UniversalRenderer
                 "#{error.class.name} - #{error.message} at #{backtrace_info}"
             )
           end
+          report(error, target_uri_string, :unexpected, context)
+        end
+
+        # Streaming failures fall back to client-side rendering just as blocking
+        # ones do, so they need the same escape hatch to an exception tracker.
+        def self.report(error, target_uri_string, stage, context = {})
+          Instrumentation.report(
+            error,
+            context.merge(
+              mode: :streaming,
+              outcome: context.fetch(:outcome, :error),
+              stage: stage,
+              target: target_uri_string
+            )
+          )
         end
       end
     end

@@ -10,7 +10,10 @@ RSpec.describe UniversalRenderer::Client::Base do
     UniversalRenderer.config.http.pool_size = 1
   end
 
-  after { UniversalRenderer::Client::HttpPool.reset! }
+  after do
+    UniversalRenderer::Client::HttpPool.reset!
+    UniversalRenderer.config = UniversalRenderer::Configuration.new
+  end
 
   it "reuses a persistent Net::HTTP connection for sequential requests" do
     http = Net::HTTP.new("ssr.example.test", 80)
@@ -47,5 +50,86 @@ RSpec.describe UniversalRenderer::Client::Base do
     expect(Net::HTTP).to have_received(:new).once
     expect(http).to have_received(:start).once
     expect(http).to have_received(:request).twice
+  end
+
+  def stub_ssr_service(response_body)
+    Net::HTTP.new("ssr.example.test", 80).tap do |http|
+      response_class =
+        Class.new(Net::HTTPOK) do
+          attr_reader :body
+
+          def initialize(body)
+            super("1.1", "200", "OK")
+            @body = body
+          end
+        end
+
+      allow(http).to receive(:started?).and_return(true)
+      allow(http).to receive(:request) do
+        response_class.new(response_body.to_json)
+      end
+      allow(Net::HTTP).to receive(:new).and_return(http)
+    end
+  end
+
+  it "keeps payload keys as strings rather than deep-symbolizing the response" do
+    stub_ssr_service(
+      head: "",
+      body: "<div>ok</div>",
+      body_attrs: {},
+      payload: { "queryCache" => { "queries" => [{ "queryKey" => %w[users 1] }] } }
+    )
+
+    result = described_class.call("http://example.com/a", {})
+
+    expect(result.payload).to eq(
+      "queryCache" => { "queries" => [{ "queryKey" => %w[users 1] }] }
+    )
+  end
+
+  # A 200 with the wrong shape has to degrade like any other failed render,
+  # because the alternative is raising inside a view helper on a live page.
+  it "falls back and reports when the service answers 200 with a non-object" do
+    stub_ssr_service(%w[not an object])
+    errors = []
+    UniversalRenderer.config.on_error = ->(error, ctx) { errors << [error, ctx] }
+
+    outcome = nil
+    ActiveSupport::Notifications.subscribed(
+      ->(*, payload) { outcome = payload[:outcome] },
+      UniversalRenderer::Instrumentation::NOTIFICATION
+    ) { expect(described_class.call("http://example.com/a", {})).to be_nil }
+
+    expect(outcome).to eq(:error)
+    expect(errors.first&.first).to be_a(TypeError)
+  end
+
+  it "drops response fields whose type the view helpers cannot use" do
+    stub_ssr_service(
+      head: 1,
+      body: "<div>ok</div>",
+      body_attrs: %w[class dark],
+      payload: [1, 2]
+    )
+
+    result = described_class.call("http://example.com/a", {})
+
+    expect(result.head).to be_nil
+    expect(result.body).to eq("<div>ok</div>")
+    expect(result.body_attrs).to be_nil
+    # payload is opaque by contract, so it is passed through whatever it is.
+    expect(result.payload).to eq([1, 2])
+  end
+
+  it "treats a relative render_path as absolute when joining onto the SSR url" do
+    UniversalRenderer.config.url = "http://ssr.example.test/base"
+    UniversalRenderer.config.render_path = "render"
+    http = stub_ssr_service(head: "", body: "", body_attrs: {})
+
+    described_class.call("http://example.com/a", {})
+
+    expect(http).to have_received(:request) do |request|
+      expect(request.path).to eq("/render")
+    end
   end
 end

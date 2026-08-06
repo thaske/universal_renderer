@@ -5,24 +5,24 @@ import type {
   RequestHandler,
   Response,
 } from "express";
+import type { Concurrency, QueueLimit } from "../concurrency";
 import type {
   BaseHandlerOptions,
+  ServerPaths,
   SSRHandlerOptions as CoreSSRHandlerOptions,
   StreamHandlerOptions as CoreStreamHandlerOptions,
 } from "../types";
 
 /**
  * Express-specific base configuration for handlers.
+ *
+ * Error handling is server-level, not handler-level: handlers call
+ * `next(error)`. Pass `error` to `createServer`.
+ *
  * @template TContext - The type of context object used throughout the rendering pipeline
  */
 export type ExpressBaseHandlerOptions<TContext extends Record<string, any>> =
-  BaseHandlerOptions<TContext> & {
-    /**
-     * Optional Express error handler to be applied to the server.
-     * This error handler will be applied after the built-in middleware but before the error handler.
-     */
-    error?: ErrorRequestHandler;
-  };
+  BaseHandlerOptions<TContext>;
 
 /**
  * Defines the shape of an Express error handling function, compatible with Express's
@@ -45,24 +45,14 @@ export type ExpressErrorHandler = (
  * @template TContext - The type of context object used throughout the rendering pipeline
  */
 export type ExpressSSRHandlerOptions<TContext extends Record<string, any>> =
-  CoreSSRHandlerOptions<TContext> & {
-    /**
-     * Optional Express error handler.
-     */
-    error?: ErrorRequestHandler;
-  };
+  CoreSSRHandlerOptions<TContext>;
 
 /**
  * Express-specific configuration options for the streaming SSR handler.
  * @template TContext - The type of context object used throughout the rendering pipeline
  */
 export type ExpressStreamHandlerOptions<TContext extends Record<string, any>> =
-  CoreStreamHandlerOptions<TContext> & {
-    /**
-     * Optional Express error handler.
-     */
-    error?: ErrorRequestHandler;
-  };
+  CoreStreamHandlerOptions<TContext>;
 
 /**
  * Express-specific configuration options for creating an SSR server.
@@ -72,10 +62,72 @@ export type ExpressServerOptions<
   TContext extends Record<string, any> = Record<string, any>,
 > = ExpressSSRHandlerOptions<TContext> & {
   /**
+   * Optional Express error handler, mounted last. Replaces the built-in JSON
+   * error handler.
+   */
+  error?: ErrorRequestHandler;
+
+  /**
    * Optional streaming callbacks for React 18+ streaming SSR.
    * When provided, enables the `/stream` endpoint for streaming responses.
    */
   streamCallbacks?: ExpressStreamHandlerOptions<TContext>["streamCallbacks"];
+
+  /**
+   * How long a render may take before the request is answered `504`, in
+   * milliseconds. Defaults to 2500; `false` disables it.
+   *
+   * A running render's slot is never revoked, since it is still touching module
+   * state, so a render that never settles ends the renderer at `concurrency: 1`.
+   * This frees the caller only; `stallAfterMs` is what makes it visible.
+   *
+   * Streaming is bounded separately: this caps time to first byte, not the whole
+   * response.
+   *
+   * Keep the gem's `config.timeout` above this value. The defaults are 3s and
+   * 2.5s, so the renderer gives up before Rails falls back.
+   */
+  renderTimeout?: number | false;
+
+  /**
+   * How long one render may hold its concurrency slot before `/health` answers
+   * 503, in milliseconds. Defaults to 30s; `false` disables the check.
+   *
+   * Separate from `renderTimeout` because it answers a different question: not
+   * "is this render over budget" but "is this process wedged". A streaming
+   * response holds its slot until the last chunk, so a threshold near
+   * `renderTimeout` would flag healthy streams. Raise it above your slowest
+   * legitimate stream.
+   */
+  stallAfterMs?: number | false;
+
+  /**
+   * How many renders may be in flight at once. Defaults to `1`.
+   *
+   * Serialized by default, because an app retrofitted with SSR keeps request
+   * state in module-level singletons, and interleaving renders through those
+   * leak one visitor's data into another's HTML. Scale out with more renderer
+   * processes. `"unbounded"` removes the limit.
+   */
+  concurrency?: Concurrency;
+
+  /**
+   * Maximum requests waiting for a render slot. Defaults to ten per slot; once
+   * full, new requests receive 503. `"unbounded"` removes the limit.
+   */
+  queueLimit?: QueueLimit;
+
+  /**
+   * Paths to mount the endpoints at. Must agree with the gem's
+   * `config.render_path` / `config.stream_path`.
+   */
+  paths?: ServerPaths;
+
+  /**
+   * Body size limit for `express.json`. Defaults to `"50mb"` — props carrying a
+   * serialized query cache get large.
+   */
+  bodyLimit?: string;
 
   /**
    * Optional Express middleware to be applied to the server.
@@ -92,3 +144,15 @@ export type ExpressServerOptions<
    */
   middleware?: RequestHandler;
 };
+
+/**
+ * The complete render configuration for an app: everything `createServer` needs
+ * except transport concerns.
+ *
+ * Keep it in one module that default-exports it (`app/frontend/ssr/config.ts` by
+ * convention). The production entry passes it to `startServer`; the dev entry
+ * hands the *path* to `startDevServer`, which reloads it per render.
+ */
+export type SsrConfig<
+  TContext extends Record<string, any> = Record<string, any>,
+> = ExpressServerOptions<TContext>;

@@ -8,7 +8,8 @@ module UniversalRenderer
           http_client,
           http_post_request,
           response,
-          stream_uri
+          stream_uri,
+          &on_failure
         )
           success = false
           chunks_written = false
@@ -28,11 +29,22 @@ module UniversalRenderer
                 end
                 success = true
               else
+                error =
+                  StandardError.new(
+                    "SSR stream server responded with " \
+                      "#{node_res.code} #{node_res.message}"
+                  )
                 UniversalRenderer.log do |log|
                   log.error(
                     "SSR stream server at #{stream_uri} responded with #{node_res.code} #{node_res.message}."
                   )
                 end
+                on_failure&.call(
+                  error,
+                  outcome: :http_error,
+                  status: node_res.code.to_i,
+                  stage: :response
+                )
               end
             end
           rescue StandardError => e
@@ -46,6 +58,11 @@ module UniversalRenderer
             # current persistent connection. Net::HTTP can also raise after its
             # request block returns while it finalizes that response body.
             HttpPool.close(upstream_connection) if upstream_connection
+            on_failure&.call(
+              e,
+              outcome: failure_outcome(e),
+              stage: :transfer
+            )
             success = chunks_written
           ensure
             response.stream.close if success && !response.stream.closed?
@@ -53,6 +70,15 @@ module UniversalRenderer
 
           success
         end
+
+        def self.failure_outcome(error)
+          return :timeout if error.is_a?(Net::OpenTimeout) ||
+                             error.is_a?(Net::ReadTimeout)
+
+          :error
+        end
+
+        private_class_method :failure_outcome
       end
     end
   end
