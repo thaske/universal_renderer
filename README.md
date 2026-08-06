@@ -24,7 +24,7 @@ The two packages share a wire format, so upgrade them together.
 
 | Gem     | NPM package | Notes                                                        |
 | ------- | ----------- | ------------------------------------------------------------ |
-| `0.6.x` | `0.7.x`     | `payload`, conditional `enable_ssr`, `concurrency`, `prepare` |
+| `0.7.x` | `0.7.x`     | `payload`, conditional `enable_ssr`, `concurrency`, `prepare` |
 | `0.5.x` | `0.6.x`     |                                                              |
 
 ## Installation

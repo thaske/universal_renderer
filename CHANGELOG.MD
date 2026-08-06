@@ -5,6 +5,118 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.7.0 (Ruby Gem) / 0.7.0 (NPM Package)
+
+Shaped by a real integration into a large client-first Rails app. Almost
+everything here removes work that consumer had to do by hand, or removes a way to
+get it silently wrong.
+
+### Ruby Gem
+
+#### Added
+
+- Conditional `enable_ssr`: `only:`, `except:`, `if:`, and `unless:` (Symbol or
+  Proc, evaluated against the controller). Previously SSR was all-or-nothing per
+  controller class, so any app that server-renders only public pages had to bypass
+  the concern and call the client directly.
+- Public `render_ssr(props = nil)` for driving a render from the action, where the
+  data and the decision usually live. Idempotent, returns the payload or `nil`.
+  `fetch_ssr` remains as an alias.
+- Public `ssr?` and `ssr_response`, exposed to views via `helper_method`. Nothing
+  needs to read `@ssr` any more — including the common case of choosing between a
+  hydration entry point and a client-render entry point.
+- `ssr_props`, `add_prop`, `push_prop`, and `add_query_data` are public, so
+  concerns and service objects can contribute props.
+- `payload` on the render response, with an `ssr_payload` helper that emits it as
+  an escaped, inert JSON script tag. Hydration state — a dehydrated query cache,
+  the class names a CSS-in-JS library already wrote into `head` — is only known
+  after the render, so it travels back from the renderer rather than out from
+  Rails.
+- `ssr_body_attributes` helper. `body_attrs` had been plumbed end to end since
+  0.5.0 with no way to actually use it.
+- `config.sanitize` and `config.scrubber`. Sanitizing a full page render parses
+  and rewrites the whole document on every request, which eats into the latency
+  SSR is meant to buy; the renderer is first-party code, so opting out is a
+  reasonable trade.
+- `render.universal_renderer` ActiveSupport notification and a `config.on_error`
+  callback. Every failure mode here is a silent fallback to client rendering,
+  which is right for availability and useless for operations — without a signal
+  you cannot tell a healthy renderer from one that has been down for a week.
+  Streaming failures report too.
+- `config.auto_include`, to stop including the concern into every
+  `ActionController::Base` descendant.
+- `config.render_path`, matching the existing `stream_path`.
+- The install generator now scaffolds the whole working setup: both renderer entry
+  points, `vite.config.ssr.mts`, the `assets:precompile` hook, and `bin/web`.
+  Takes `--frontend-dir`, `--skip-frontend`, `--skip-deploy`.
+
+#### Changed
+
+- `add_query_data` stringifies Symbol parts of a query key. Numeric parts are left
+  alone, since React Query compares keys structurally and `["users", 1]` has to
+  stay numeric. Previously the key kept Symbols on the Ruby side and matched only
+  once JSON flattened them.
+- Dropped the app-wide `before_action :initialize_props`; props initialize lazily.
+- The engine registers its controller hook after `load_config_initializers`, so
+  `config.auto_include` is read reliably.
+- Dropped the `body_html` fallback in the response parser — no shipped version of
+  the NPM package emits it.
+
+#### Deprecated
+
+- `ssr_props` / `ssr_props_json` view helpers. They emit the props Rails already
+  knows; what the client needs is what the render produced. Use `ssr_payload`.
+
+#### Fixed
+
+- `Client::Stream` called `log_setup_error` bare, but `ErrorLogger` defines only
+  singleton methods, so that rescue path raised `NoMethodError` instead of logging.
+
+### NPM Package
+
+#### Added
+
+- `concurrency` option, **defaulting to `1`**. An app retrofitted with SSR keeps
+  request state in module-level singletons, and two renders interleaving through
+  those is one visitor's data in another visitor's HTML — a security bug, not a
+  perf bug. Previously every consumer had to hand-roll this. `"unbounded"` opts
+  out. The limiter spans `setup` through `cleanup` and is shared with the
+  streaming handler.
+- `prepare` hook, run synchronously immediately before the render with no await in
+  between. `setup` is async, so mutations made there stay visible for as long as
+  the await lasts; `prepare`/`cleanup` is the window that is actually safe.
+- `payload` on `RenderOutput`, serialized as `payload` for the gem's `ssr_payload`.
+- `startServer`, which resolves the port from `SSR_PORT` then `3001`, binds
+  loopback, and resolves once listening.
+- `paths` option for the render, stream, and health endpoints. `stream_path` was
+  configurable on the Ruby side while the Node side hardcoded `/stream`, so
+  changing it silently 404'd.
+- `universal-renderer/dev` — `startDevServer`, the Vite-backed development
+  renderer. Re-resolves the render config per render so an edit is picked up in
+  full, with all four hooks coming from the same reloaded module.
+- `universal-renderer/vite` — `defineSsrConfig`, encoding the four settings a
+  Rails SSR build gets wrong by default and silently: excluding
+  `vite-plugin-rails`, matching the client build's asset prefix, disabling
+  `publicDir`, and putting the bundle outside `public/`. Output filename is pinned
+  rather than left to depend on `"type": "module"`.
+- `universal-renderer/shim` and `/shim/auto` — inert browser globals, with the
+  module-evaluation-order hazard documented.
+- `universal-renderer/react-query` — `hydrateReactQuery`, matching the gem's
+  `add_query_data` wire shape.
+- `SsrConfig` type for the render config module.
+- `bodyLimit` option.
+
+#### Fixed
+
+- A streaming client disconnect during `setup` no longer skips the context cleanup
+  that `setup` was about to produce.
+- `startDevServer` resolves Vite from the host application. A bare import lands on
+  this package's own copy whenever it is linked, and two Vite instances disagree
+  about plugin state — the symptom is not an import error but path aliases failing
+  to resolve mid-render.
+- The README's React Query example read `props.query_data` with `{ key, data }`.
+  The gem has always emitted `props.react_query` with `{ query_key, data }`.
+
 ## 0.5.2 (Ruby Gem) - 2026-07-09
 
 ### Fixed
