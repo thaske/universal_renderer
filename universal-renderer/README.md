@@ -3,8 +3,8 @@
 The SSR renderer that pairs with the [`universal_renderer`](https://rubygems.org/gems/universal_renderer)
 Ruby gem. The gem posts a URL and props; this serves back the HTML.
 
-The two halves share a wire format, so upgrade them together: `0.7.x` here pairs
-with gem `0.7.x`.
+The two halves share a wire format, so upgrade them together: `0.8.x` here pairs
+with gem `0.8.x`.
 
 ```bash
 npm install universal-renderer     # or bun add / yarn add

@@ -10,7 +10,7 @@
     },
     "universal-renderer": {
       "name": "universal-renderer",
-      "version": "0.7.0",
+      "version": "0.8.0",
       "devDependencies": {
         "@testing-library/jest-dom": "^6.9.1",
         "@testing-library/react": "^16.3.2",
