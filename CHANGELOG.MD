@@ -5,6 +5,55 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.8.0 (Ruby Gem) / 0.8.0 (NPM Package)
+
+### Ruby Gem
+
+#### Added
+
+- A Puma plugin, `plugin :universal_renderer`, that runs the renderer beside the
+  app server and keeps it running. It restarts the renderer when it exits (with
+  backoff while it keeps dying at boot) and when `/health` stops answering, stops
+  it with Puma, and replaces it on hot and phased restarts. It takes `runtime`,
+  `bundle` and `port`, through a `universal_renderer` Puma DSL method or
+  `SSR_RUNTIME`, `SSR_BUNDLE` and `SSR_PORT`. Before this, nothing restarted a renderer that
+  died, so every page rendered on the client until the next deploy or dyno
+  restart without anyone noticing.
+- The install generator adds the plugin to `config/puma.rb`, for production only.
+
+#### Removed
+
+- `bin/web`. The generator no longer writes it; the Puma plugin replaces it. To
+  move over, point the Procfile's web process at Puma, delete `bin/web`, and add
+  the plugin to `config/puma.rb`. Re-running the generator in an app that still
+  has `bin/web` leaves the Puma config alone and prints these steps, because
+  running both would start two renderers on the same port.
+
+### NPM Package
+
+#### Changed
+
+- `defineSsrConfig` bundles dependencies by default (`ssr.noExternal: true`). Vite
+  externalizes `node_modules` in SSR builds, so a deploy that prunes
+  `node_modules` after the build left the renderer unable to resolve `react`, and
+  it never bound its port. List client-only packages that cannot be bundled in
+  `ssr.external`. Pass your own `ssr.noExternal` to restore the old behavior.
+- `defineSsrConfig` replaces `process.env.NODE_ENV` at build time, using Vite's
+  rule for client builds: the `NODE_ENV` the build runs with, or `"production"`.
+  Vite leaves it to runtime in SSR builds and most hosts never set it, so React ran
+  its development build in production, logging a warning with a component stack on
+  every render. Build with `NODE_ENV=development`, or set it in `define`, for a
+  development bundle.
+- `defineSsrConfig` supports Vite 8: bundler options passed as `rolldownOptions`
+  or `rollupOptions` are merged, and the output filename stays pinned.
+
+#### Added
+
+- `startServer` warns at startup when the renderer runs development builds of its
+  libraries, which slows renders and can fill production logs. The development
+  renderer, where that is intended, does not warn.
+- Vite 8 in the `vite` peer range.
+
 ## 0.7.0 (Ruby Gem) / 0.7.0 (NPM Package)
 
 Shaped by a real integration into a large client-first Rails app. Almost

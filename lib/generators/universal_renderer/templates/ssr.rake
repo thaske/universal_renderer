@@ -5,7 +5,7 @@
 # credentials, a database that is not up yet.
 # rubocop:disable Rails/RakeEnvironment
 namespace :ssr do
-  desc "Build the standalone SSR bundle that bin/web runs (ssr-build/)"
+  desc "Build the standalone SSR bundle that the Puma plugin runs (ssr-build/)"
   task :build do
     # Goes through the package script rather than invoking `vite` directly:
     # node_modules/.bin is not on PATH during a deploy build, so a bare `vite`
@@ -16,7 +16,7 @@ namespace :ssr do
 end
 # rubocop:enable Rails/RakeEnvironment
 
-# bin/web runs the compiled bundle, so it has to exist by the time a release
+# The Puma plugin runs the compiled bundle, so it has to exist by the time a release
 # boots. Build it with the rest of the assets.
 if Rake::Task.task_defined?("assets:precompile")
   Rake::Task["assets:precompile"].enhance(["ssr:build"])

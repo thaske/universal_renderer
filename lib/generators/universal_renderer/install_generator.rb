@@ -2,10 +2,14 @@
 
 module UniversalRenderer
   # Scaffolds a working SSR setup: the initializer, the two renderer entry points,
-  # the SSR Vite build, the precompile hook, and the web-dyno launcher. Each file
-  # encodes something that is wrong by default and fails silently.
+  # the SSR Vite build, the precompile hook, and the Puma plugin that runs the
+  # renderer in production. Each one encodes something that is wrong by default
+  # and fails silently.
   class InstallGenerator < Rails::Generators::Base
     source_root File.expand_path("templates", __dir__)
+
+    PUMA_CONFIG = "config/puma.rb"
+    PUMA_PLUGIN_LINE = 'plugin :universal_renderer if ENV.fetch("RAILS_ENV", "development") == "production"'
 
     class_option :frontend_dir,
                  type: :string,
@@ -20,7 +24,7 @@ module UniversalRenderer
     class_option :skip_deploy,
                  type: :boolean,
                  default: false,
-                 desc: "Skip bin/web and the assets:precompile hook"
+                 desc: "Skip the Puma plugin and the assets:precompile hook"
 
     def copy_initializer
       template "initializer.rb", "config/initializers/universal_renderer.rb"
@@ -40,8 +44,7 @@ module UniversalRenderer
       return if options[:skip_deploy] || options[:skip_frontend]
 
       template "ssr.rake", "lib/tasks/ssr.rake"
-      template "web", "bin/web"
-      chmod "bin/web", 0o755
+      add_puma_plugin if puma_setup == :add
     end
 
     def show_installation_notes
@@ -64,14 +67,53 @@ module UniversalRenderer
       say_status "", "  5. Opt a controller in with `enable_ssr` or `render_ssr`"
       return if options[:skip_deploy]
 
-      say_status "", "  6. Point Procfile's web process at bin/web, which runs"
-      say_status "", "     the renderer alongside your app server"
+      case puma_setup
+      when :add
+        say_status "", "  6. Puma now starts the renderer in production (`plugin"
+        say_status "", "     :universal_renderer` in config/puma.rb). Keep Procfile's web"
+        say_status "", "     process as it is"
+      when :bin_web
+        say_status "", "  6. bin/web is no longer generated. Point Procfile's web process"
+        say_status "", "     at Puma, delete bin/web, and add to config/puma.rb:"
+        say_status "", "       #{PUMA_PLUGIN_LINE}"
+      when :no_config
+        say_status "", "  6. Start the renderer with your app server. With Puma, add to"
+        say_status "", "     its config:"
+        say_status "", "       #{PUMA_PLUGIN_LINE}"
+      end
     end
 
     private
 
     def frontend_dir
       options[:frontend_dir].delete_suffix("/")
+    end
+
+    # Decided once, before any file is written. An app that still runs the
+    # bin/web from an earlier version is left alone: adding the plugin as well
+    # would start a second renderer on the same port.
+    def puma_setup
+      @puma_setup ||=
+        if File.exist?(File.join(destination_root, "bin/web"))
+          :bin_web
+        elsif File.exist?(File.join(destination_root, PUMA_CONFIG))
+          :add
+        else
+          :no_config
+        end
+    end
+
+    def add_puma_plugin
+      return if File.read(File.join(destination_root, PUMA_CONFIG)).match?(/^\s*plugin :universal_renderer\b/)
+
+      append_to_file PUMA_CONFIG, <<~RUBY
+
+        # Runs the SSR renderer beside Puma, and restarts it when it exits or
+        # stops answering /health. Production only: in development, Procfile.dev
+        # runs the development renderer on the same port.
+        # Options: `universal_renderer runtime: "bun", bundle: "ssr-build/server.mjs", port: 3001`.
+        #{PUMA_PLUGIN_LINE}
+      RUBY
     end
   end
 end

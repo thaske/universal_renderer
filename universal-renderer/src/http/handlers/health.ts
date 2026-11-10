@@ -12,7 +12,7 @@ export type HealthHandlerOptions = {
    *
    * A running task's slot is never revoked, so one render that never settles
    * ends the renderer. Nothing inside the process can recover from that, which
-   * is why it has to be visible from outside: the generated `bin/web` polls this
+   * is why it has to be visible from outside: the Puma plugin polls this
    * endpoint and restarts the renderer.
    */
   stallAfterMs?: number | false;
