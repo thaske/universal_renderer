@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Ruby Gem
+
+#### Added
+
+- A Puma plugin, `plugin :universal_renderer`, that runs the renderer beside the
+  app server and keeps it running. It restarts the renderer when it exits (with
+  backoff while it keeps dying at boot) and when `/health` stops answering, stops
+  it with Puma, and replaces it on hot and phased restarts. Options come from a
+  `universal_renderer` Puma DSL method, falling back to the `bin/web` environment
+  variables. In production, nothing restarted a renderer that died, so every page
+  rendered on the client until the next dyno restart without anyone noticing.
+- `UniversalRenderer::Supervisor`, the process supervisor behind the plugin, for
+  app servers other than Puma.
+- The install generator adds the plugin to `config/puma.rb` when the app has one,
+  and writes `bin/web` only when it does not.
+
 ## 0.7.0 (Ruby Gem) / 0.7.0 (NPM Package)
 
 Shaped by a real integration into a large client-first Rails app. Almost

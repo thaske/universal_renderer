@@ -41,7 +41,8 @@ bin/rails generate universal_renderer:install
 ```
 
 The generator writes the initializer, the two renderer entry points, the SSR Vite
-build, the `assets:precompile` hook, and `bin/web`. Pass
+build, and the `assets:precompile` hook. It adds `plugin :universal_renderer` to
+`config/puma.rb`, or writes `bin/web` if the app does not run Puma. Pass
 `--frontend-dir=app/client` if your JavaScript is not in `app/frontend`.
 
 ## Rendering from a controller
@@ -256,8 +257,8 @@ Renders are **serialized by default**. An app retrofitted with SSR keeps
 request-scoped state in module-level singletons — a store, a query client, a
 mutable feature-flag object, a CSS-in-JS registry — and two renders interleaving
 through those is not a slow page, it is one visitor's data in another visitor's
-HTML. Scale out with more renderer processes; `bin/web` starts one per web
-process, so SSR capacity tracks your web dyno count.
+HTML. Scale out with more renderer processes; the Puma plugin (or `bin/web`)
+starts one per web process, so SSR capacity tracks your web dyno count.
 
 Raise `concurrency` (or pass `"unbounded"`) only once you have verified the render
 touches no shared mutable state.
@@ -294,9 +295,9 @@ default is also roughly where Heroku's router and most ALB defaults have already
 abandoned the request.
 
 Nothing inside the process can clear a stuck render, so the health signal is the
-point: the generated `bin/web` polls it and restarts the renderer without
-touching the app server. Tune with `SSR_HEALTH_INTERVAL`, `SSR_HEALTH_FAILURES`,
-or turn it off with `SSR_WATCHDOG=0`.
+point: the Puma plugin (and the generated `bin/web`) polls it and restarts the
+renderer without touching the app server. Tune with `SSR_HEALTH_INTERVAL`,
+`SSR_HEALTH_FAILURES`, or turn it off with `SSR_WATCHDOG=0`.
 
 Development sets both to `false` — a breakpoint in the render outlasts any
 production budget, and a `504` or a restart there is noise.
@@ -394,17 +395,64 @@ vite: bin/vite dev
 ssr: bun app/frontend/ssr/dev.ts
 ```
 
+In production the renderer runs beside your app server on the same host rather
+than as a separate process type, because PaaS process types get no routable
+address for each other. If the renderer dies, requests fall back to client
+rendering; that is a degraded page, not an outage, so it must not take the app
+server down. Something still has to bring the renderer back.
+
+#### With Puma
+
+```ruby
+# config/puma.rb
+plugin :universal_renderer
+universal_renderer port: 3001 # optional, and must come after the `plugin` line
+```
+
+Your Procfile stays `web: bundle exec puma -C config/puma.rb`.
+
+Puma runs plugins in its master process, so a clustered Puma gets one renderer
+per server, not one per worker. The plugin:
+
+- starts the renderer in its own process group, so a wrapper script cannot leave
+  a child holding the port;
+- restarts it when it exits, waiting 1, 2, 4, up to 30 seconds while it keeps
+  dying at boot, and 1 second again once it has run for a minute;
+- restarts it when `/health` fails `health_failures` checks in a row (a stalled
+  render, a blocked event loop);
+- stops it with Puma, and replaces it on a hot (`USR2`) or phased (`USR1`)
+  restart, so a phased restart also picks up a new bundle;
+- skips it, with a log line, when the bundle has not been built.
+
+Each option falls back to the variable `bin/web` reads, then to the default:
+
+| Option            | Variable              | Default                | Purpose                                      |
+| ----------------- | --------------------- | ---------------------- | -------------------------------------------- |
+| `runtime`         | `SSR_RUNTIME`         | `bun`                  | Set to `node` if not Bun.                    |
+| `bundle`          | `SSR_BUNDLE`          | `ssr-build/server.mjs` | Built renderer entry.                        |
+| `command`         |                       | `runtime bundle`       | Full command line, replacing both.           |
+| `port`            | `SSR_PORT`            | `3001`                 | Passed to the renderer as `SSR_PORT`.        |
+| `health_interval` | `SSR_HEALTH_INTERVAL` | `10`                   | Seconds; `false` or `SSR_WATCHDOG=0` is off. |
+| `health_failures` | `SSR_HEALTH_FAILURES` | `3`                    | Failed checks in a row before a restart.     |
+| `health_path`     |                       | `/health`              | Match a custom `health` in the render config. |
+| `stop_timeout`    |                       | `10`                   | Seconds between `TERM` and `KILL`.           |
+| `enabled`         |                       | `true`                 | `false` skips the renderer.                  |
+| `on_event`        |                       |                        | `->(name, details) {}` for `:started`, `:exited`, `:unhealthy`, `:stopped`. |
+
+`on_event` runs in the Puma master. Use it to report restarts to your error
+tracker: a renderer that keeps restarting looks like a healthy site from the
+outside.
+
+#### Without Puma
+
 ```procfile
 # Procfile
 web: bin/web
 ```
 
-`bin/web` runs the renderer alongside your app server on the same host rather than
-as a separate process type, because PaaS process types get no routable address for
-each other. If the renderer dies, requests fall back to client rendering; that is
-a degraded page, not an outage, so it must not take the process down.
-
-It defaults to Bun and Puma, and both are environment variables rather than edits:
+`bin/web` starts the renderer, runs your app server, and restarts the renderer
+when `/health` fails. It defaults to Bun and Puma, and both are environment
+variables rather than edits:
 
 | Variable      | Default                            | Purpose                    |
 | ------------- | ---------------------------------- | -------------------------- |

@@ -7,6 +7,8 @@ module UniversalRenderer
   class InstallGenerator < Rails::Generators::Base
     source_root File.expand_path("templates", __dir__)
 
+    PUMA_CONFIG = "config/puma.rb"
+
     class_option :frontend_dir,
                  type: :string,
                  default: "app/frontend",
@@ -40,8 +42,12 @@ module UniversalRenderer
       return if options[:skip_deploy] || options[:skip_frontend]
 
       template "ssr.rake", "lib/tasks/ssr.rake"
-      template "web", "bin/web"
-      chmod "bin/web", 0o755
+      if puma?
+        add_puma_plugin
+      else
+        template "web", "bin/web"
+        chmod "bin/web", 0o755
+      end
     end
 
     def show_installation_notes
@@ -64,14 +70,34 @@ module UniversalRenderer
       say_status "", "  5. Opt a controller in with `enable_ssr` or `render_ssr`"
       return if options[:skip_deploy]
 
-      say_status "", "  6. Point Procfile's web process at bin/web, which runs"
-      say_status "", "     the renderer alongside your app server"
+      if puma?
+        say_status "", "  6. Puma now starts the renderer (`plugin :universal_renderer`"
+        say_status "", "     in config/puma.rb). Keep Procfile's web process as it is"
+      else
+        say_status "", "  6. Point Procfile's web process at bin/web, which runs"
+        say_status "", "     the renderer alongside your app server"
+      end
     end
 
     private
 
     def frontend_dir
       options[:frontend_dir].delete_suffix("/")
+    end
+
+    def puma?
+      File.exist?(File.join(destination_root, PUMA_CONFIG))
+    end
+
+    def add_puma_plugin
+      return if File.read(File.join(destination_root, PUMA_CONFIG)).match?(/^\s*plugin :universal_renderer\b/)
+
+      append_to_file PUMA_CONFIG, <<~RUBY
+
+        # Runs the SSR renderer beside Puma, and restarts it when it exits or
+        # stops answering /health. Options: `universal_renderer bundle: "...", port: 3001`.
+        plugin :universal_renderer
+      RUBY
     end
   end
 end

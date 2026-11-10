@@ -19,6 +19,27 @@ RSpec.describe UniversalRenderer::InstallGenerator do
     end
   end
 
+  it "adds the Puma plugin instead of bin/web when the app runs Puma, once" do
+    Dir.mktmpdir do |destination|
+      puma_config = File.join(destination, "config/puma.rb")
+      FileUtils.mkdir_p(File.dirname(puma_config))
+      File.write(puma_config, "workers 2\n")
+
+      2.times { described_class.start([], destination_root: destination) }
+
+      expect(File.read(puma_config).scan("plugin :universal_renderer").size).to eq(1)
+      expect(File).not_to exist(File.join(destination, "bin/web"))
+    end
+  end
+
+  it "writes bin/web when there is no Puma config" do
+    Dir.mktmpdir do |destination|
+      described_class.start([], destination_root: destination)
+
+      expect(File).to be_executable(File.join(destination, "bin/web"))
+    end
+  end
+
   it "generates timeouts with the renderer finishing first" do
     Dir.mktmpdir do |destination|
       described_class.start([], destination_root: destination)
