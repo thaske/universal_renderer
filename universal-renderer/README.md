@@ -192,9 +192,20 @@ export default defineSsrConfig({
 });
 ```
 
-Handles the four settings that are each wrong by default for a Rails SSR build and
-each fail silently. Note what is absent: `vite-plugin-rails`. See the function's
-JSDoc for the rest.
+Handles the six settings that are each wrong by default for a Rails SSR build and
+each fail silently. Note what is absent: `vite-plugin-rails`. Two of the defaults
+change what ships:
+
+- Dependencies are bundled (`ssr.noExternal: true`), so the renderer runs from a
+  deploy that prunes `node_modules`. List client-only packages that cannot be
+  bundled, such as native modules, in `ssr.external`.
+- `process.env.NODE_ENV` is replaced at build time, as Vite does for client
+  builds: with the `NODE_ENV` the build runs with, or `"production"`. React and
+  other libraries then run their production builds even when the host sets no
+  `NODE_ENV`. `startServer` logs a warning if the bundle it runs is a
+  development build anyway.
+
+See the function's JSDoc for the rest.
 
 ## Streaming
 

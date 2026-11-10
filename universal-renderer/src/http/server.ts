@@ -196,6 +196,29 @@ export async function startServer<
   if (options.log !== false) {
     console.log(`[SSR] universal-renderer listening on http://${host}:${port}`);
   }
+  warnIfDevelopmentBuild(process.env.NODE_ENV);
 
   return { app, server, port };
+}
+
+/**
+ * Warns when the renderer runs development builds of its libraries.
+ *
+ * In a bundle built with `defineSsrConfig`, `process.env.NODE_ENV` below was
+ * replaced at build time, the same as in every bundled library, so this reports
+ * what React will actually run, not what the host happens to set. Not silenced
+ * by `log: false`: the cost shows up as slow renders and full logs, long after
+ * startup.
+ */
+export function warnIfDevelopmentBuild(nodeEnv: string | undefined): void {
+  if (nodeEnv === "production") return;
+
+  const value = nodeEnv === undefined ? "unset" : JSON.stringify(nodeEnv);
+  console.warn(
+    `[SSR] process.env.NODE_ENV is ${value}, so React and other libraries run ` +
+      "their development builds. Renders are slower, and each one can log " +
+      "development-only warnings with component stacks, which fills production " +
+      "logs. Build the renderer with defineSsrConfig from universal-renderer/vite, " +
+      "or run it with NODE_ENV=production.",
+  );
 }

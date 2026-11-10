@@ -23,6 +23,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The install generator adds the plugin to `config/puma.rb` when the app has one,
   and writes `bin/web` only when it does not.
 
+### NPM Package
+
+#### Changed
+
+- `defineSsrConfig` bundles dependencies by default (`ssr.noExternal: true`). Vite
+  externalizes `node_modules` in SSR builds, so a deploy that prunes
+  `node_modules` after the build left the renderer unable to resolve `react`, and
+  it never bound its port. List client-only packages that cannot be bundled in
+  `ssr.external`. Pass your own `ssr.noExternal` to restore the old behavior.
+- `defineSsrConfig` replaces `process.env.NODE_ENV` at build time, using Vite's
+  rule for client builds: the `NODE_ENV` the build runs with, or `"production"`.
+  Vite leaves it to runtime in SSR builds and most hosts never set it, so React ran
+  its development build in production, logging a warning with a component stack on
+  every render. Build with `NODE_ENV=development`, or set it in `define`, for a
+  development bundle.
+- `defineSsrConfig` supports Vite 8: bundler options passed as `rolldownOptions`
+  or `rollupOptions` are merged, and the output filename stays pinned.
+
+#### Added
+
+- `startServer` warns at startup when the renderer runs development builds of its
+  libraries, which slows renders and can fill production logs.
+- Vite 8 in the `vite` peer range.
+
 ## 0.7.0 (Ruby Gem) / 0.7.0 (NPM Package)
 
 Shaped by a real integration into a large client-first Rails app. Almost

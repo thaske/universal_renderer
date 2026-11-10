@@ -376,15 +376,32 @@ export default defineSsrConfig({
 });
 ```
 
-`defineSsrConfig` exists because a Rails SSR build has four settings that are each
+`defineSsrConfig` exists because a Rails SSR build has six settings that are each
 wrong by default and each fail *silently* — you get a bundle, it just renders the
 wrong thing. Note in particular what is **absent**: `vite-plugin-rails`, which is
 built for the client manifest pipeline and overrides entrypoints and outDir. List
 only the plugins the render itself needs; your client build keeps using
-`vite.config.mts` unchanged. See the function's docs for the other three.
+`vite.config.mts` unchanged. See the function's docs for the others.
 
 The bundle lands at `ssr-build/server.mjs`, deliberately outside `public/` — it is
-server code and must not be web-servable.
+server code and must not be web-servable. It is self-contained: dependencies are
+bundled (`ssr.noExternal: true`), so it runs from a slug whose `node_modules` was
+pruned after the build, and `process.env.NODE_ENV` is replaced at build time, as
+Vite does for client builds (the `NODE_ENV` the build runs with, or
+`"production"`), so React does not run its development build on a host that never
+sets `NODE_ENV`. If the renderer does start on a development build, `startServer`
+logs a warning saying so.
+Keep client-only packages that cannot be bundled, such as anything with a native
+module, out with `ssr.external`:
+
+```ts
+export default defineSsrConfig({
+  entry: "app/frontend/ssr/server.ts",
+  plugins: [react()],
+  // Lazy, client-only, and its `canvas` dependency is native.
+  ssr: { external: ["react-pdf", "pdfjs-dist"] },
+});
+```
 
 ### Running it
 
