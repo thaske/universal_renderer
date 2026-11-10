@@ -8,21 +8,21 @@ require "universal_renderer/supervisor"
 RSpec.describe UniversalRenderer::Supervisor do
   let(:fake_renderer) { File.expand_path("../fixtures/fake_renderer.rb", __dir__) }
   let(:port) { TCPServer.open("127.0.0.1", 0) { |server| server.addr[1] } }
-  let(:logs) { Queue.new }
-  let(:events) { Queue.new }
+  # Appended to from the supervisor's threads; Array#<< is atomic under the GVL.
+  let(:logs) { [] }
   let(:mode) { "healthy" }
   let(:extra_env) { {} }
+  let(:command) { [RbConfig.ruby, fake_renderer] }
 
   let(:supervisor) do
     described_class.new(
-      command: [RbConfig.ruby, fake_renderer],
+      command: command,
       port: port,
       env: { "FAKE_RENDERER_MODE" => mode }.merge(extra_env),
       health_interval: 0.2,
       health_failures: 2,
       stop_timeout: 1,
-      logger: ->(message) { logs << message },
-      on_event: ->(name, details) { events << [name, details] }
+      logger: ->(message) { logs << message }
     )
   end
 
@@ -31,14 +31,20 @@ RSpec.describe UniversalRenderer::Supervisor do
   def wait_until(timeout: 5)
     deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout
     until yield
-      raise "condition not met within #{timeout}s" if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+      if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+        raise "condition not met within #{timeout}s. Log:\n#{log_lines.join("\n")}"
+      end
 
       sleep 0.05
     end
   end
 
-  def drain(queue)
-    Array.new(queue.size) { queue.pop }
+  def log_lines
+    logs.dup
+  end
+
+  def starts
+    log_lines.grep(/renderer started/).size
   end
 
   def alive?(pid)
@@ -62,7 +68,8 @@ RSpec.describe UniversalRenderer::Supervisor do
     Process.kill("KILL", first_pid)
 
     wait_until { supervisor.pid && supervisor.pid != first_pid && answering? }
-    expect(drain(events).map(&:first)).to eq(%i[started exited started])
+    expect(log_lines).to include(a_string_including("renderer pid=#{first_pid} exited", "restarting in 1s"))
+    expect(starts).to eq(2)
   end
 
   context "when the renderer stops answering its health checks" do
@@ -75,8 +82,15 @@ RSpec.describe UniversalRenderer::Supervisor do
 
       wait_until { supervisor.pid && supervisor.pid != first_pid }
 
-      expect(drain(events).map(&:first)).to include(:unhealthy, :stopped)
+      expect(log_lines).to include(a_string_including("stopping renderer pid=#{first_pid} (failed 2 health checks)"))
       expect(alive?(first_pid)).to be(false)
+    end
+
+    it "backs off while each replacement fails too, like a renderer that keeps crashing" do
+      supervisor.start
+      wait_until(timeout: 10) { log_lines.grep(/restarting in/).size >= 2 }
+
+      expect(log_lines.grep(/restarting in/).first(2).map { |line| line[/in \d+s/] }).to eq(["in 1s", "in 2s"])
     end
   end
 
@@ -85,11 +99,19 @@ RSpec.describe UniversalRenderer::Supervisor do
 
     it "waits longer before each restart" do
       supervisor.start
-      sleep 2.5
+      wait_until { log_lines.grep(/restarting in/).size >= 2 }
 
-      starts = drain(events).count { |name, _details| name == :started }
-      expect(starts).to eq(2)
-      expect(drain(logs).grep(/restarting in/).map { |line| line[/in \d+s/] }).to eq(["in 1s", "in 2s"])
+      expect(log_lines.grep(/restarting in/).first(2).map { |line| line[/in \d+s/] }).to eq(["in 1s", "in 2s"])
+    end
+
+    it "starts nothing more once stopped during the wait" do
+      supervisor.start
+      wait_until { log_lines.any? { |line| line.include?("restarting in 1s") } }
+
+      supervisor.stop
+      sleep 1.3
+
+      expect(starts).to eq(1)
     end
   end
 
@@ -110,7 +132,8 @@ RSpec.describe UniversalRenderer::Supervisor do
       expect(alive?(renderer_pid)).to be(false)
       wait_until(timeout: 2) { !alive?(child_pid) }
       expect(supervisor.pid).to be_nil
-      expect(drain(events).map(&:first)).to eq(%i[started stopped])
+      expect(log_lines).to include(a_string_including("stopping renderer pid=#{renderer_pid} (stopping)"))
+      expect(starts).to eq(1)
     end
   end
 
@@ -125,7 +148,7 @@ RSpec.describe UniversalRenderer::Supervisor do
       supervisor.stop
 
       expect(alive?(renderer_pid)).to be(false)
-      expect(drain(logs)).to include(a_string_including("did not exit within 1s, killing it"))
+      expect(log_lines).to include(a_string_including("did not exit within 1s, killing it"))
     end
   end
 
@@ -143,22 +166,13 @@ RSpec.describe UniversalRenderer::Supervisor do
   end
 
   context "when the runtime is not installed" do
-    let(:supervisor) do
-      described_class.new(
-        command: "definitely-not-a-runtime server.mjs",
-        port: port,
-        health_interval: nil,
-        logger: ->(message) { logs << message }
-      )
-    end
+    let(:command) { ["definitely-not-a-runtime", "server.mjs"] }
 
     it "logs the failure and keeps retrying" do
       supervisor.start
-      sleep 1.3
+      wait_until { log_lines.grep(/could not start definitely-not-a-runtime/).size >= 2 }
 
-      lines = drain(logs)
-      expect(lines.grep(/could not start definitely-not-a-runtime/).size).to eq(2)
-      expect(lines).to include(a_string_including("renderer failed to start, restarting in 1s"))
+      expect(log_lines).to include(a_string_including("renderer failed to start, restarting in 1s"))
     end
   end
 end

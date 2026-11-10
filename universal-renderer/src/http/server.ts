@@ -177,6 +177,11 @@ export async function startServer<
     host?: string;
     /** Set false to skip the startup log line. */
     log?: boolean;
+    /**
+     * Set false to skip the warning about running development builds. The
+     * development renderer sets it: development builds are the point there.
+     */
+    warnDevelopmentBuild?: boolean;
   },
 ): Promise<{ app: express.Application; server: Server; port: number }> {
   const app = await createServer(options);
@@ -196,7 +201,7 @@ export async function startServer<
   if (options.log !== false) {
     console.log(`[SSR] universal-renderer listening on http://${host}:${port}`);
   }
-  warnIfDevelopmentBuild(process.env.NODE_ENV);
+  if (options.warnDevelopmentBuild !== false) warnIfDevelopmentBuild(process.env.NODE_ENV);
 
   return { app, server, port };
 }

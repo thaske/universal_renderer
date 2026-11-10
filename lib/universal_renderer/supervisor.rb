@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
 require "net/http"
-require "shellwords"
 
 module UniversalRenderer
-  # Runs the SSR renderer as a child process and keeps it running.
+  # Runs the SSR renderer as a child process and keeps it running. Used by the
+  # Puma plugin; not public API.
   #
   # The renderer must not take the app server down with it: when it is gone,
   # Rails falls back to client rendering, a degraded page rather than an outage.
@@ -16,48 +16,30 @@ module UniversalRenderer
   # master, which may not have loaded the app.
   class Supervisor # rubocop:disable Metrics/ClassLength -- one process lifecycle; the threads share its state
     LOG_PREFIX = "[universal_renderer]"
+    HEALTH_PATH = "/health"
     EXIT_POLL_INTERVAL = 0.2
+    # A renderer that keeps dying waits 1, 2, 4 ... up to this many seconds.
+    MAX_BACKOFF = 30
+    # A renderer that ran this long was healthy, so its next restart waits 1s again.
+    HEALTHY_AFTER = 60
 
     attr_reader :pid
 
-    # @param command [String, Array<String>] Renderer command line. A String is
-    #   split with Shellwords and run without a shell.
+    # @param command [Array<String>] Renderer command line, run without a shell.
     # @param port [Integer] Passed to the renderer as `SSR_PORT`, and used for health checks.
-    # @param health_interval [Numeric, nil] Seconds between health checks. `nil`
-    #   disables them; exits are still restarted.
-    # @param health_failures [Integer] Consecutive failed checks before a restart.
+    # @param health_interval [Numeric, nil] Seconds between health checks; `nil` turns them off.
+    # @param health_failures [Integer] Failed checks in a row before a restart.
     # @param stop_timeout [Numeric] Seconds to wait after `TERM` before `KILL`.
-    # @param max_backoff [Numeric] Cap on the delay between restarts of a renderer
-    #   that keeps exiting.
-    # @param healthy_after [Numeric] A renderer that ran this long restarts after
-    #   one second again, instead of continuing the backoff.
-    # @param logger [#call] Receives each log line.
-    # @param on_event [#call, nil] Called with `(name, details)` for `:started`,
-    #   `:exited`, `:unhealthy`, and `:stopped`. Errors it raises are logged.
-    def initialize( # rubocop:disable Metrics/ParameterLists -- each keyword is a documented option
-      command:,
-      port:,
-      env: {},
-      health_path: "/health",
-      health_interval: 10,
-      health_failures: 3,
-      stop_timeout: 10,
-      max_backoff: 30,
-      healthy_after: 60,
-      logger: ->(message) { warn(message) },
-      on_event: nil
-    )
-      @command = command.is_a?(Array) ? command : Shellwords.split(command)
+    def initialize(command:, port:, # rubocop:disable Metrics/ParameterLists -- the timings exist for tests
+                   env: {}, health_interval: 10, health_failures: 3, stop_timeout: 10,
+                   logger: ->(message) { warn(message) })
+      @command = command
       @port = Integer(port)
       @env = env.merge("SSR_PORT" => @port.to_s)
-      @health_path = health_path
       @health_interval = health_interval
       @health_failures = health_failures
       @stop_timeout = stop_timeout
-      @max_backoff = max_backoff
-      @healthy_after = healthy_after
       @logger = logger
-      @on_event = on_event
 
       @mutex = Mutex.new
       @exited = ConditionVariable.new
@@ -76,15 +58,16 @@ module UniversalRenderer
     # Replaces the running renderer. Waits for it to exit, so its port is free
     # when this returns; the supervisor starts the next one after one second.
     def restart(reason:)
-      outside_trap { terminate(reason) }
+      outside_trap { terminate(pid, reason) }
     end
 
     # Stops the renderer for good and waits for it to exit.
     def stop
       outside_trap do
+        # No renderer starts after this, so the one terminated below is the last.
         @mutex.synchronize { @stopping = true }
         @wakeup.close
-        terminate("stopping")
+        terminate(pid, "stopping")
         @supervisor_thread&.join(@stop_timeout)
         @health_thread&.join(1)
       end
@@ -111,22 +94,26 @@ module UniversalRenderer
           end
         break if stopping?
 
-        emit(:exited, pid: pid, status: status&.to_s)
         # Backing off is for a renderer that keeps dying, not one we replaced.
-        backoff = 1 if planned || monotonic_now - started_at >= @healthy_after
+        backoff = 1 if planned || monotonic_now - started_at >= HEALTHY_AFTER
         log("#{describe_exit(pid, status)}, restarting in #{backoff}s")
         sleep_unless_stopped(backoff)
-        backoff = [backoff * 2, @max_backoff].min
+        backoff = [backoff * 2, MAX_BACKOFF].min
       end
     rescue StandardError => e
       log("supervisor stopped unexpectedly: #{e.class}: #{e.message}")
     end
 
+    # Spawns under the lock that `stop` takes, so a renderer cannot start after
+    # `stop` has looked for the one to terminate.
     def spawn_renderer
-      pid = Process.spawn(@env, *@command, pgroup: true)
-      @mutex.synchronize { @pid = pid }
-      log("renderer started (pid=#{pid}, port=#{@port})")
-      emit(:started, pid: pid)
+      pid =
+        @mutex.synchronize do
+          next if @stopping
+
+          @pid = Process.spawn(@env, *@command, pgroup: true)
+        end
+      log("renderer started (pid=#{pid}, port=#{@port})") if pid
       pid
     rescue SystemCallError => e
       log("could not start #{@command.first}: #{e.message}")
@@ -162,11 +149,11 @@ module UniversalRenderer
       until stopping?
         sleep_unless_stopped(@health_interval)
         current_pid = pid
-        if current_pid.nil? || current_pid != watched_pid
+        if current_pid != watched_pid
           watched_pid = current_pid
           strikes = 0
-          next if current_pid.nil?
         end
+        next if current_pid.nil?
 
         if healthy?
           strikes = 0
@@ -174,10 +161,10 @@ module UniversalRenderer
         end
 
         strikes += 1
-        next if strikes < @health_failures || stopping?
+        next if strikes < @health_failures
 
-        emit(:unhealthy, pid: current_pid, failures: strikes)
-        terminate("failed #{strikes} health checks")
+        # A failure, not a planned restart: a renderer that keeps wedging backs off.
+        terminate(current_pid, "failed #{strikes} health checks", planned: false)
         strikes = 0
       end
     rescue StandardError => e
@@ -186,25 +173,32 @@ module UniversalRenderer
 
     def healthy?
       Net::HTTP.start("127.0.0.1", @port, open_timeout: 1, read_timeout: 5) do |http|
-        http.get(@health_path).is_a?(Net::HTTPSuccess)
+        http.get(HEALTH_PATH).is_a?(Net::HTTPSuccess)
       end
     rescue StandardError
       false
     end
 
-    def terminate(reason)
-      target = pid
-      return unless target
+    # Acts only while `target` is still the running renderer: a health check can
+    # take seconds, and the renderer it judged may have been replaced meanwhile.
+    # A planned exit restarts after one second instead of continuing the backoff.
+    def terminate(target, reason, planned: true)
+      current =
+        @mutex.synchronize do
+          next false unless target && @pid == target
+
+          @planned_exits << target if planned
+          true
+        end
+      return unless current
 
       log("stopping renderer pid=#{target} (#{reason})")
-      @mutex.synchronize { @planned_exits << target }
       signal(target, "TERM")
-      unless wait_for_exit(target, @stop_timeout)
-        log("renderer pid=#{target} did not exit within #{@stop_timeout}s, killing it")
-        signal(target, "KILL")
-        wait_for_exit(target, 2)
-      end
-      emit(:stopped, pid: target, reason: reason)
+      return if wait_for_exit(target, @stop_timeout)
+
+      log("renderer pid=#{target} did not exit within #{@stop_timeout}s, killing it")
+      signal(target, "KILL")
+      wait_for_exit(target, 2)
     end
 
     # The renderer runs in its own process group, so this also reaches anything
@@ -236,12 +230,6 @@ module UniversalRenderer
 
     def sleep_unless_stopped(seconds)
       @wakeup.pop(timeout: seconds)
-    end
-
-    def emit(name, **details)
-      @on_event&.call(name, details)
-    rescue StandardError => e
-      log("on_event raised #{e.class}: #{e.message}")
     end
 
     def log(message)

@@ -14,14 +14,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A Puma plugin, `plugin :universal_renderer`, that runs the renderer beside the
   app server and keeps it running. It restarts the renderer when it exits (with
   backoff while it keeps dying at boot) and when `/health` stops answering, stops
-  it with Puma, and replaces it on hot and phased restarts. Options come from a
-  `universal_renderer` Puma DSL method, falling back to the `bin/web` environment
-  variables. In production, nothing restarted a renderer that died, so every page
-  rendered on the client until the next dyno restart without anyone noticing.
-- `UniversalRenderer::Supervisor`, the process supervisor behind the plugin, for
-  app servers other than Puma.
-- The install generator adds the plugin to `config/puma.rb` when the app has one,
-  and writes `bin/web` only when it does not.
+  it with Puma, and replaces it on hot and phased restarts. It takes `runtime`,
+  `bundle` and `port`, through a `universal_renderer` Puma DSL method or
+  `SSR_RUNTIME`, `SSR_BUNDLE` and `SSR_PORT`. Before this, nothing restarted a renderer that
+  died, so every page rendered on the client until the next deploy or dyno
+  restart without anyone noticing.
+- The install generator adds the plugin to `config/puma.rb`, for production only.
+
+#### Removed
+
+- `bin/web`. The generator no longer writes it; the Puma plugin replaces it. To
+  move over, point the Procfile's web process at Puma, delete `bin/web`, and add
+  the plugin to `config/puma.rb`. Re-running the generator in an app that still
+  has `bin/web` leaves the Puma config alone and prints these steps, because
+  running both would start two renderers on the same port.
 
 ### NPM Package
 
@@ -44,7 +50,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Added
 
 - `startServer` warns at startup when the renderer runs development builds of its
-  libraries, which slows renders and can fill production logs.
+  libraries, which slows renders and can fill production logs. The development
+  renderer, where that is intended, does not warn.
 - Vite 8 in the `vite` peer range.
 
 ## 0.7.0 (Ruby Gem) / 0.7.0 (NPM Package)

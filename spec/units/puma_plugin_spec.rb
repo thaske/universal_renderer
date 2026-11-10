@@ -8,23 +8,10 @@ require "puma/plugin/universal_renderer"
 
 RSpec.describe "Puma plugin :universal_renderer" do
   describe UniversalRenderer::PumaPlugin do
-    it "falls back to the bin/web environment variables, then to the defaults" do
-      env = { "SSR_BUNDLE" => "build/ssr.mjs", "SSR_HEALTH_FAILURES" => "5" }
-      options = described_class.resolve({ port: 4000 }, env: env)
+    it "takes each option from the plugin, then the environment, then the default" do
+      options = described_class.resolve({ port: 4000 }, env: { "SSR_BUNDLE" => "build/ssr.mjs" })
 
-      expect(options).to include(
-        runtime: "bun",
-        bundle: "build/ssr.mjs",
-        port: 4000,
-        health_interval: 10.0,
-        health_failures: 5,
-        command: nil
-      )
-    end
-
-    it "turns health checks off with SSR_WATCHDOG=0 or health_interval: false" do
-      expect(described_class.resolve({}, env: { "SSR_WATCHDOG" => "0" })[:health_interval]).to be_nil
-      expect(described_class.resolve({ health_interval: false }, env: {})[:health_interval]).to be_nil
+      expect(options).to eq(runtime: "bun", bundle: "build/ssr.mjs", port: 4000)
     end
 
     it "rejects unknown options, so a typo does not silently fall back to a default" do
@@ -38,7 +25,7 @@ RSpec.describe "Puma plugin :universal_renderer" do
     let(:app_port) { free_port }
     let(:renderer_port) { free_port }
     let(:plugin_options) do
-      "command: [#{RbConfig.ruby.inspect}, #{fake_renderer.inspect}], port: #{renderer_port}, health_interval: 0.2"
+      "runtime: #{RbConfig.ruby.inspect}, bundle: #{fake_renderer.inspect}, port: #{renderer_port}"
     end
     let(:fake_renderer) { File.expand_path("../fixtures/fake_renderer.rb", __dir__) }
     let(:puma_pid) do

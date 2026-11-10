@@ -234,6 +234,7 @@ export async function startDevServer(options: DevServerOptions): Promise<{
 
     port: options.port,
     host: options.host,
+    warnDevelopmentBuild: false,
     middleware: composeMiddleware(
       vite.middlewares as unknown as RequestHandler,
       options.overrides?.middleware,
